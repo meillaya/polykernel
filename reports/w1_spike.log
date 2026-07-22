@@ -1,0 +1,229 @@
+warning: Nix search path entry '/home/mei/.nix-defexpr/channels' does not exist, ignoring
+Running tasks     devenv:enterShell
+
+Running           devenv:files:cleanup
+Succeeded         devenv:files:cleanup (6.80ms)
+Running           devenv:enterShell
+Succeeded         devenv:enterShell (6.77ms)
+Running           devenv:enterTest
+No command        devenv:enterTest
+1 Skipped, 2 Succeeded
+PolyKernel dev shell (llvmPackages_21 MLIR / cudaPackages_12_6 / rocmPackages.clr)
+  CC/CXX:      /nix/store/m59w5gavjx8db0ay3m1yzbw02l54109b-clang-wrapper-21.1.8/bin/clang / /nix/store/m59w5gavjx8db0ay3m1yzbw02l54109b-clang-wrapper-21.1.8/bin/clang++
+  mlir-tblgen: LLVM (http://llvm.org/):
+  nvcc:        Cuda compilation tools, release 12.6, V12.6.85
+  hipcc:       HIP version: 7.2.53211-9999
+  cmake:       cmake version 4.1.2
+  clang:       clang version 21.1.8
+MLIR_DIR=/nix/store/2lzr6hy0s5cikj7lxwpl0qhh2idmqfc1-mlir-21.1.8-dev/lib/cmake/mlir
+LLVM_DIR=/nix/store/4768r0pa7fswbi0mdjalqc9pm56fh2vm-llvm-21.1.8-dev/lib/cmake/llvm
+MLIR_TABLEGEN_EXE=/nix/store/a8lgffyjfxbjvj7bpdmhvbvl4zjhnckk-llvm-tblgen-21.1.8/bin/mlir-tblgen
+LLVM_EXTERNAL_LIT=/nix/store/mnrhk9ghglznss3ds1mhd9pz4vlnk0d7-python3.14-lit-18.1.8/bin/.lit-wrapped
+=== CMAKE CONFIGURE (C++20) ===
+-- The CXX compiler identification is Clang 21.1.8
+-- The C compiler identification is Clang 21.1.8
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /nix/store/m59w5gavjx8db0ay3m1yzbw02l54109b-clang-wrapper-21.1.8/bin/clang++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /nix/store/m59w5gavjx8db0ay3m1yzbw02l54109b-clang-wrapper-21.1.8/bin/clang - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Could NOT find FFI (missing: FFI_LIBRARIES HAVE_FFI_CALL) 
+-- Found ZLIB: /nix/store/b2swxfi8srrbsafvh9iyyhd26mz9giwf-zlib-1.3.2/lib/libz.so (found version "1.3.2")
+-- Could NOT find LibXml2 (missing: LIBXML2_LIBRARY LIBXML2_INCLUDE_DIR) 
+-- Using MLIRConfig.cmake in: /nix/store/2lzr6hy0s5cikj7lxwpl0qhh2idmqfc1-mlir-21.1.8-dev/lib/cmake/mlir
+-- Using LLVMConfig.cmake in: /nix/store/4768r0pa7fswbi0mdjalqc9pm56fh2vm-llvm-21.1.8-dev/lib/cmake/llvm
+-- Using mlir-tblgen: /nix/store/a8lgffyjfxbjvj7bpdmhvbvl4zjhnckk-llvm-tblgen-21.1.8/bin/mlir-tblgen
+-- Linker detection: GNU ld
+-- Performing Test LLVM_LIBSTDCXX_MIN
+-- Performing Test LLVM_LIBSTDCXX_MIN - Success
+-- Performing Test LLVM_LIBSTDCXX_SOFT_ERROR
+-- Performing Test LLVM_LIBSTDCXX_SOFT_ERROR - Success
+-- Performing Test C_SUPPORTS_FPIC
+-- Performing Test C_SUPPORTS_FPIC - Success
+-- Performing Test CXX_SUPPORTS_FPIC
+-- Performing Test CXX_SUPPORTS_FPIC - Success
+-- Building with -fPIC
+-- Performing Test C_SUPPORTS_FNO_SEMANTIC_INTERPOSITION
+-- Performing Test C_SUPPORTS_FNO_SEMANTIC_INTERPOSITION - Success
+-- Performing Test CXX_SUPPORTS_FNO_SEMANTIC_INTERPOSITION
+-- Performing Test CXX_SUPPORTS_FNO_SEMANTIC_INTERPOSITION - Success
+-- Performing Test SUPPORTS_FVISIBILITY_INLINES_HIDDEN_FLAG
+-- Performing Test SUPPORTS_FVISIBILITY_INLINES_HIDDEN_FLAG - Success
+-- Performing Test CXX_SUPPORTS_SUGGEST_OVERRIDE_FLAG
+-- Performing Test CXX_SUPPORTS_SUGGEST_OVERRIDE_FLAG - Success
+-- Performing Test CXX_WSUGGEST_OVERRIDE_ALLOWS_ONLY_FINAL
+-- Performing Test CXX_WSUGGEST_OVERRIDE_ALLOWS_ONLY_FINAL - Success
+-- Performing Test C_WCOMMENT_ALLOWS_LINE_WRAP
+-- Performing Test C_WCOMMENT_ALLOWS_LINE_WRAP - Success
+-- Performing Test C_SUPPORTS_MISLEADING_INDENTATION_FLAG
+-- Performing Test C_SUPPORTS_MISLEADING_INDENTATION_FLAG - Success
+-- Performing Test CXX_SUPPORTS_MISLEADING_INDENTATION_FLAG
+-- Performing Test CXX_SUPPORTS_MISLEADING_INDENTATION_FLAG - Success
+-- Performing Test C_SUPPORTS_CTAD_MAYBE_UNSPPORTED_FLAG
+-- Performing Test C_SUPPORTS_CTAD_MAYBE_UNSPPORTED_FLAG - Success
+-- Performing Test CXX_SUPPORTS_CTAD_MAYBE_UNSPPORTED_FLAG
+-- Performing Test CXX_SUPPORTS_CTAD_MAYBE_UNSPPORTED_FLAG - Success
+-- Performing Test LINKER_SUPPORTS_COLOR_DIAGNOSTICS
+-- Performing Test LINKER_SUPPORTS_COLOR_DIAGNOSTICS - Failed
+-- Looking for os_signpost_interval_begin
+-- Looking for os_signpost_interval_begin - not found
+-- Performing Test LLVM_LINKER_SUPPORTS_B_SYMBOLIC_FUNCTIONS
+-- Performing Test LLVM_LINKER_SUPPORTS_B_SYMBOLIC_FUNCTIONS - Success
+-- Configuring done (6.3s)
+-- Generating done (0.0s)
+-- Build files have been written to: /home/mei/projects/polykernel/build
+CONFIGURE_EXIT=0
+warning: Nix search path entry '/home/mei/.nix-defexpr/channels' does not exist, ignoring
+Running tasks     devenv:enterShell
+
+Running           devenv:files:cleanup
+Succeeded         devenv:files:cleanup (5.79ms)
+Running           devenv:enterShell
+Succeeded         devenv:enterShell (6.12ms)
+Running           devenv:enterTest
+No command        devenv:enterTest
+1 Skipped, 2 Succeeded
+PolyKernel dev shell (llvmPackages_21 MLIR / cudaPackages_12_6 / rocmPackages.clr)
+  CC/CXX:      /nix/store/m59w5gavjx8db0ay3m1yzbw02l54109b-clang-wrapper-21.1.8/bin/clang / /nix/store/m59w5gavjx8db0ay3m1yzbw02l54109b-clang-wrapper-21.1.8/bin/clang++
+  mlir-tblgen: LLVM (http://llvm.org/):
+  nvcc:        Cuda compilation tools, release 12.6, V12.6.85
+  hipcc:       HIP version: 7.2.53211-9999
+  cmake:       cmake version 4.1.2
+  clang:       clang version 21.1.8
+=== CMAKE BUILD ===
+[1/6] Building PolyKernelDialect.cpp.inc...
+[2/6] Building PolyKernelDialect.h.inc...
+[3/6] Building CXX object lib/IR/CMakeFiles/obj.MLIRPolyKernel.dir/__/__/include/PolyKernel/IR/PolyKernelDialect.cpp.o
+[4/6] Linking CXX static library lib/libMLIRPolyKernel.a
+[5/6] Building CXX object tools/polykernel-opt/CMakeFiles/polykernel-opt.dir/polykernel-opt.cpp.o
+[6/6] Linking CXX executable tools/polykernel-opt/polykernel-opt
+FAILED: [code=1] tools/polykernel-opt/polykernel-opt 
+: && /nix/store/m59w5gavjx8db0ay3m1yzbw02l54109b-clang-wrapper-21.1.8/bin/clang++ -fPIC -fno-semantic-interposition -fvisibility-inlines-hidden -Werror=date-time -Werror=unguarded-availability-new -Wall -Wextra -Wno-unused-parameter -Wwrite-strings -Wcast-qual -Wmissing-field-initializers -Wimplicit-fallthrough -Wcovered-switch-default -Wno-noexcept-type -Wnon-virtual-dtor -Wdelete-non-virtual-dtor -Wsuggest-override -Wstring-conversion -Wmisleading-indentation -Wctad-maybe-unsupported -fdiagnostics-color -ffunction-sections -fdata-sections -Wl,-rpath-link,/home/mei/projects/polykernel/build/lib  -Wl,--gc-sections  -Xlinker --dependency-file=tools/polykernel-opt/CMakeFiles/polykernel-opt.dir/link.d tools/polykernel-opt/CMakeFiles/polykernel-opt.dir/polykernel-opt.cpp.o -o tools/polykernel-opt/polykernel-opt  -Wl,-rpath,"\$ORIGIN/../lib:/nix/store/kcmpd1h0097k50v3hjpvd1acyj46j3p5-llvm-21.1.8-lib/lib"  lib/libMLIRPolyKernel.a  /nix/store/jxsl12r2ykpvhb7b62q4qqdnavs3x8w8-mlir-21.1.8/lib/libMLIROptLib.a  -lMLIRRegisterAllDialects  -lMLIRRegisterAllPasses  /nix/store/jxsl12r2ykpvhb7b62q4qqdnavs3x8w8-mlir-21.1.8/lib/libMLIRIR.a  /nix/store/jxsl12r2ykpvhb7b62q4qqdnavs3x8w8-mlir-21.1.8/lib/libMLIRSupport.a  /nix/store/jxsl12r2ykpvhb7b62q4qqdnavs3x8w8-mlir-21.1.8/lib/libMLIRBytecodeWriter.a  /nix/store/jxsl12r2ykpvhb7b62q4qqdnavs3x8w8-mlir-21.1.8/lib/libMLIRBytecodeOpInterface.a  /nix/store/jxsl12r2ykpvhb7b62q4qqdnavs3x8w8-mlir-21.1.8/lib/libMLIRDebug.a  /nix/store/jxsl12r2ykpvhb7b62q4qqdnavs3x8w8-mlir-21.1.8/lib/libMLIRObservers.a  /nix/store/jxsl12r2ykpvhb7b62q4qqdnavs3x8w8-mlir-21.1.8/lib/libMLIRParser.a  /nix/store/jxsl12r2ykpvhb7b62q4qqdnavs3x8w8-mlir-21.1.8/lib/libMLIRBytecodeReader.a  /nix/store/jxsl12r2ykpvhb7b62q4qqdnavs3x8w8-mlir-21.1.8/lib/libMLIRAsmParser.a  /nix/store/jxsl12r2ykpvhb7b62q4qqdnavs3x8w8-mlir-21.1.8/lib/libMLIRPluginsLib.a  /nix/store/jxsl12r2ykpvhb7b62q4qqdnavs3x8w8-mlir-21.1.8/lib/libMLIRPass.a  /nix/store/jxsl12r2ykpvhb7b62q4qqdnavs3x8w8-mlir-21.1.8/lib/libMLIRAnalysis.a  /nix/store/jxsl12r2ykpvhb7b62q4qqdnavs3x8w8-mlir-21.1.8/lib/libMLIRControlFlowInterfaces.a  /nix/store/jxsl12r2ykpvhb7b62q4qqdnavs3x8w8-mlir-21.1.8/lib/libMLIRDataLayoutInterfaces.a  /nix/store/jxsl12r2ykpvhb7b62q4qqdnavs3x8w8-mlir-21.1.8/lib/libMLIRInferIntRangeInterface.a  /nix/store/jxsl12r2ykpvhb7b62q4qqdnavs3x8w8-mlir-21.1.8/lib/libMLIRLoopLikeInterface.a  /nix/store/jxsl12r2ykpvhb7b62q4qqdnavs3x8w8-mlir-21.1.8/lib/libMLIRFunctionInterfaces.a  /nix/store/jxsl12r2ykpvhb7b62q4qqdnavs3x8w8-mlir-21.1.8/lib/libMLIRCallInterfaces.a  /nix/store/jxsl12r2ykpvhb7b62q4qqdnavs3x8w8-mlir-21.1.8/lib/libMLIRPresburger.a  /nix/store/jxsl12r2ykpvhb7b62q4qqdnavs3x8w8-mlir-21.1.8/lib/libMLIRViewLikeInterface.a  /nix/store/jxsl12r2ykpvhb7b62q4qqdnavs3x8w8-mlir-21.1.8/lib/libMLIRIRDL.a  /nix/store/jxsl12r2ykpvhb7b62q4qqdnavs3x8w8-mlir-21.1.8/lib/libMLIRDialect.a  /nix/store/jxsl12r2ykpvhb7b62q4qqdnavs3x8w8-mlir-21.1.8/lib/libMLIRInferTypeOpInterface.a  /nix/store/jxsl12r2ykpvhb7b62q4qqdnavs3x8w8-mlir-21.1.8/lib/libMLIRSideEffectInterfaces.a  /nix/store/jxsl12r2ykpvhb7b62q4qqdnavs3x8w8-mlir-21.1.8/lib/libMLIRIR.a  /nix/store/jxsl12r2ykpvhb7b62q4qqdnavs3x8w8-mlir-21.1.8/lib/libMLIRSupport.a  /nix/store/kcmpd1h0097k50v3hjpvd1acyj46j3p5-llvm-21.1.8-lib/lib/libLLVM.so.21.1 && :
+/nix/store/ddk8rvjihg4vhh1k6x9rc65y1zb1kx34-binutils-2.46/bin/ld.bfd: cannot find -lMLIRRegisterAllDialects: No such file or directory
+/nix/store/ddk8rvjihg4vhh1k6x9rc65y1zb1kx34-binutils-2.46/bin/ld.bfd: cannot find -lMLIRRegisterAllPasses: No such file or directory
+clang++: error: linker command failed with exit code 1 (use -v to see invocation)
+ninja: build stopped: subcommand failed.
+BUILD_EXIT=1
+warning: Nix search path entry '/home/mei/.nix-defexpr/channels' does not exist, ignoring
+Running tasks     devenv:enterShell
+
+Running           devenv:files:cleanup
+Succeeded         devenv:files:cleanup (6.56ms)
+Running           devenv:enterShell
+Succeeded         devenv:enterShell (6.29ms)
+Running           devenv:enterTest
+No command        devenv:enterTest
+1 Skipped, 2 Succeeded
+PolyKernel dev shell (llvmPackages_21 MLIR / cudaPackages_12_6 / rocmPackages.clr)
+  CC/CXX:      /nix/store/m59w5gavjx8db0ay3m1yzbw02l54109b-clang-wrapper-21.1.8/bin/clang / /nix/store/m59w5gavjx8db0ay3m1yzbw02l54109b-clang-wrapper-21.1.8/bin/clang++
+  mlir-tblgen: LLVM (http://llvm.org/):
+  nvcc:        Cuda compilation tools, release 12.6, V12.6.85
+  hipcc:       HIP version: 7.2.53211-9999
+  cmake:       cmake version 4.1.2
+  clang:       clang version 21.1.8
+=== CMAKE BUILD (after dropping RegisterAll) ===
+[0/1] Re-running CMake...
+-- Could NOT find FFI (missing: FFI_LIBRARIES HAVE_FFI_CALL) 
+-- Could NOT find LibXml2 (missing: LIBXML2_LIBRARY LIBXML2_INCLUDE_DIR) 
+-- Using MLIRConfig.cmake in: /nix/store/2lzr6hy0s5cikj7lxwpl0qhh2idmqfc1-mlir-21.1.8-dev/lib/cmake/mlir
+-- Using LLVMConfig.cmake in: /nix/store/4768r0pa7fswbi0mdjalqc9pm56fh2vm-llvm-21.1.8-dev/lib/cmake/llvm
+-- Using mlir-tblgen: /nix/store/a8lgffyjfxbjvj7bpdmhvbvl4zjhnckk-llvm-tblgen-21.1.8/bin/mlir-tblgen
+-- Building with -fPIC
+-- Configuring done (0.1s)
+-- Generating done (0.0s)
+-- Build files have been written to: /home/mei/projects/polykernel/build
+[1/3] Building CXX object tools/polykernel-opt/CMakeFiles/polykernel-opt.dir/polykernel-opt.cpp.o
+[2/3] Linking CXX executable tools/polykernel-opt/polykernel-opt
+BUILD_EXIT=0
+warning: Nix search path entry '/home/mei/.nix-defexpr/channels' does not exist, ignoring
+Running tasks     devenv:enterShell
+
+Running           devenv:files:cleanup
+Succeeded         devenv:files:cleanup (7.43ms)
+Running           devenv:enterShell
+Succeeded         devenv:enterShell (5.93ms)
+Running           devenv:enterTest
+No command        devenv:enterTest
+1 Skipped, 2 Succeeded
+PolyKernel dev shell (llvmPackages_21 MLIR / cudaPackages_12_6 / rocmPackages.clr)
+  CC/CXX:      /nix/store/m59w5gavjx8db0ay3m1yzbw02l54109b-clang-wrapper-21.1.8/bin/clang / /nix/store/m59w5gavjx8db0ay3m1yzbw02l54109b-clang-wrapper-21.1.8/bin/clang++
+  mlir-tblgen: LLVM (http://llvm.org/):
+  nvcc:        Cuda compilation tools, release 12.6, V12.6.85
+  hipcc:       HIP version: 7.2.53211-9999
+  cmake:       cmake version 4.1.2
+  clang:       clang version 21.1.8
+=== check-polykernel (run 1) ===
+[0/1] Running the PolyKernel regression tests
+-- Testing: 1 tests, 1 workers --
+PASS: POLYKERNEL :: smoke.mlir (1 of 1)
+
+Testing Time: 0.15s
+
+Total Discovered Tests: 1
+  Passed: 1 (100.00%)
+CHECK_EXIT_1=0
+=== check-polykernel (run 2 - determinism) ===
+[0/1] Running the PolyKernel regression tests
+-- Testing: 1 tests, 1 workers --
+PASS: POLYKERNEL :: smoke.mlir (1 of 1)
+
+Testing Time: 0.11s
+
+Total Discovered Tests: 1
+  Passed: 1 (100.00%)
+CHECK_EXIT_2=0
+warning: Nix search path entry '/home/mei/.nix-defexpr/channels' does not exist, ignoring
+Running tasks     devenv:enterShell
+
+Running           devenv:files:cleanup
+Succeeded         devenv:files:cleanup (6.19ms)
+Running           devenv:enterShell
+Succeeded         devenv:enterShell (7.34ms)
+Running           devenv:enterTest
+No command        devenv:enterTest
+1 Skipped, 2 Succeeded
+PolyKernel dev shell (llvmPackages_21 MLIR / cudaPackages_12_6 / rocmPackages.clr)
+  CC/CXX:      /nix/store/m59w5gavjx8db0ay3m1yzbw02l54109b-clang-wrapper-21.1.8/bin/clang / /nix/store/m59w5gavjx8db0ay3m1yzbw02l54109b-clang-wrapper-21.1.8/bin/clang++
+  mlir-tblgen: LLVM (http://llvm.org/):
+  nvcc:        Cuda compilation tools, release 12.6, V12.6.85
+  hipcc:       HIP version: 7.2.53211-9999
+  cmake:       cmake version 4.1.2
+  clang:       clang version 21.1.8
+
+================================================================================
+VERIFICATION EVIDENCE (appended; captured live inside nix develop)
+================================================================================
+
+--- Resolved toolchain paths ---
+MLIR_DIR          = /nix/store/2lzr6hy0s5cikj7lxwpl0qhh2idmqfc1-mlir-21.1.8-dev/lib/cmake/mlir
+LLVM_DIR          = /nix/store/4768r0pa7fswbi0mdjalqc9pm56fh2vm-llvm-21.1.8-dev/lib/cmake/llvm
+MLIR_TABLEGEN_EXE = /nix/store/a8lgffyjfxbjvj7bpdmhvbvl4zjhnckk-llvm-tblgen-21.1.8/bin/mlir-tblgen
+LLVM_EXTERNAL_LIT = /nix/store/mnrhk9ghglznss3ds1mhd9pz4vlnk0d7-python3.14-lit-18.1.8/bin/.lit-wrapped
+FileCheck         = /nix/store/l25n688gmqircnpypip13wy99ndycwbj-llvm-21.1.8/bin/FileCheck
+clang             = clang version 21.1.8
+
+--- polykernel-opt --help (dialect registration proof) ---
+OVERVIEW: polykernel-opt
+
+Available Dialects: builtin, polykernel
+
+--- polykernel-opt --show-dialects ---
+Available Dialects: builtin,polykernel
+
+--- polykernel-opt test/smoke.mlir (round-trip) ---
+module {
+}
+
+RUN_EXIT=0
+
+--- check-polykernel (lit) ---
+PASS: POLYKERNEL :: smoke.mlir (1 of 1)
+Testing Time: 0.12s
+Total Discovered Tests: 1
+  Passed: 1 (100.00%)
+CHECK_EXIT=0

@@ -1,0 +1,13 @@
+@LIT_SITE_CFG_IN_HEADER@
+
+# Installed LLVM tools dir (FileCheck/count/not) - from LLVMConfig.cmake.
+config.llvm_tools_dir = "@LLVM_TOOLS_BINARY_DIR@"
+config.mlir_obj_dir = "@MLIR_BINARY_DIR@"
+config.polykernel_obj_root = "@POLYKERNEL_BINARY_DIR@"
+config.polykernel_src_root = "@POLYKERNEL_SOURCE_DIR@"
+
+import lit.llvm
+lit.llvm.initialize(lit_config, config)
+
+# Let the main config do the real work.
+lit_config.load_config(config, "@POLYKERNEL_SOURCE_DIR@/test/lit.cfg.py")

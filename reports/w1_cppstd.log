@@ -1,0 +1,45 @@
+================================================================================
+PolyKernel W1 Spike - C++ standard selection (reports/w1_cppstd.log)
+================================================================================
+
+RESULT: C++20 OK, fallback to C++17 NOT needed.
+
+The top-level CMakeLists.txt sets:
+    set(CMAKE_CXX_STANDARD 20 CACHE STRING "C++ standard to conform to")
+    set(CMAKE_CXX_STANDARD_REQUIRED ON)
+    set(CMAKE_CXX_EXTENSIONS OFF)
+
+--------------------------------------------------------------------------------
+Evidence 1: CMake cache (build/CMakeCache.txt)
+--------------------------------------------------------------------------------
+$ grep CMAKE_CXX_STANDARD build/CMakeCache.txt
+CMAKE_CXX_STANDARD:STRING=20
+
+--------------------------------------------------------------------------------
+Evidence 2: actual compiler flag reaching clang++ (ninja compile commands)
+--------------------------------------------------------------------------------
+$ ninja -C build -t commands polykernel-opt | grep -oE '\-std=[a-z+]+[0-9]+'
+-std=c++20
+$ ninja -C build -t commands obj.MLIRPolyKernel | grep -oE '\-std=[a-z+]+[0-9]+'
+-std=c++20
+
+--------------------------------------------------------------------------------
+Evidence 3: clean compile + link of the dialect lib and opt tool under C++20
+--------------------------------------------------------------------------------
+[3/6] Building CXX object lib/IR/CMakeFiles/obj.MLIRPolyKernel.dir/__/__/include/PolyKernel/IR/PolyKernelDialect.cpp.o
+[4/6] Linking CXX static library lib/libMLIRPolyKernel.a
+[5/6] Building CXX object tools/polykernel-opt/CMakeFiles/polykernel-opt.dir/polykernel-opt.cpp.o
+[6/6] Linking CXX executable tools/polykernel-opt/polykernel-opt
+BUILD_EXIT=0
+
+Compiler: clang++ 21.1.8 (llvmPackages_21.clang), matching MLIR-21 headers.
+
+--------------------------------------------------------------------------------
+Fallback path (NOT taken, documented for the record)
+--------------------------------------------------------------------------------
+Had MLIR-21 headers rejected C++20, the plan was to set CMAKE_CXX_STANDARD 17
+project-wide and rebuild green (the upstream mlir/examples/standalone defaults
+to C++17). This was unnecessary: MLIR 21.1.8 headers compile cleanly under
+-std=c++20 with llvmPackages_21.clang.
+
+Chosen standard for PolyKernel going forward: C++20.
