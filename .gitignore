@@ -1,0 +1,36 @@
+# --- PolyKernel build / toolchain artifacts ---
+
+# Stale codegraph index symlink (NEVER commit or delete; leave in place).
+# No trailing slash: .codegraph is a symlink, so a dir-only pattern won't match.
+.codegraph
+.codegraph/
+
+# CMake / Ninja build outputs
+build/
+result
+result-*
+
+# devenv.sh / direnv state
+.devenv*
+.direnv/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+
+# Compiled objects
+*.o
+*.obj
+*.so
+*.a
+
+# Caches
+.cache/
+cache/
+
+# Transient orchestration state (keep .omo/plans, .omo/start-work/)
+.omo/boulder.json
+.omo/run-continuation/
+.omo/drafts/

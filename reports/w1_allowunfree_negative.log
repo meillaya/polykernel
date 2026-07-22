@@ -1,0 +1,60 @@
+# PolyKernel W1 - QA NEGATIVE test: allowUnfree=false must break CUDA evaluation
+# 2026-07-22T18:15:53-04:00
+# flake.nix nixpkgs.config.allowUnfree temporarily set to false.
+# Expect: cudaPackages_12_6.* (unfree, CUDA EULA) fails to evaluate.
+
+$ nix eval --impure .#devShells.x86_64-linux.default.drvPath --accept-flake-config
+---
+warning: Git tree '/home/mei/projects/polykernel' has uncommitted changes
+warning: Nix search path entry '/home/mei/.nix-defexpr/channels' does not exist, ignoring
+error:
+       … while calling the 'derivationStrict' builtin
+         at «nix-internal»/derivation-internal.nix:38:12:
+           37|
+           38|   strict = drvFunc drvAttrs;
+             |            ^
+           39|
+
+       … while evaluating derivation 'devenv-shell'
+         whose name attribute is located at «github:NixOS/nixpkgs/421eebf»/pkgs/stdenv/generic/make-derivation.nix:651:11
+
+       … while evaluating attribute 'CUDA_HOME' of derivation 'devenv-shell'
+
+       … while evaluating definitions from `/nix/store/a81cc7y7s5i777iyamnaiqls22p01wls-source/devenv.nix':
+
+       (stack trace truncated; use '--show-trace' to show the full, detailed trace)
+
+       error: Refusing to evaluate package 'cuda12.6-cuda_nvcc-12.6.85' in /nix/store/bz3kd8wmg66h7m444c1lrmb66x5alamh-source/pkgs/development/cuda-modules/packages/cuda_nvcc.nix:255 because it has an unfree license (‘CUDA EULA’)
+       a) To temporarily allow unfree packages, you can use an environment variable
+          for a single invocation of the nix tools.
+
+            $ export NIXPKGS_ALLOW_UNFREE=1
+
+          Note: When using `nix shell`, `nix build`, `nix develop`, etc with a flake,
+                then pass `--impure` in order to allow use of environment variables.
+
+       b) For `nixos-rebuild` you can set
+         { nixpkgs.config.allowUnfree = true; }
+       in configuration.nix to override this.
+
+       Alternatively you can configure a predicate to allow specific packages:
+         { nixpkgs.config.allowUnfreePredicate = pkg: builtins.elem (lib.getName pkg) [
+             "cuda_nvcc"
+           ];
+         }
+
+       c) For `nix-env`, `nix-build`, `nix-shell` or any other Nix command you can add
+         { allowUnfree = true; }
+       to ~/.config/nixpkgs/config.nix.
+---
+EXIT_CODE=0
+
+# RESULT: PASS - allowUnfree=false correctly made cudaPackages_12_6 (CUDA EULA) fail to evaluate.
+# The error 'Refusing to evaluate package cuda12.6-cuda_nvcc-12.6.85 ... unfree license (CUDA EULA)'
+# proves the gate is real. allowUnfree=true in flake.nix is what enables the CUDA packages.
+# allowUnfree has been REVERTED to true in flake.nix.
+
+# Revert verification: re-evaluating devShell drvPath with allowUnfree=true (should succeed):
+$ nix eval --impure .#devShells.x86_64-linux.default.drvPath --accept-flake-config
+"/nix/store/lxpddbwrcmralpglvqv62gfvmsc0km3v-devenv-shell.drv"
+REVERT_EVAL_EXIT=0
