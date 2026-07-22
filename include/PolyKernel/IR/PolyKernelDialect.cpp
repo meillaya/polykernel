@@ -6,6 +6,8 @@
 
 #include "PolyKernel/IR/PolyKernelDialect.h"
 
+#include "PolyKernel/IR/PolyKernelOps.h"
+
 using namespace mlir;
 using namespace mlir::polykernel;
 
@@ -18,6 +20,11 @@ using namespace mlir::polykernel;
 //===----------------------------------------------------------------------===//
 
 void PolyKernelDialect::initialize() {
-  // W1 spike: no operations / types / attributes registered yet.
-  // Operations are added in Todo 3 (addOperations<...>(), registerTypes(), ...).
+  // Todo 3 (Wave 1): register EXACTLY the named transformer-inference op set.
+  // `FuncOp`/`ReturnOp` are the function container + terminator (not compute
+  // ops); the rest are the base + fused compute ops. No other ops exist.
+  addOperations<
+#define GET_OP_LIST
+#include "PolyKernel/IR/PolyKernelOps.cpp.inc"
+      >();
 }

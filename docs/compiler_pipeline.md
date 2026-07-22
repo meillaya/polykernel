@@ -3,6 +3,12 @@
 > W1 spike (Todo 2): out-of-tree MLIR toolchain. This is a **GATE** — it proves
 > the out-of-tree MLIR-21 build + dialect registration + `polykernel-opt` tool +
 > `lit` pipeline before any dialect/op work (Todo 3+). **GATE PASSED.**
+>
+> Todo 3 (Wave 1): the `polykernel` dialect now defines **exactly** the named
+> transformer-inference op set via ODS/TableGen; every op parses + round-trips
+> and the op set is closed (undefined op → parse error). **DONE** — see
+> "Todo 3 (Wave 1)" section below + `reports/w1_dialect_roundtrip.log`,
+> `reports/w1_unknown_op.log`.
 
 ## Status
 
@@ -152,3 +158,75 @@ with `add_lit_testsuite(... DEPENDS polykernel-opt)` using `LLVM_EXTERNAL_LIT`.
 3. **`FileCheck`/`count`/`not` are not CMake targets** out-of-tree, so they must not
    appear in the lit `DEPENDS` (only `polykernel-opt` does); they are resolved at lit
    runtime from `LLVM_TOOLS_BINARY_DIR`.
+
+## Todo 3 (Wave 1): PolyKernel dialect ops (ODS/TableGen)
+
+Defined **exactly** the named transformer-inference op set in
+`include/PolyKernel/IR/PolyKernelOps.td` — nothing else (op-zoo guardrail). 18 ops
+register: 11 base (`func`, `rmsnorm`, `matmul`, `bias`, `gelu`, `silu`, `add`,
+`softmax`, `rope`, `attention`, `kv_cache_update`) + 6 fused
+(`fused_rmsnorm_matmul`, `fused_matmul_bias_gelu`, `fused_residual_rmsnorm`,
+`fused_softmax_mask`, `qkv_projection`, `fused_kv_append_attention`) + the
+`return` terminator. `polykernel.func`/`polykernel.return` are the function
+container + terminator (modeled on `func.func` via `FunctionOpInterface`), **not**
+compute ops, so the compute op-zoo guardrail holds. Verified: every op round-trips
+(`test/dialect_roundtrip.mlir`) and the set is closed (`test/op_set_closed.mlir`:
+`polykernel.conv2d` → `custom op 'polykernel.conv2d' is unknown`, exit 1).
+
+### TableGen / C++ build learnings (for Todo 4+)
+
+- **C++ class names are prefix-stripped.** Dialect def `PolyKernel_Dialect` strips
+  the `PolyKernel_` prefix from op defs: `def PolyKernel_MatMulOp` → C++ class
+  `mlir::polykernel::MatMulOp`. **`HasParent` takes the C++ name**: use
+  `HasParent<"FuncOp">`, NOT `HasParent<"PolyKernel_FuncOp">` (the latter emits an
+  undefined C++ type and fails with a confusing `no member named 'InferredProperties'`
+  cascade).
+- **ODS includes needed** (OpBase.td alone is NOT enough):
+  `mlir/IR/CommonTypeConstraints.td` (`AnyTensor`), `mlir/Interfaces/ControlFlowInterfaces.td`
+  (`ReturnLike`), `mlir/Interfaces/FunctionInterfaces.td` (`FunctionOpInterface`),
+  `mlir/Interfaces/InferTypeOpInterface.td` (`SameOperandsAndResultType`),
+  `mlir/Interfaces/SideEffectInterfaces.td` (`Pure`).
+- **Ops header needs `mlir/Bytecode/BytecodeOpInterface.h`** (MLIR 21 generates
+  properties/bytecode code that references `DialectBytecodeReader/Writer`). Mirror
+  the include set of upstream `FuncOps.h`.
+- **`AnyTensor` is a `def`, not a `class`** — you cannot `def X : AnyTensor;`. Use
+  `AnyTensor` directly as the operand/result constraint.
+- **Operand-type accessors:** an operand `$a` generates `getA()` returning a
+  `TypedValue<TensorType>`; get its type via `getA().getType()` (there is no
+  `getAType()` returning a `Type`).
+- **Optional operands with their own types need a custom parser** (declarative
+  assembly format can't print a type only when an optional operand is present
+  without `AttrSizedOperandSegments` + properties handling). To keep a clean
+  declarative format, `polykernel.rope`'s `cos`/`sin` are modeled as **explicit**
+  (required) operands. Revisit optionality in Todo 4 if needed.
+- **Link libs:** `MLIRPolyKernel` links `MLIRIR MLIRSupport MLIRFunctionInterfaces`.
+  `MLIRFunctionInterfaces` provides `function_interface_impl::parse/printFunctionOp`
+  (defined `T` in `libMLIRFunctionInterfaces.a`). `MLIRFuncDialect` is **not**
+  required (`polykernel.func` is our own op, not `func.func`). `MLIRInferTypeOpInterface`
+  not required (no shape inference yet).
+- **No upstream dialect registration needed in `polykernel-opt`.** The IR uses only
+  `polykernel.*` ops + builtin tensors; `registry.insert<PolyKernelDialect>()`
+  suffices (the dialect's `initialize()` now calls `addOperations<...>()` via
+  `GET_OP_LIST`). `--show-dialects` → `builtin,polykernel`.
+- **clangd gives false "header not found" errors** here: the nix `clang-wrapper`
+  bakes the MLIR/LLVM include paths in implicitly, so they are absent from
+  `compile_commands.json` and clangd can't resolve them. The authoritative check is
+  the nix compiler itself (`clang++ -fsyntax-only` with the build's warning flags →
+  clean) and the actual `cmake --build`.
+
+### CMake wiring (ops)
+
+`include/PolyKernel/IR/CMakeLists.txt` has TWO independent TableGen targets (no
+double-generation): `MLIRPolyKernelDialectIncGen` (`-gen-dialect-decls/-defs` from
+`PolyKernelDialect.td`) and `MLIRPolyKernelOpsIncGen` (`-gen-op-decls/-defs` from
+`PolyKernelOps.td`, which includes the dialect `.td` but defines no dialect record).
+`lib/IR/CMakeLists.txt` compiles both `PolyKernelDialect.cpp` + `PolyKernelOps.cpp`
+(co-located under `include/PolyKernel/IR/`) and `DEPENDS` on both IncGen targets.
+
+### Verification (Todo 3)
+
+`check-polykernel` → `Passed: 3 (100.00%)` (`smoke.mlir`, `dialect_roundtrip.mlir`,
+`op_set_closed.mlir`), deterministic across 2 runs. Evidence:
+`reports/w1_dialect_roundtrip.log` (round-tripped IR for every op + op census =
+exactly the 18 named ops) and `reports/w1_unknown_op.log` (`polykernel.conv2d`
+rejected, exit 1).

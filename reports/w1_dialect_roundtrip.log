@@ -1,0 +1,94 @@
+warning: Nix search path entry '/home/mei/.nix-defexpr/channels' does not exist, ignoring
+Running tasks     devenv:enterShell
+
+Running           devenv:files:cleanup
+Succeeded         devenv:files:cleanup (6.08ms)
+Running           devenv:enterShell
+Succeeded         devenv:enterShell (5.77ms)
+Running           devenv:enterTest
+No command        devenv:enterTest
+1 Skipped, 2 Succeeded
+PolyKernel dev shell (llvmPackages_21 MLIR / cudaPackages_12_6 / rocmPackages.clr)
+  CC/CXX:      /nix/store/m59w5gavjx8db0ay3m1yzbw02l54109b-clang-wrapper-21.1.8/bin/clang / /nix/store/m59w5gavjx8db0ay3m1yzbw02l54109b-clang-wrapper-21.1.8/bin/clang++
+  mlir-tblgen: LLVM (http://llvm.org/):
+  nvcc:        Cuda compilation tools, release 12.6, V12.6.85
+  hipcc:       HIP version: 7.2.53211-9999
+  cmake:       cmake version 4.1.2
+  clang:       clang version 21.1.8
+==================================================================
+PolyKernel W1 Todo 3 - dialect + ops round-trip verification
+date: 2026-07-22T23:51:03Z
+==================================================================
+
+### [1] polykernel-opt --show-dialects (dialect still registers) ###
+Available Dialects: builtin,polykernel
+
+### [2] check-polykernel run #1 (flaky_tests: determinism) ###
+PASS: POLYKERNEL :: smoke.mlir (1 of 3)
+PASS: POLYKERNEL :: op_set_closed.mlir (2 of 3)
+PASS: POLYKERNEL :: dialect_roundtrip.mlir (3 of 3)
+Testing Time: 0.11s
+Total Discovered Tests: 3
+  Passed: 3 (100.00%)
+
+### [3] check-polykernel run #2 (flaky_tests: determinism) ###
+PASS: POLYKERNEL :: op_set_closed.mlir (1 of 3)
+PASS: POLYKERNEL :: smoke.mlir (2 of 3)
+PASS: POLYKERNEL :: dialect_roundtrip.mlir (3 of 3)
+Testing Time: 0.10s
+Total Discovered Tests: 3
+  Passed: 3 (100.00%)
+
+### [4] lit verbose: dialect_roundtrip.mlir alone ###
+  Passed: 1 (100.00%)
+
+### [5] Round-tripped IR (polykernel-opt test/dialect_roundtrip.mlir) ###
+--- every named op appears in the canonical printed output below ---
+module {
+  polykernel.func @base_ops(%arg0: tensor<1x2048x4096xbf16>, %arg1: tensor<4096x11008xbf16>, %arg2: tensor<11008xbf16>, %arg3: tensor<1x2048x4096xbf16>, %arg4: tensor<1x2048x32x128xbf16>, %arg5: tensor<1x2048x32x128xbf16>, %arg6: tensor<1x32x2048x128xbf16>, %arg7: tensor<1x32x2048x128xbf16>, %arg8: tensor<1x32x2048x128xbf16>, %arg9: tensor<1x32x2048x128xbf16>, %arg10: tensor<1x32x1x128xbf16>, %arg11: tensor<1x32x1x128xbf16>) -> tensor<1x32x1x128xbf16> {
+    %0 = polykernel.rmsnorm %arg0 {epsilon = 9.99999974E-6 : f32} : tensor<1x2048x4096xbf16>
+    %1 = polykernel.matmul %0, %arg1 : tensor<1x2048x4096xbf16>, tensor<4096x11008xbf16> -> tensor<1x2048x11008xbf16>
+    %2 = polykernel.bias %1, %arg2 : tensor<1x2048x11008xbf16>, tensor<11008xbf16> -> tensor<1x2048x11008xbf16>
+    %3 = polykernel.gelu %2 : tensor<1x2048x11008xbf16>
+    %4 = polykernel.silu %3 : tensor<1x2048x11008xbf16>
+    %5 = polykernel.add %arg0, %arg3 : tensor<1x2048x4096xbf16>
+    %6 = polykernel.softmax %5 {axis = 2 : i64} : tensor<1x2048x4096xbf16>
+    %7 = polykernel.rope %arg6, %arg4, %arg5 : tensor<1x32x2048x128xbf16>, tensor<1x2048x32x128xbf16>, tensor<1x2048x32x128xbf16> -> tensor<1x32x2048x128xbf16>
+    %8 = polykernel.attention %arg6, %arg7, %arg8 : tensor<1x32x2048x128xbf16>, tensor<1x32x2048x128xbf16>, tensor<1x32x2048x128xbf16> -> tensor<1x32x2048x128xbf16>
+    %9 = polykernel.kv_cache_update %arg9, %arg10, %arg11 : tensor<1x32x2048x128xbf16>, tensor<1x32x1x128xbf16>, tensor<1x32x1x128xbf16> -> tensor<1x32x1x128xbf16>
+    polykernel.return %9 : tensor<1x32x1x128xbf16>
+  }
+  polykernel.func @fused_ops(%arg0: tensor<1x2048x4096xbf16>, %arg1: tensor<4096x11008xbf16>, %arg2: tensor<11008xbf16>, %arg3: tensor<1x2048x4096xbf16>, %arg4: tensor<1x1x2048x2048xbf16>, %arg5: tensor<4096x12288xbf16>, %arg6: tensor<1x32x2048x128xbf16>, %arg7: tensor<1x32x2048x128xbf16>, %arg8: tensor<1x32x1x128xbf16>, %arg9: tensor<1x32x1x128xbf16>) -> tensor<1x32x2048x128xbf16> {
+    %0 = polykernel.fused_rmsnorm_matmul %arg0, %arg1 {epsilon = 9.99999974E-6 : f32} : tensor<1x2048x4096xbf16>, tensor<4096x11008xbf16> -> tensor<1x2048x11008xbf16>
+    %1 = polykernel.fused_matmul_bias_gelu %arg0, %arg1, %arg2 : tensor<1x2048x4096xbf16>, tensor<4096x11008xbf16>, tensor<11008xbf16> -> tensor<1x2048x11008xbf16>
+    %2 = polykernel.fused_residual_rmsnorm %arg3, %arg0 {epsilon = 9.99999974E-6 : f32} : tensor<1x2048x4096xbf16>, tensor<1x2048x4096xbf16> -> tensor<1x2048x4096xbf16>
+    %3 = polykernel.fused_softmax_mask %arg0, %arg4 : tensor<1x2048x4096xbf16>, tensor<1x1x2048x2048xbf16> -> tensor<1x2048x4096xbf16>
+    %q, %k, %v = polykernel.qkv_projection %arg0, %arg5 : tensor<1x2048x4096xbf16>, tensor<4096x12288xbf16> -> tensor<1x32x2048x128xbf16>, tensor<1x32x2048x128xbf16>, tensor<1x32x2048x128xbf16>
+    %output, %updated_cache = polykernel.fused_kv_append_attention %arg6, %arg7, %arg8, %arg9 : tensor<1x32x2048x128xbf16>, tensor<1x32x2048x128xbf16>, tensor<1x32x1x128xbf16>, tensor<1x32x1x128xbf16> -> tensor<1x32x2048x128xbf16>, tensor<1x32x2048x128xbf16>
+    polykernel.return %output : tensor<1x32x2048x128xbf16>
+  }
+}
+
+
+### [6] FileCheck of round-tripped IR against the test CHECK lines ###
+FileCheck: PASS (all CHECK lines matched)
+
+### [7] Op census: distinct polykernel.* op mnemonics that round-trip ###
+polykernel.add
+polykernel.attention
+polykernel.bias
+polykernel.func
+polykernel.fused_kv_append_attention
+polykernel.fused_matmul_bias_gelu
+polykernel.fused_residual_rmsnorm
+polykernel.fused_rmsnorm_matmul
+polykernel.fused_softmax_mask
+polykernel.gelu
+polykernel.kv_cache_update
+polykernel.matmul
+polykernel.qkv_projection
+polykernel.return
+polykernel.rmsnorm
+polykernel.rope
+polykernel.silu
+polykernel.softmax

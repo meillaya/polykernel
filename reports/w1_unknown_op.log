@@ -1,0 +1,45 @@
+warning: Nix search path entry '/home/mei/.nix-defexpr/channels' does not exist, ignoring
+Running tasks     devenv:enterShell
+
+Running           devenv:files:cleanup
+Succeeded         devenv:files:cleanup (5.41ms)
+Running           devenv:enterShell
+Succeeded         devenv:enterShell (5.48ms)
+Running           devenv:enterTest
+No command        devenv:enterTest
+1 Skipped, 2 Succeeded
+PolyKernel dev shell (llvmPackages_21 MLIR / cudaPackages_12_6 / rocmPackages.clr)
+  CC/CXX:      /nix/store/m59w5gavjx8db0ay3m1yzbw02l54109b-clang-wrapper-21.1.8/bin/clang / /nix/store/m59w5gavjx8db0ay3m1yzbw02l54109b-clang-wrapper-21.1.8/bin/clang++
+  mlir-tblgen: LLVM (http://llvm.org/):
+  nvcc:        Cuda compilation tools, release 12.6, V12.6.85
+  hipcc:       HIP version: 7.2.53211-9999
+  cmake:       cmake version 4.1.2
+  clang:       clang version 21.1.8
+==================================================================
+PolyKernel W1 Todo 3 - op set is CLOSED (undefined op -> error)
+date: 2026-07-22T23:51:30Z
+==================================================================
+
+### [1] Pretty-form parse failure: polykernel.conv2d (undefined) ###
+--- input (test/op_set_closed.mlir body) ---
+builtin.module {
+  polykernel.func @bad(%x: tensor<1x3x224x224xbf16>) -> tensor<1x3x224x224xbf16> {
+    %0 = polykernel.conv2d %x : tensor<1x3x224x224xbf16> -> tensor<1x3x224x224xbf16>
+    polykernel.return %0 : tensor<1x3x224x224xbf16>
+  }
+}
+--- polykernel-opt output (stderr) ---
+test/op_set_closed.mlir:10:10: error: custom op 'polykernel.conv2d' is unknown
+    %0 = polykernel.conv2d %x : tensor<1x3x224x224xbf16> -> tensor<1x3x224x224xbf16>
+         ^
+--- exit code: 1 (non-zero => parse rejected as required) ---
+
+### [2] Generic-form failure: "polykernel.conv2d"() (unregistered) ###
+/tmp/opencode/conv2d_generic.mlir:3:10: error: unregistered operation 'polykernel.conv2d' found in dialect ('polykernel') that does not allow unknown operations
+    %0 = "polykernel.conv2d"() : () -> tensor<4096xbf16>
+         ^
+/tmp/opencode/conv2d_generic.mlir:3:10: note: see current operation: %0 = "polykernel.conv2d"() : () -> tensor<4096xbf16>
+--- exit code: 1 (non-zero => op not registered, dialect rejects unknown ops) ---
+
+### [3] lit negative test op_set_closed.mlir (not polykernel-opt | FileCheck) ###
+  Passed: 1 (100.00%)

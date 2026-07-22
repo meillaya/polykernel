@@ -1,6 +1,7 @@
 //===- PolyKernelDialect.h - PolyKernel dialect -----------------*- C++ -*-===//
 //
-// PolyKernel out-of-tree MLIR dialect (W1 spike: declaration only).
+// PolyKernel out-of-tree MLIR dialect: dialect declaration (operations live in
+// PolyKernelOps.h).
 //
 //===----------------------------------------------------------------------===//
 

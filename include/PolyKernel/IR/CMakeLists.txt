@@ -1,13 +1,24 @@
-# ===- PolyKernel dialect TableGen (W1 spike: dialect decl only, NO ops) -===
+# ===- PolyKernel dialect TableGen (dialect decl + ops via ODS) -===
 #
-# Direct mlir_tablegen for the dialect decls/defs (the task sanctions
-# `add_mlir_dialect` OR `mlir_tablegen`; we use mlir_tablegen directly so the
-# generated files are named PolyKernelDialect{.h,.cpp}.inc rather than the
-# doubled "PolyKernelDialectDialect.*.inc" that add_mlir_dialect(PolyKernelDialect ...)
-# would produce). Ops/Types/Attrs are intentionally absent - they land in Todo 3.
+# Direct mlir_tablegen (sanctioned alongside `add_mlir_dialect`). Two separate
+# TableGen targets so the dialect decls and the op decls/defs are generated
+# independently and NEVER double-generated:
+#   - MLIRPolyKernelDialectIncGen: -gen-dialect-decls/-defs from PolyKernelDialect.td
+#     (named PolyKernelDialect{.h,.cpp}.inc, not the doubled
+#     "PolyKernelDialectDialect.*.inc" add_mlir_dialect would produce).
+#   - MLIRPolyKernelOpsIncGen: -gen-op-decls/-defs from PolyKernelOps.td
+#     (named PolyKernelOps{.h,.cpp}.inc). PolyKernelOps.td includes
+#     PolyKernelDialect.td but defines NO dialect record of its own, so
+#     -gen-op-* emits only the op decls/defs.
 
 set(LLVM_TARGET_DEFINITIONS PolyKernelDialect.td)
 mlir_tablegen(PolyKernelDialect.h.inc -gen-dialect-decls -dialect=polykernel)
 mlir_tablegen(PolyKernelDialect.cpp.inc -gen-dialect-defs -dialect=polykernel)
 add_public_tablegen_target(MLIRPolyKernelDialectIncGen)
-add_dependencies(mlir-headers MLIRPolyKernelDialectIncGen)
+
+set(LLVM_TARGET_DEFINITIONS PolyKernelOps.td)
+mlir_tablegen(PolyKernelOps.h.inc -gen-op-decls)
+mlir_tablegen(PolyKernelOps.cpp.inc -gen-op-defs)
+add_public_tablegen_target(MLIRPolyKernelOpsIncGen)
+
+add_dependencies(mlir-headers MLIRPolyKernelDialectIncGen MLIRPolyKernelOpsIncGen)
