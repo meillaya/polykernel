@@ -71,3 +71,6 @@ add_subdirectory(include/PolyKernel)
 add_subdirectory(lib)
 add_subdirectory(tools/polykernel-opt)
 add_subdirectory(test)
+# Host CPU reference kernels + drivers (Todo 8). Plain C++ (no CUDA/MLIR); the
+# local executable spec validated against the Python golden.
+add_subdirectory(kernels)

@@ -1,0 +1,46 @@
+##############################################################################
+# PolyKernel Todo 8 (Wave 2): nvcc driver FAILURE PATH
+# Proves the driver/toolchain surfaces codegen bugs as clear captured errors.
+# nvcc: Cuda compilation tools, release 12.6, V12.6.85
+##############################################################################
+
+=== FAIL #1: generated kernel with an UNDEFINED MACRO (PK_GLOBAL -> PK_GLOBALL) ===
+--- diff vs good kernel (the simulated codegen typo) ---
+1c1
+< 47:PK_GLOBAL void rmsnorm_kernel(const pk_bf16 *__restrict__ input,
+---
+> 47:PK_GLOBALL void rmsnorm_kernel(const pk_bf16 *__restrict__ input,
+--- nvcc_driver.py on the broken kernel (expect non-zero exit + clear error) ---
+/tmp/opencode/broken_kernels/rmsnorm.cu(66): warning #177-D: variable "<unnamed>::local_ss" was declared but never referenced
+      local_ss += a * a + b * b;
+      ^
+
+11 errors detected in the compilation of "/tmp/opencode/broken_kernels/rmsnorm.cu".
+kernel: /tmp/opencode/broken_kernels/rmsnorm.cu
+archs:  sm_80
+nvcc:   /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/nvcc
+ptxas:  /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/ptxas
+========================================================================
+[nvcc] /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/nvcc -arch=sm_80 -DPOLYKERNEL_CUDA -Ikernels/template --ptx /tmp/opencode/broken_kernels/rmsnorm.cu -o build/nvcc/rmsnorm_sm_80.ptx
+error: nvcc failed for sm_80 (exit 1)
+nvcc_driver exit=1
+
+=== FAIL #2: generated kernel with a BROKEN INCLUDE path ===
+--- badinclude.cu ---
+// broken include (simulated codegen bug)
+#include "template/nonexistent_kernel_common.h"
+PK_GLOBAL void k(){}
+--- nvcc (expect: cannot find include file) ---
+/tmp/opencode/broken_kernels/badinclude.cu:2:10: fatal error: template/nonexistent_kernel_common.h: No such file or directory
+    2 | #include "template/nonexistent_kernel_common.h"
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+nvcc exit=1
+
+=== FAIL #3: good kernel compiled WITHOUT -DPOLYKERNEL_CUDA (template guard fires) ===
+--- nvcc (expect: #error from kernel_common.h) ---
+kernels/generated/../template/kernel_common.h:31:2: error: #error "kernel_common.h: define exactly one of -DPOLYKERNEL_CUDA or -DPOLYKERNEL_HIP"
+   31 | #error "kernel_common.h: define exactly one of -DPOLYKERNEL_CUDA or -DPOLYKERNEL_HIP"
+In file included from kernels/generated/../template/kernel_common.h:52:
+/nix/store/jc7q7dm8y1r2317sg888mi7pxzarg7m2-clr-7.2.3/include/hip/hip_runtime.h:59:10: fatal error: hip/nvidia_detail/nvidia_hip_runtime.h: No such file or directory
+nvcc exit=1

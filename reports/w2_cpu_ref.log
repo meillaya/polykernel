@@ -1,0 +1,40 @@
+##############################################################################
+# PolyKernel Todo 8 (Wave 2): CPU reference vs golden — pytest (run TWICE for
+# determinism; fixed seed defeats the flaky-tests adversarial class).
+# Validation bridge: bf16 .npy -> cpu_ref_rmsnorm -> .npy -> golden.assert_correct
+# python: Python 3.14.6  pytest: pytest 9.0.3
+##############################################################################
+
+=== RUN 1 ===
+============================= test session starts ==============================
+platform linux -- Python 3.14.6, pytest-9.0.3, pluggy-1.6.0 -- /nix/store/jxyrvv4gbpnp3ap5iy7wxwl1sg4x2x88-python3-3.14.6/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/mei/projects/polykernel
+collecting ... collected 6 items
+
+tests/kernels/test_cpu_ref.py::test_rmsnorm_no_weight_small PASSED       [ 16%]
+tests/kernels/test_cpu_ref.py::test_rmsnorm_with_weight PASSED           [ 33%]
+tests/kernels/test_cpu_ref.py::test_rmsnorm_odd_cols PASSED              [ 50%]
+tests/kernels/test_cpu_ref.py::test_rmsnorm_3d_flattens_leading_dims PASSED [ 66%]
+tests/kernels/test_cpu_ref.py::test_rmsnorm_custom_epsilon PASSED        [ 83%]
+tests/kernels/test_cpu_ref.py::test_rmsnorm_large_canonical_shape PASSED [100%]
+
+============================== 6 passed in 0.46s ===============================
+run1 exit=0
+
+=== RUN 2 (determinism: identical result) ===
+============================= test session starts ==============================
+platform linux -- Python 3.14.6, pytest-9.0.3, pluggy-1.6.0 -- /nix/store/jxyrvv4gbpnp3ap5iy7wxwl1sg4x2x88-python3-3.14.6/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/mei/projects/polykernel
+collecting ... collected 6 items
+
+tests/kernels/test_cpu_ref.py::test_rmsnorm_no_weight_small PASSED       [ 16%]
+tests/kernels/test_cpu_ref.py::test_rmsnorm_with_weight PASSED           [ 33%]
+tests/kernels/test_cpu_ref.py::test_rmsnorm_odd_cols PASSED              [ 50%]
+tests/kernels/test_cpu_ref.py::test_rmsnorm_3d_flattens_leading_dims PASSED [ 66%]
+tests/kernels/test_cpu_ref.py::test_rmsnorm_custom_epsilon PASSED        [ 83%]
+tests/kernels/test_cpu_ref.py::test_rmsnorm_large_canonical_shape PASSED [100%]
+
+============================== 6 passed in 0.44s ===============================
+run2 exit=0

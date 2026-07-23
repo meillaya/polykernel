@@ -13,10 +13,12 @@
 // see docs/compiler_pipeline.md).
 //
 // Passes:
-//   - `--infer-shapes`  (Todo 4): shape + dtype inference (InferShapes.h).
-//   - `--canonicalize`  (Todo 5): canonicalization patterns + DCE
+//   - `--infer-shapes`   (Todo 4): shape + dtype inference (InferShapes.h).
+//   - `--canonicalize`   (Todo 5): canonicalization patterns + DCE
 //     (Canonicalize.h).
-// Both are picked up by registerPolyKernelPasses() automatically.
+//   - `--lower-to-cuda`  (Todo 8): emit portable CUDA/HIP kernel source
+//     (LowerToCuda.h).
+// All are picked up by registerPolyKernelPasses() automatically.
 //
 //===----------------------------------------------------------------------===//
 
@@ -25,6 +27,7 @@
 
 #include "PolyKernel/Passes/Canonicalize.h"
 #include "PolyKernel/Passes/InferShapes.h"
+#include "PolyKernel/Passes/LowerToCuda.h"
 
 namespace mlir::polykernel {
 // Generated registration helpers: registerInferShapesPass() /

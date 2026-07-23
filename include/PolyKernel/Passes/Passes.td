@@ -114,4 +114,34 @@ def Canonicalize : Pass<"canonicalize", "ModuleOp"> {
   let constructor = "::mlir::polykernel::createCanonicalizePass()";
 }
 
+//===----------------------------------------------------------------------===//
+// LowerToCuda
+//===----------------------------------------------------------------------===//
+
+def LowerToCuda : Pass<"lower-to-cuda", "ModuleOp"> {
+  let summary = "Emit portable CUDA/HIP kernel source (.cu) for PolyKernel ops";
+  let description = [{
+    A CUSTOM SOURCE EMITTER (Pinned contract F): walks the PolyKernel IR and, for
+    each recognized compute op kind, string-emits a portable CUDA/HIP kernel
+    source file (.cu) into `--output-dir`. It does NOT use gpu-to-llvm /
+    convert-to-llvm; the emitted .cu is written against
+    kernels/template/kernel_common.h and compiled to PTX by the nvcc driver. The
+    IR itself is left unchanged.
+
+    Todo 8 emits RMSNorm (`kernels/generated/rmsnorm.cu`); Todo 9/10 extend the
+    dispatch to gelu/silu/matmul/softmax.
+  }];
+
+  let options = [
+    Option<"outputDir", "output-dir", "std::string",
+           /*default=*/"\"kernels/generated\"",
+           "Directory to write the generated .cu kernel sources">
+  ];
+
+  // Registered explicitly via the TableGen-generated registerLowerToCudaPass()
+  // / registerPolyKernelPasses() (see Passes.h) — never registerAllPasses (nix
+  // out-of-tree constraint).
+  let constructor = "::mlir::polykernel::createLowerToCudaPass()";
+}
+
 #endif // POLYKERNEL_PASSES
