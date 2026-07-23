@@ -97,6 +97,31 @@ void launch_gelu_cpu(const uint16_t *input, uint16_t *output, int64_t n);
 // output is rounded back to bf16. Shape-agnostic: the caller flattens dims to `n`.
 void launch_silu_cpu(const uint16_t *input, uint16_t *output, int64_t n);
 
+//===----------------------------------------------------------------------===//
+// MatMul CPU reference.
+//===----------------------------------------------------------------------===//
+//
+// Tiled-baseline matrix multiply: C[M,N] = A[M,K] @ B[K,N]. `a`/`b`/`c` are
+// row-major bf16 (raw uint16 bits). Accumulation is fp32 (matching golden's
+// np.matmul on fp32(bf16(a)), fp32(bf16(b))); each output element is rounded
+// back to bf16 (RNE). Batched leading dims are flattened into M by the caller
+// (matching golden's np.matmul on [...,M,K] @ [K,N]).
+void launch_matmul_cpu(const uint16_t *a, const uint16_t *b, uint16_t *c,
+                       int64_t M, int64_t N, int64_t K);
+
+//===----------------------------------------------------------------------===//
+// Softmax CPU reference.
+//===----------------------------------------------------------------------===//
+//
+// Numerically stable softmax over the LAST axis: for each of `rows` length-`cols`
+// rows, subtract the row max before exp, then normalize:
+//     m = max(x);  y = exp(x - m) / sum(exp(x - m)).
+// `input`/`output` are row-major bf16 (raw uint16 bits). Compute is fp32
+// (std::exp); the output is rounded back to bf16 (RNE). The caller flattens all
+// leading dims into `rows` (matching golden's softmax(axis=-1)).
+void launch_softmax_cpu(const uint16_t *input, uint16_t *output, int64_t rows,
+                        int64_t cols);
+
 } // namespace polykernel::cpu
 
 #endif // POLYKERNEL_KERNELS_CPU_CPU_REFERENCE_H

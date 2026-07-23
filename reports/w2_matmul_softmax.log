@@ -1,0 +1,144 @@
+##############################################################################
+# PolyKernel Todo 10 (Wave 2): CUDA MatMul + Softmax kernels + CPU reference — QA log
+# Extends the Todo 8/9 framework (RMSNorm/GELU/SiLU). Deliverables: matmul.cu
+# (tiled shared-mem GEMM, fp32 accum, NO tensor cores) + softmax.cu (stable, one
+# block/row) CUDA kernels (portable template), --lower-to-cuda matmul/softmax
+# emitters (byte-identical to standalone), launch_matmul_cpu + launch_softmax_cpu
+# CPU refs + drivers, CPU-ref-vs-golden tests. RMSNorm/GELU/SiLU re-confirmed.
+# ROUNDING CONTRACT: bf16 (RNE) in, fp32 compute/accumulate, bf16 out (golden.py).
+# MatMul C[M,N]=A[M,K]@B[K,N] (batched leading dims flattened into M, np.matmul).
+# Softmax: stable (subtract row max before exp), last axis, fp32, bf16 out.
+##############################################################################
+
+=== STEP 0: reconfigure (CMakeLists changed) + build ===
+-- Configuring done (0.1s)
+-- Generating done (0.0s)
+-- Build files have been written to: /home/mei/projects/polykernel/build
+configure exit: 0
+ninja: no work to do.
+build exit: 0
+
+=== STEP 1: polykernel-opt --lower-to-cuda emits matmul.cu + softmax.cu ===
+--- input IR (matmul + softmax) ---
+polykernel.func @mm_sm(%a: tensor<128x128xbf16>, %b: tensor<128x128xbf16>) -> tensor<128x128xbf16> {
+  %0 = polykernel.matmul %a, %b : tensor<128x128xbf16>, tensor<128x128xbf16> -> tensor<128x128xbf16>
+  %1 = polykernel.softmax %0 : tensor<128x128xbf16>
+  polykernel.return %1 : tensor<128x128xbf16>
+}
+--- run (default --output-dir=kernels/generated) ---
+polykernel-opt exit: 0
+-rw-r--r-- 1 mei mei 3976 Jul 22 23:54 matmul.cu
+-rw-r--r-- 1 mei mei 4787 Jul 22 23:54 softmax.cu
+--- emitter output is byte-identical to the standalone deliverable .cu ---
+matmul.cu: emitter == standalone (IDENTICAL)
+softmax.cu: emitter == standalone (IDENTICAL)
+
+=== STEP 2: nvcc_driver.py --kernel matmul --arch sm_80,sm_90 --ptx ===
+kernel: kernels/generated/matmul.cu
+archs:  sm_80, sm_90
+nvcc:   /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/nvcc
+ptxas:  /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/ptxas
+========================================================================
+[nvcc] /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/nvcc -arch=sm_80 -DPOLYKERNEL_CUDA -Ikernels/template --ptx kernels/generated/matmul.cu -o build/nvcc/matmul_sm_80.ptx
+[ptxas] /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/ptxas -v -arch=sm_80 build/nvcc/matmul_sm_80.ptx -o build/nvcc/matmul_sm_80.cubin
+--- ptxas -v (sm_80) ---
+  ptxas info    : 0 bytes gmem
+  ptxas info    : Compiling entry function '_ZN41_GLOBAL__N__d51d85d3_9_matmul_cu_87f56b2c13matmul_kernelEPK13__nv_bfloat16S2_PS0_iii' for 'sm_80'
+  ptxas info    : Function properties for _ZN41_GLOBAL__N__d51d85d3_9_matmul_cu_87f56b2c13matmul_kernelEPK13__nv_bfloat16S2_PS0_iii
+  ptxas info    : Used 31 registers, used 1 barriers, 1024 bytes smem, 388 bytes cmem[0]
+  [parsed] registers=31 smem=1024B spill_stores=0B spill_loads=0B stack=0B cmem0=388B
+  PTX: build/nvcc/matmul_sm_80.ptx
+========================================================================
+[nvcc] /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/nvcc -arch=sm_90 -DPOLYKERNEL_CUDA -Ikernels/template --ptx kernels/generated/matmul.cu -o build/nvcc/matmul_sm_90.ptx
+[ptxas] /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/ptxas -v -arch=sm_90 build/nvcc/matmul_sm_90.ptx -o build/nvcc/matmul_sm_90.cubin
+--- ptxas -v (sm_90) ---
+  ptxas info    : 0 bytes gmem
+  ptxas info    : Compiling entry function '_ZN41_GLOBAL__N__d51d85d3_9_matmul_cu_87f56b2c13matmul_kernelEPK13__nv_bfloat16S2_PS0_iii' for 'sm_90'
+  ptxas info    : Function properties for _ZN41_GLOBAL__N__d51d85d3_9_matmul_cu_87f56b2c13matmul_kernelEPK13__nv_bfloat16S2_PS0_iii
+  ptxas info    : Used 32 registers, used 1 barriers, 1024 bytes smem
+  [parsed] registers=32 smem=1024B spill_stores=0B spill_loads=0B stack=0B cmem0=0B
+  PTX: build/nvcc/matmul_sm_90.ptx
+========================================================================
+OK: compiled matmul for sm_80, sm_90; PTX emitted.
+matmul nvcc_driver exit: 0
+
+=== STEP 3: nvcc_driver.py --kernel softmax --arch sm_80,sm_90 --ptx ===
+kernel: kernels/generated/softmax.cu
+archs:  sm_80, sm_90
+nvcc:   /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/nvcc
+ptxas:  /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/ptxas
+========================================================================
+[nvcc] /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/nvcc -arch=sm_80 -DPOLYKERNEL_CUDA -Ikernels/template --ptx kernels/generated/softmax.cu -o build/nvcc/softmax_sm_80.ptx
+[ptxas] /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/ptxas -v -arch=sm_80 build/nvcc/softmax_sm_80.ptx -o build/nvcc/softmax_sm_80.cubin
+--- ptxas -v (sm_80) ---
+  ptxas info    : 0 bytes gmem
+  ptxas info    : Compiling entry function '_ZN43_GLOBAL__N__4db6ce2a_10_softmax_cu_19b4ee2a14softmax_kernelEPK13__nv_bfloat16PS0_i' for 'sm_80'
+  ptxas info    : Function properties for _ZN43_GLOBAL__N__4db6ce2a_10_softmax_cu_19b4ee2a14softmax_kernelEPK13__nv_bfloat16PS0_i
+  ptxas info    : Used 28 registers, used 1 barriers, 40 bytes smem, 372 bytes cmem[0]
+  [parsed] registers=28 smem=40B spill_stores=0B spill_loads=0B stack=0B cmem0=372B
+  PTX: build/nvcc/softmax_sm_80.ptx
+========================================================================
+[nvcc] /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/nvcc -arch=sm_90 -DPOLYKERNEL_CUDA -Ikernels/template --ptx kernels/generated/softmax.cu -o build/nvcc/softmax_sm_90.ptx
+[ptxas] /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/ptxas -v -arch=sm_90 build/nvcc/softmax_sm_90.ptx -o build/nvcc/softmax_sm_90.cubin
+--- ptxas -v (sm_90) ---
+  ptxas info    : 0 bytes gmem
+  ptxas info    : Compiling entry function '_ZN43_GLOBAL__N__4db6ce2a_10_softmax_cu_19b4ee2a14softmax_kernelEPK13__nv_bfloat16PS0_i' for 'sm_90'
+  ptxas info    : Function properties for _ZN43_GLOBAL__N__4db6ce2a_10_softmax_cu_19b4ee2a14softmax_kernelEPK13__nv_bfloat16PS0_i
+  ptxas info    : Used 28 registers, used 1 barriers, 40 bytes smem
+  [parsed] registers=28 smem=40B spill_stores=0B spill_loads=0B stack=0B cmem0=0B
+  PTX: build/nvcc/softmax_sm_90.ptx
+========================================================================
+OK: compiled softmax for sm_80, sm_90; PTX emitted.
+softmax nvcc_driver exit: 0
+
+=== STEP 4: pytest tests/kernels/ -v (RUN 1) ===
+============================= test session starts ==============================
+
+tests/kernels/test_cpu_ref.py::test_rmsnorm_no_weight_small PASSED       [  5%]
+tests/kernels/test_cpu_ref.py::test_rmsnorm_with_weight PASSED           [ 10%]
+tests/kernels/test_cpu_ref.py::test_rmsnorm_odd_cols PASSED              [ 15%]
+tests/kernels/test_cpu_ref.py::test_rmsnorm_3d_flattens_leading_dims PASSED [ 21%]
+tests/kernels/test_cpu_ref.py::test_rmsnorm_custom_epsilon PASSED        [ 26%]
+tests/kernels/test_cpu_ref.py::test_rmsnorm_large_canonical_shape PASSED [ 31%]
+tests/kernels/test_cpu_ref_activations.py::test_gelu_small PASSED        [ 36%]
+tests/kernels/test_cpu_ref_activations.py::test_gelu_odd_length PASSED   [ 42%]
+tests/kernels/test_cpu_ref_activations.py::test_gelu_canonical_shape PASSED [ 47%]
+tests/kernels/test_cpu_ref_activations.py::test_silu_small PASSED        [ 52%]
+tests/kernels/test_cpu_ref_activations.py::test_silu_odd_length PASSED   [ 57%]
+tests/kernels/test_cpu_ref_activations.py::test_silu_canonical_shape PASSED [ 63%]
+tests/kernels/test_cpu_ref_matmul_softmax.py::test_matmul_square PASSED  [ 68%]
+tests/kernels/test_cpu_ref_matmul_softmax.py::test_matmul_rectangular PASSED [ 73%]
+tests/kernels/test_cpu_ref_matmul_softmax.py::test_matmul_non_tile_multiple PASSED [ 78%]
+tests/kernels/test_cpu_ref_matmul_softmax.py::test_matmul_batched_flattens_leading_dims PASSED [ 84%]
+tests/kernels/test_cpu_ref_matmul_softmax.py::test_softmax_tokens_vocab PASSED [ 89%]
+tests/kernels/test_cpu_ref_matmul_softmax.py::test_softmax_odd_last_dim PASSED [ 94%]
+tests/kernels/test_cpu_ref_matmul_softmax.py::test_softmax_3d_flattens_leading_dims PASSED [100%]
+
+============================== 19 passed in 2.25s ==============================
+run1 exit: 0
+
+=== STEP 4b: pytest tests/kernels/ -v (RUN 2 — determinism / flaky-tests class) ===
+============================= test session starts ==============================
+
+tests/kernels/test_cpu_ref.py::test_rmsnorm_no_weight_small PASSED       [  5%]
+tests/kernels/test_cpu_ref.py::test_rmsnorm_with_weight PASSED           [ 10%]
+tests/kernels/test_cpu_ref.py::test_rmsnorm_odd_cols PASSED              [ 15%]
+tests/kernels/test_cpu_ref.py::test_rmsnorm_3d_flattens_leading_dims PASSED [ 21%]
+tests/kernels/test_cpu_ref.py::test_rmsnorm_custom_epsilon PASSED        [ 26%]
+tests/kernels/test_cpu_ref.py::test_rmsnorm_large_canonical_shape PASSED [ 31%]
+tests/kernels/test_cpu_ref_activations.py::test_gelu_small PASSED        [ 36%]
+tests/kernels/test_cpu_ref_activations.py::test_gelu_odd_length PASSED   [ 42%]
+tests/kernels/test_cpu_ref_activations.py::test_gelu_canonical_shape PASSED [ 47%]
+tests/kernels/test_cpu_ref_activations.py::test_silu_small PASSED        [ 52%]
+tests/kernels/test_cpu_ref_activations.py::test_silu_odd_length PASSED   [ 57%]
+tests/kernels/test_cpu_ref_activations.py::test_silu_canonical_shape PASSED [ 63%]
+tests/kernels/test_cpu_ref_matmul_softmax.py::test_matmul_square PASSED  [ 68%]
+tests/kernels/test_cpu_ref_matmul_softmax.py::test_matmul_rectangular PASSED [ 73%]
+tests/kernels/test_cpu_ref_matmul_softmax.py::test_matmul_non_tile_multiple PASSED [ 78%]
+tests/kernels/test_cpu_ref_matmul_softmax.py::test_matmul_batched_flattens_leading_dims PASSED [ 84%]
+tests/kernels/test_cpu_ref_matmul_softmax.py::test_softmax_tokens_vocab PASSED [ 89%]
+tests/kernels/test_cpu_ref_matmul_softmax.py::test_softmax_odd_last_dim PASSED [ 94%]
+tests/kernels/test_cpu_ref_matmul_softmax.py::test_softmax_3d_flattens_leading_dims PASSED [100%]
+
+============================== 19 passed in 2.20s ==============================
+run2 exit: 0

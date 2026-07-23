@@ -14,6 +14,8 @@
 #                       LLVM_RUNTIME_OUTPUT_INTDIR is set project-wide).
 #   - cpu_ref_gelu:     driver exe (reads input.npy, writes GELU output.npy).
 #   - cpu_ref_silu:     driver exe (reads input.npy, writes SiLU output.npy).
+#   - cpu_ref_matmul:   driver exe (reads A.npy + B.npy, writes C = A @ B).
+#   - cpu_ref_softmax:  driver exe (reads input.npy, writes stable softmax).
 
 add_library(cpu_reference STATIC
   cpu/cpu_reference.cpp
@@ -30,3 +32,9 @@ target_link_libraries(cpu_ref_gelu PRIVATE cpu_reference)
 
 add_executable(cpu_ref_silu cpu/cpu_ref_silu.cpp)
 target_link_libraries(cpu_ref_silu PRIVATE cpu_reference)
+
+add_executable(cpu_ref_matmul cpu/cpu_ref_matmul.cpp)
+target_link_libraries(cpu_ref_matmul PRIVATE cpu_reference)
+
+add_executable(cpu_ref_softmax cpu/cpu_ref_softmax.cpp)
+target_link_libraries(cpu_ref_softmax PRIVATE cpu_reference)

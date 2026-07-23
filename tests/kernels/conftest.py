@@ -130,3 +130,58 @@ def run_silu(tmp_path: Path):
     """Drive the CPU-ref SiLU on a bf16 input; return the bf16 output."""
     exe = _require_exe(CPU_REF_SILU_EXE)
     return lambda x: _drive_activation(exe, x, tmp_path)
+
+
+# MatMul + Softmax CPU-ref drivers (Todo 10).
+CPU_REF_MATMUL_EXE = _PROJECT_ROOT / "build" / "kernels" / "cpu_ref_matmul"
+CPU_REF_SOFTMAX_EXE = _PROJECT_ROOT / "build" / "kernels" / "cpu_ref_softmax"
+
+
+@pytest.fixture
+def run_matmul(tmp_path: Path):
+    """Drive the CPU-ref MatMul on bf16 A, B; return the bf16 C = A @ B."""
+    exe = _require_exe(CPU_REF_MATMUL_EXE)
+
+    def _run(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+        a_path = tmp_path / "a.npy"
+        b_path = tmp_path / "b.npy"
+        c_path = tmp_path / "c.npy"
+        np.save(a_path, a)
+        np.save(b_path, b)
+        proc = subprocess.run(
+            [str(exe), str(a_path), str(b_path), str(c_path)],
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+        if proc.returncode != 0:
+            raise RuntimeError(
+                f"cpu_ref_matmul failed (exit {proc.returncode}):\n{proc.stderr}"
+            )
+        return np.load(c_path).view(ml_dtypes.bfloat16)
+
+    return _run
+
+
+@pytest.fixture
+def run_softmax(tmp_path: Path):
+    """Drive the CPU-ref Softmax on a bf16 input; return the bf16 output."""
+    exe = _require_exe(CPU_REF_SOFTMAX_EXE)
+
+    def _run(x: np.ndarray, axis: int = -1) -> np.ndarray:
+        in_path = tmp_path / "input.npy"
+        out_path = tmp_path / "output.npy"
+        np.save(in_path, x)
+        proc = subprocess.run(
+            [str(exe), str(in_path), str(out_path), "--axis", repr(axis)],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        if proc.returncode != 0:
+            raise RuntimeError(
+                f"cpu_ref_softmax failed (exit {proc.returncode}):\n{proc.stderr}"
+            )
+        return np.load(out_path).view(ml_dtypes.bfloat16)
+
+    return _run
