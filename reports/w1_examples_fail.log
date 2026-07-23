@@ -1,0 +1,33 @@
+# PolyKernel Todo 6 (Wave 1): EXAMPLE FAILURE CASES (op-zoo + shape guardrails)
+# Generated: 2026-07-23T02:23:35Z
+# Binary: build/tools/polykernel-opt/polykernel-opt (prebuilt; no source changed, no rebuild needed)
+# Each case below MUST fail with a non-zero exit code.
+
+########################################################################
+# CASE A: matmul contraction-dimension K mismatch (--infer-shapes)
+#   A = tensor<1x2048x4096xbf16>  -> K = 4096
+#   B = tensor<2048x11008xbf16>   -> K = 2048   (4096 != 2048)
+########################################################################
+$ build/tools/polykernel-opt/polykernel-opt /tmp/opencode/fail_matmul_k.mlir --infer-shapes --canonicalize
+--- output (stdout+stderr) ---
+/tmp/opencode/fail_matmul_k.mlir:7:8: error: matmul shape mismatch: contraction dimension K differs (lhs K = 4096 vs rhs K = 2048)
+  %0 = polykernel.matmul %a, %b
+       ^
+--- exit code: 1 ---
+
+########################################################################
+# CASE B: undefined op polykernel.conv2d (NOT in the 18-op set) -> parse error
+########################################################################
+$ build/tools/polykernel-opt/polykernel-opt /tmp/opencode/fail_unknown_op.mlir --infer-shapes --canonicalize
+--- output (stdout+stderr) ---
+/tmp/opencode/fail_unknown_op.mlir:6:8: error: custom op 'polykernel.conv2d' is unknown
+  %0 = polykernel.conv2d %x
+       ^
+--- exit code: 1 ---
+
+########################################################################
+# SUMMARY
+########################################################################
+CASE A (matmul K mismatch)  exit code: 1  (expected non-zero)
+CASE B (undefined conv2d)   exit code: 1  (expected non-zero)
+RESULT: PASS - both bad inputs rejected with non-zero exit.
