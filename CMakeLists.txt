@@ -23,6 +23,10 @@ set(CMAKE_CXX_STANDARD 20 CACHE STRING "C++ standard to conform to")
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Enable CTest at the top level so the gtest suites registered under
+# lib/Analysis (Todo 11) are discoverable from the build root via `ctest`.
+enable_testing()
+
 # --- nix gotcha guard: mlir-tblgen must be pinned before find_package(MLIR) ---
 if(NOT MLIR_TABLEGEN_EXE)
   message(FATAL_ERROR
@@ -70,6 +74,8 @@ add_definitions(${LLVM_DEFINITIONS})
 add_subdirectory(include/PolyKernel)
 add_subdirectory(lib)
 add_subdirectory(tools/polykernel-opt)
+# GPU-free compile-time analyzer CLI (Todo 11); wraps lib/Analysis.
+add_subdirectory(tools/polykernel-analyze)
 add_subdirectory(test)
 # Host CPU reference kernels + drivers (Todo 8). Plain C++ (no CUDA/MLIR); the
 # local executable spec validated against the Python golden.

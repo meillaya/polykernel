@@ -1,0 +1,175 @@
+############################################################
+# Todo 11 (Wave 2): compile-time analyzer v1 - QA log
+# GPU-FREE: nvcc/ptxas run without a device.
+############################################################
+
+=== [1] ctest run #1 (gtest suites) ===
+Test project /home/mei/projects/polykernel/build
+      Start  1: PtxasParser.NewFormatMatmul
+ 1/18 Test  #1: PtxasParser.NewFormatMatmul .................   Passed    0.00 sec
+      Start  2: PtxasParser.OldFormatWithSpills
+ 2/18 Test  #2: PtxasParser.OldFormatWithSpills .............   Passed    0.00 sec
+      Start  3: PtxasParser.NewFormatSoftmaxMissingFields
+ 3/18 Test  #3: PtxasParser.NewFormatSoftmaxMissingFields ...   Passed    0.00 sec
+      Start  4: PtxasParser.GmemField
+ 4/18 Test  #4: PtxasParser.GmemField .......................   Passed    0.00 sec
+      Start  5: PtxasParser.GarbageInputIsError
+ 5/18 Test  #5: PtxasParser.GarbageInputIsError .............   Passed    0.00 sec
+      Start  6: PtxasParser.EmptyInputIsError
+ 6/18 Test  #6: PtxasParser.EmptyInputIsError ...............   Passed    0.00 sec
+      Start  7: Occupancy.HandComputedRegisterLimitedSm90
+ 7/18 Test  #7: Occupancy.HandComputedRegisterLimitedSm90 ...   Passed    0.00 sec
+      Start  8: Occupancy.RegisterLimitedSm80
+ 8/18 Test  #8: Occupancy.RegisterLimitedSm80 ...............   Passed    0.00 sec
+      Start  9: Occupancy.SmemLimitedSm90
+ 9/18 Test  #9: Occupancy.SmemLimitedSm90 ...................   Passed    0.00 sec
+      Start 10: Occupancy.WarpLimitedSm90
+10/18 Test #10: Occupancy.WarpLimitedSm90 ...................   Passed    0.00 sec
+      Start 11: Occupancy.BlockLimitedSm90
+11/18 Test #11: Occupancy.BlockLimitedSm90 ..................   Passed    0.00 sec
+      Start 12: Occupancy.MatmulKernelSm90
+12/18 Test #12: Occupancy.MatmulKernelSm90 ..................   Passed    0.00 sec
+      Start 13: Occupancy.ArchParseAndNames
+13/18 Test #13: Occupancy.ArchParseAndNames .................   Passed    0.00 sec
+      Start 14: Roofline.LargeGemmIsComputeBound
+14/18 Test #14: Roofline.LargeGemmIsComputeBound ............   Passed    0.00 sec
+      Start 15: Roofline.SmallGemmIsMemoryBound
+15/18 Test #15: Roofline.SmallGemmIsMemoryBound .............   Passed    0.00 sec
+      Start 16: Roofline.Matmul128CubeIsMemoryBound
+16/18 Test #16: Roofline.Matmul128CubeIsMemoryBound .........   Passed    0.00 sec
+      Start 17: Roofline.Sm80RidgeClassification
+17/18 Test #17: Roofline.Sm80RidgeClassification ............   Passed    0.00 sec
+      Start 18: Roofline.BoundNames
+18/18 Test #18: Roofline.BoundNames .........................   Passed    0.00 sec
+
+100% tests passed, 0 tests failed out of 18
+
+Total Test time (real) =   0.03 sec
+
+=== [2] ctest run #2 (determinism check) ===
+      Start 17: Roofline.Sm80RidgeClassification
+17/18 Test #17: Roofline.Sm80RidgeClassification ............   Passed    0.00 sec
+      Start 18: Roofline.BoundNames
+18/18 Test #18: Roofline.BoundNames .........................   Passed    0.00 sec
+
+100% tests passed, 0 tests failed out of 18
+
+Total Test time (real) =   0.03 sec
+
+=== [3] GPU-free analyze.py: matmul 128,128,128 sm_90 (JSON) ===
+$ python tools/polykernel-bench/analyze.py --backend=cuda --mode=analyze --kernel matmul --shape 128,128,128 --arch sm_90
+[nvcc] /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/nvcc -arch=sm_90 -DPOLYKERNEL_CUDA -Ikernels/template --ptx kernels/generated/matmul.cu -o build/nvcc/matmul_sm_90.ptx
+[ptxas] /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/ptxas -v -arch=sm_90 build/nvcc/matmul_sm_90.ptx -o build/nvcc/matmul_sm_90.cubin
+[analyze] /home/mei/projects/polykernel/build/tools/polykernel-analyze/polykernel-analyze --kernel matmul --backend cuda --arch sm_90 --shape 128,128,128 --dtype-bytes 2 --threads-per-block 256 --path scalar --ptxas-log - --format json
+{
+  "kernel": "matmul",
+  "backend": "cuda",
+  "arch": "sm_90",
+  "registers_per_thread": 32,
+  "smem_per_block_bytes": 1024,
+  "spill_stores_bytes": 0,
+  "spill_loads_bytes": 0,
+  "occupancy": {
+    "active_warps_per_sm": 64,
+    "max_warps_per_sm": 64,
+    "occupancy_pct": 100,
+    "limiter": "registers"
+  },
+  "traffic": {
+    "global_read_bytes": 65536,
+    "global_write_bytes": 32768,
+    "arithmetic_intensity_flop_per_byte": 42.6667,
+    "roofline": "memory-bound"
+  },
+  "bottleneck": "memory",
+  "suggested_fixes": ["wider vectorized loads / fuse to reduce traffic"],
+  "path": "scalar"
+}
+
+=== [4] Same report, text format (readability) ===
+kernel:                 matmul
+backend:                cuda
+arch:                   sm_90
+registers_per_thread:   32
+smem_per_block_bytes:   1024
+spill_stores_bytes:     0
+spill_loads_bytes:      0
+occupancy:
+  active_warps_per_sm:  64
+  max_warps_per_sm:     64
+  occupancy_pct:        100
+  limiter:              registers
+traffic:
+  global_read_bytes:    65536
+  global_write_bytes:   32768
+  arithmetic_intensity: 42.6667 flop/byte
+  roofline:             memory-bound
+bottleneck:             memory
+path:                   scalar
+suggested_fixes:
+  - wider vectorized loads / fuse to reduce traffic
+
+=== [5] GPU-free analyze.py: softmax (second kernel) sm_90, text ===
+$ python tools/polykernel-bench/analyze.py --backend=cuda --mode=analyze --kernel softmax --shape 128,128,128 --arch sm_90 --format text
+kernel:                 softmax
+backend:                cuda
+arch:                   sm_90
+registers_per_thread:   28
+smem_per_block_bytes:   40
+spill_stores_bytes:     0
+spill_loads_bytes:      0
+occupancy:
+  active_warps_per_sm:  64
+  max_warps_per_sm:     64
+  occupancy_pct:        100
+  limiter:              warps
+traffic:
+  global_read_bytes:    65536
+  global_write_bytes:   32768
+  arithmetic_intensity: 42.6667 flop/byte
+  roofline:             memory-bound
+bottleneck:             memory
+path:                   scalar
+suggested_fixes:
+  - wider vectorized loads / fuse to reduce traffic
+
+=== [6] matmul on sm_80 (A100) - exercises the sm_80 constant table ===
+{
+  "kernel": "matmul",
+  "backend": "cuda",
+  "arch": "sm_80",
+  "registers_per_thread": 31,
+  "smem_per_block_bytes": 1024,
+  "spill_stores_bytes": 0,
+  "spill_loads_bytes": 0,
+  "occupancy": {
+    "active_warps_per_sm": 64,
+    "max_warps_per_sm": 64,
+    "occupancy_pct": 100,
+    "limiter": "registers"
+  },
+  "traffic": {
+    "global_read_bytes": 65536,
+    "global_write_bytes": 32768,
+    "arithmetic_intensity_flop_per_byte": 42.6667,
+    "roofline": "memory-bound"
+  },
+  "bottleneck": "memory",
+  "suggested_fixes": ["wider vectorized loads / fuse to reduce traffic"],
+  "path": "scalar"
+}
+
+=== [7] Contract H schema validation (stdout is clean machine-readable JSON) ===
+Progress lines ([nvcc]/[ptxas]/[analyze]) go to stderr; ONLY the report is on stdout.
+VALID JSON, parses with json.load
+top-level keys: ['arch', 'backend', 'bottleneck', 'kernel', 'occupancy', 'path', 'registers_per_thread', 'smem_per_block_bytes', 'spill_loads_bytes', 'spill_stores_bytes', 'suggested_fixes', 'traffic']
+occupancy keys: ['active_warps_per_sm', 'limiter', 'max_warps_per_sm', 'occupancy_pct']
+traffic keys: ['arithmetic_intensity_flop_per_byte', 'global_read_bytes', 'global_write_bytes', 'roofline']
+enums -> limiter:registers roofline:memory-bound bottleneck:memory path:scalar backend:cuda
+
+=== [8] Adversarial class summary ===
+misleading_success_output: real gtest 18/18 passed (section 1) + real matmul report with live ptxas numbers (sections 3/6) pasted above.
+stale_state: cmake reconfigured after CMakeLists changes -> Configuring done exit 0, GTest 1.17.0 found.
+hung_or_long: nvcc/ptxas bounded by --timeout 180s (nvcc_driver DEFAULT_TIMEOUT_S).
+flaky_tests: gtest run twice (sections 1+2), both 18/18, deterministic 0.03s.
+dirty_worktree: only deliverable files + reports/ created; .codegraph/.omo untouched.
