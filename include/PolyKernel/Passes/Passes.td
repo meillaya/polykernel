@@ -8,17 +8,20 @@
 // (`-gen-pass-decls`). It is the single home for ALL PolyKernel pass decls so
 // later todos extend it in place:
 //
-//   - Todo 4 (this file): `InferShapes` (`--infer-shapes`), shape + dtype
-//     inference for every polykernel compute op.
-//   - Todo 5 (future):    add a `Canonicalize`-style pass decl here too; the
-//     `GEN_PASS_*` machinery below picks it up automatically (just add another
-//     `def ... : Pass<...>` and a matching create/register helper).
+//   - Todo 4: `InferShapes` (`--infer-shapes`), shape + dtype inference for
+//     every polykernel compute op.
+//   - Todo 5: `Canonicalize` (`--canonicalize`), canonicalization patterns
+//     (identity residual-add elimination, elementwise constant folding,
+//     softmax-of-splat no-op fold) + DCE via the greedy pattern driver.
 //
 // The generated registration is EXPLICIT (no registerAllPasses / MLIRRegisterAll*
 // — nixpkgs MLIR does not ship the aggregate object archives; see
 // docs/compiler_pipeline.md). `--gen-pass-decls -name PolyKernel` emits:
-//   - GEN_PASS_DECL_<PASSNAME>  per-pass decl macros (e.g. INFER_SHAPES)
-//   - GEN_PASS_REGISTRATION     registerInferShapesPass() + registerPolyKernelPasses()
+//   - GEN_PASS_DECL_<PASSNAME>  per-pass decl macros (e.g. INFER_SHAPES,
+//                               CANONICALIZE)
+//   - GEN_PASS_REGISTRATION     registerInferShapesPass() /
+//                               registerCanonicalizePass() /
+//                               registerPolyKernelPasses()
 //
 //===----------------------------------------------------------------------===//
 
@@ -66,6 +69,49 @@ def InferShapes : Pass<"infer-shapes", "ModuleOp"> {
   // registerInferShapesPass() / registerPolyKernelPasses() (see Passes.h) — never
   // registerAllPasses (nix out-of-tree constraint).
   let constructor = "::mlir::polykernel::createInferShapesPass()";
+}
+
+//===----------------------------------------------------------------------===//
+// Canonicalize
+//===----------------------------------------------------------------------===//
+
+def Canonicalize : Pass<"canonicalize", "ModuleOp"> {
+  let summary = "Canonicalize PolyKernel ops: identity-add elimination, "
+                "constant folding, DCE";
+  let description = [{
+    Applies the PolyKernel canonicalization patterns with the greedy pattern
+    rewrite driver (`applyPatternsGreedily`), which also folds ops, removes
+    ops left dead by the rewrites (DCE) and simplifies regions. This is a
+    self-contained PolyKernel canonicalizer (design A): the patterns live in
+    the pass, not on the upstream `--canonicalize` infrastructure.
+
+    Patterns:
+      - Identity residual-add elimination: `polykernel.add(x, zero) -> x` and
+        `add(zero, x) -> x`, where `zero` is a dense-zero `arith.constant`
+        (splat or general). `add`'s result type equals its operand types
+        (SameTypeOperands), so replacing the op with the non-zero operand
+        keeps types consistent. The dead zero constant is DCE'd.
+      - Constant folding of pure elementwise ops: `polykernel.gelu` /
+        `polykernel.silu` of a dense floating-point `arith.constant` fold to a
+        computed `arith.constant` (every element is mapped through the
+        activation, evaluated in double precision and rounded to the element
+        type; works for splat and general dense constants). GELU uses the
+        exact erf-based definition `0.5 * x * (1 + erf(x / sqrt(2)))`; SiLU
+        uses `x / (1 + exp(-x))`.
+      - No-op fold: `polykernel.softmax` of a splat constant folds to the
+        uniform distribution `splat(1/N)`, where `N` is the size of the
+        reduction axis (the `axis` attribute, defaulting to the last dim):
+        softmax of equal values is uniform because the `exp(c)` cancels in
+        the normalization — no transcendental math needed.
+
+    Non-foldable cases (e.g. `add` of two non-constant operands, softmax of a
+    NON-splat constant) are left unchanged.
+  }];
+
+  // Registered explicitly via the TableGen-generated registerCanonicalizePass()
+  // / registerPolyKernelPasses() (see Passes.h) — never registerAllPasses (nix
+  // out-of-tree constraint).
+  let constructor = "::mlir::polykernel::createCanonicalizePass()";
 }
 
 #endif // POLYKERNEL_PASSES

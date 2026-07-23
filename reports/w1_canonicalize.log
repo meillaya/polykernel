@@ -1,0 +1,86 @@
+=== PolyKernel W1 Todo 5: --canonicalize (QA happy) ===
+Command: nix develop ... -c bash -c 'cmake --build build && cmake --build build --target check-polykernel && build/tools/polykernel-opt/polykernel-opt test/canonicalize.mlir --canonicalize | FileCheck test/canonicalize.mlir'
+
+=== lit summary (all 6 tests: 5 prior + canonicalize) ===
+-- Testing: 6 tests, 6 workers --
+PASS: POLYKERNEL :: smoke.mlir (1 of 6)
+PASS: POLYKERNEL :: infer_shapes_mismatch.mlir (2 of 6)
+PASS: POLYKERNEL :: op_set_closed.mlir (3 of 6)
+PASS: POLYKERNEL :: canonicalize.mlir (4 of 6)
+PASS: POLYKERNEL :: infer_shapes.mlir (5 of 6)
+PASS: POLYKERNEL :: dialect_roundtrip.mlir (6 of 6)
+
+Testing Time: 0.13s
+
+Total Discovered Tests: 6
+  Passed: 6 (100.00%)
+
+=== standalone FileCheck on canonicalize.mlir ===
+FileCheck exit: 0
+
+=== BEFORE (input IR, key functions) ===
+polykernel.func @add_zero_rhs(%x: tensor<2x4xf32>) -> tensor<2x4xf32> {
+  %zero = arith.constant dense<0.0> : tensor<2x4xf32>
+  %0 = polykernel.add %x, %zero : tensor<2x4xf32>
+  polykernel.return %0 : tensor<2x4xf32>
+}
+polykernel.func @gelu_const_fold() -> (tensor<4xf32>, tensor<4xf32>) {
+  %c0 = arith.constant dense<0.0> : tensor<4xf32>
+  %c1 = arith.constant dense<1.0> : tensor<4xf32>
+  %0 = polykernel.gelu %c0 : tensor<4xf32>
+  %1 = polykernel.gelu %c1 : tensor<4xf32>
+  polykernel.return %0, %1 : tensor<4xf32>, tensor<4xf32>
+}
+polykernel.func @silu_const_fold() -> tensor<4xf32> {
+  %c1 = arith.constant dense<1.0> : tensor<4xf32>
+  %0 = polykernel.silu %c1 : tensor<4xf32>
+  polykernel.return %0 : tensor<4xf32>
+}
+polykernel.func @softmax_splat_fold() -> (tensor<2x4xf32>, tensor<2x4xf32>) {
+  %c = arith.constant dense<2.0> : tensor<2x4xf32>
+  %0 = polykernel.softmax %c : tensor<2x4xf32>
+  %1 = polykernel.softmax %c {axis = 0 : i64} : tensor<2x4xf32>
+  polykernel.return %0, %1 : tensor<2x4xf32>, tensor<2x4xf32>
+}
+polykernel.func @add_nonfoldable(%a: tensor<2x4xf32>, %b: tensor<2x4xf32>)
+    -> tensor<2x4xf32> {
+  %0 = polykernel.add %a, %b : tensor<2x4xf32>
+  polykernel.return %0 : tensor<2x4xf32>
+}
+
+=== AFTER (polykernel-opt test/canonicalize.mlir --canonicalize, full module) ===
+module {
+  polykernel.func @add_zero_rhs(%arg0: tensor<2x4xf32>) -> tensor<2x4xf32> {
+    polykernel.return %arg0 : tensor<2x4xf32>
+  }
+  polykernel.func @add_zero_lhs(%arg0: tensor<2x4xf32>) -> tensor<2x4xf32> {
+    polykernel.return %arg0 : tensor<2x4xf32>
+  }
+  polykernel.func @gelu_const_fold() -> (tensor<4xf32>, tensor<4xf32>) {
+    %cst = arith.constant dense<0.000000e+00> : tensor<4xf32>
+    %cst_0 = arith.constant dense<0.841344773> : tensor<4xf32>
+    polykernel.return %cst, %cst_0 : tensor<4xf32>, tensor<4xf32>
+  }
+  polykernel.func @silu_const_fold() -> tensor<4xf32> {
+    %cst = arith.constant dense<0.731058597> : tensor<4xf32>
+    polykernel.return %cst : tensor<4xf32>
+  }
+  polykernel.func @softmax_splat_fold() -> (tensor<2x4xf32>, tensor<2x4xf32>) {
+    %cst = arith.constant dense<2.500000e-01> : tensor<2x4xf32>
+    %cst_0 = arith.constant dense<5.000000e-01> : tensor<2x4xf32>
+    polykernel.return %cst, %cst_0 : tensor<2x4xf32>, tensor<2x4xf32>
+  }
+  polykernel.func @add_nonfoldable(%arg0: tensor<2x4xf32>, %arg1: tensor<2x4xf32>) -> tensor<2x4xf32> {
+    %0 = polykernel.add %arg0, %arg1 : tensor<2x4xf32>
+    polykernel.return %0 : tensor<2x4xf32>
+  }
+  polykernel.func @softmax_nonsplat_const_survives() -> tensor<2xf32> {
+    %cst = arith.constant dense<[1.000000e+00, 2.000000e+00]> : tensor<2xf32>
+    %0 = polykernel.softmax %cst : tensor<2xf32>
+    polykernel.return %0 : tensor<2xf32>
+  }
+  polykernel.func @gelu_nonconst_survives(%arg0: tensor<2x4xf32>) -> tensor<2x4xf32> {
+    %0 = polykernel.gelu %arg0 : tensor<2x4xf32>
+    polykernel.return %0 : tensor<2x4xf32>
+  }
+}

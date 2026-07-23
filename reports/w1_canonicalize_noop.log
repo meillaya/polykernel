@@ -1,0 +1,49 @@
+=== PolyKernel W1 Todo 5: --canonicalize (QA failure/edge: NO over-folding) ===
+Command: build/tools/polykernel-opt/polykernel-opt test/canonicalize.mlir --canonicalize
+
+The non-foldable add (two NON-constant tensor operands) must be LEFT UNCHANGED,
+as must softmax of a non-splat constant and gelu of a non-constant. This is the
+negative half proving the patterns do not over-fold.
+
+=== BEFORE (input IR, negative cases) ===
+// ----- NEGATIVE: non-foldable add (two non-constant operands) SURVIVES -----
+
+polykernel.func @add_nonfoldable(%a: tensor<2x4xf32>, %b: tensor<2x4xf32>)
+    -> tensor<2x4xf32> {
+  %0 = polykernel.add %a, %b : tensor<2x4xf32>
+  polykernel.return %0 : tensor<2x4xf32>
+}
+
+// ----- NEGATIVE: softmax of a NON-splat constant is NOT folded -----
+
+polykernel.func @softmax_nonsplat_const_survives() -> tensor<2xf32> {
+  %c = arith.constant dense<[1.0, 2.0]> : tensor<2xf32>
+  %0 = polykernel.softmax %c : tensor<2xf32>
+  polykernel.return %0 : tensor<2xf32>
+}
+
+// ----- NEGATIVE: gelu of a non-constant operand SURVIVES -----
+
+polykernel.func @gelu_nonconst_survives(%x: tensor<2x4xf32>)
+    -> tensor<2x4xf32> {
+  %0 = polykernel.gelu %x : tensor<2x4xf32>
+  polykernel.return %0 : tensor<2x4xf32>
+}
+
+=== AFTER: the surviving ops (real output) ===
+  polykernel.func @add_nonfoldable(%arg0: tensor<2x4xf32>, %arg1: tensor<2x4xf32>) -> tensor<2x4xf32> {
+    %0 = polykernel.add %arg0, %arg1 : tensor<2x4xf32>
+    polykernel.return %0 : tensor<2x4xf32>
+  }
+  polykernel.func @softmax_nonsplat_const_survives() -> tensor<2xf32> {
+    %cst = arith.constant dense<[1.000000e+00, 2.000000e+00]> : tensor<2xf32>
+    %0 = polykernel.softmax %cst : tensor<2xf32>
+    polykernel.return %0 : tensor<2xf32>
+  }
+  polykernel.func @gelu_nonconst_survives(%arg0: tensor<2x4xf32>) -> tensor<2x4xf32> {
+    %0 = polykernel.gelu %arg0 : tensor<2x4xf32>
+    polykernel.return %0 : tensor<2x4xf32>
+  }
+
+=== FileCheck verifies survival (CHECK: polykernel.add / polykernel.softmax / polykernel.gelu) ===
+FileCheck exit: 0 (surviving ops matched)

@@ -12,22 +12,24 @@
 // MLIRRegisterAll* (nixpkgs MLIR does not ship the aggregate object archives;
 // see docs/compiler_pipeline.md).
 //
-// Todo 5 adds the `--canonicalize` pass: declare it in Passes.td, add its
-// create helper header include below, and it is picked up by
-// registerPolyKernelPasses() automatically.
+// Passes:
+//   - `--infer-shapes`  (Todo 4): shape + dtype inference (InferShapes.h).
+//   - `--canonicalize`  (Todo 5): canonicalization patterns + DCE
+//     (Canonicalize.h).
+// Both are picked up by registerPolyKernelPasses() automatically.
 //
 //===----------------------------------------------------------------------===//
 
 #ifndef POLYKERNEL_PASSES_PASSES_H
 #define POLYKERNEL_PASSES_PASSES_H
 
+#include "PolyKernel/Passes/Canonicalize.h"
 #include "PolyKernel/Passes/InferShapes.h"
-// Todo 5: #include "PolyKernel/Passes/Canonicalize.h"
 
 namespace mlir::polykernel {
-// Generated registration helpers: registerInferShapesPass() (per pass) and
-// registerPolyKernelPasses() (all PolyKernel passes), from Passes.td via
-// `-gen-pass-decls -name PolyKernel`.
+// Generated registration helpers: registerInferShapesPass() /
+// registerCanonicalizePass() (per pass) and registerPolyKernelPasses() (all
+// PolyKernel passes), from Passes.td via `-gen-pass-decls -name PolyKernel`.
 #define GEN_PASS_REGISTRATION
 #include "PolyKernel/Passes/Passes.h.inc"
 } // namespace mlir::polykernel
