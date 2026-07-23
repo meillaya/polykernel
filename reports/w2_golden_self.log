@@ -1,0 +1,54 @@
+# Wave 2 / Todo 7 — golden harness self-tests (NumPy + ml_dtypes, bf16/fp32 rounding contract)
+# Command: nix develop --impure --accept-flake-config -c bash -c 'cd /home/mei/projects/polykernel && python -m pytest tests/golden/test_golden_self.py -v'
+# Deps (dev shell): numpy 2.5.0 | ml_dtypes 0.5.4 | pytest 9.0.3
+# NOTE: bare python3 lacks numpy/ml_dtypes; the dev shell provides them via $PYTHONPATH. nix develop path used.
+
+==================== RUN 1 (determinism) ====================
+============================= test session starts ==============================
+platform linux -- Python 3.14.6, pytest-9.0.3, pluggy-1.6.0 -- /nix/store/jxyrvv4gbpnp3ap5iy7wxwl1sg4x2x88-python3-3.14.6/bin/python
+cachedir: .pytest_cache
+rootdir: /home/mei/projects/polykernel
+collecting ... collected 15 items
+
+tests/golden/test_golden_self.py::test_matmul_2x2_known_exact PASSED     [  6%]
+tests/golden/test_golden_self.py::test_gelu_zero_is_zero PASSED          [ 13%]
+tests/golden/test_golden_self.py::test_gelu_one_matches_erf_formula PASSED [ 20%]
+tests/golden/test_golden_self.py::test_silu_one PASSED                   [ 26%]
+tests/golden/test_golden_self.py::test_softmax_uniform_is_half PASSED    [ 33%]
+tests/golden/test_golden_self.py::test_rmsnorm_known_vector PASSED       [ 40%]
+tests/golden/test_golden_self.py::test_softmax_sums_to_one_random PASSED [ 46%]
+tests/golden/test_golden_self.py::test_fused_rmsnorm_matmul_consistency PASSED [ 53%]
+tests/golden/test_golden_self.py::test_fused_matmul_bias_gelu_consistency PASSED [ 60%]
+tests/golden/test_golden_self.py::test_fused_residual_rmsnorm_consistency PASSED [ 66%]
+tests/golden/test_golden_self.py::test_fused_softmax_mask_consistency PASSED [ 73%]
+tests/golden/test_golden_self.py::test_qkv_projection_splits_evenly PASSED [ 80%]
+tests/golden/test_golden_self.py::test_fused_kv_append_attention_shapes_and_append PASSED [ 86%]
+tests/golden/test_golden_self.py::test_metrics_perfect_match PASSED      [ 93%]
+tests/golden/test_golden_self.py::test_assert_correct_raises_on_perturbation PASSED [100%]
+
+============================== 15 passed in 0.04s ==============================
+
+==================== RUN 2 (determinism) ====================
+============================= test session starts ==============================
+platform linux -- Python 3.14.6, pytest-9.0.3, pluggy-1.6.0 -- /nix/store/jxyrvv4gbpnp3ap5iy7wxwl1sg4x2x88-python3-3.14.6/bin/python
+cachedir: .pytest_cache
+rootdir: /home/mei/projects/polykernel
+collecting ... collected 15 items
+
+tests/golden/test_golden_self.py::test_matmul_2x2_known_exact PASSED     [  6%]
+tests/golden/test_golden_self.py::test_gelu_zero_is_zero PASSED          [ 13%]
+tests/golden/test_golden_self.py::test_gelu_one_matches_erf_formula PASSED [ 20%]
+tests/golden/test_golden_self.py::test_silu_one PASSED                   [ 26%]
+tests/golden/test_golden_self.py::test_softmax_uniform_is_half PASSED    [ 33%]
+tests/golden/test_golden_self.py::test_rmsnorm_known_vector PASSED       [ 40%]
+tests/golden/test_golden_self.py::test_softmax_sums_to_one_random PASSED [ 46%]
+tests/golden/test_golden_self.py::test_fused_rmsnorm_matmul_consistency PASSED [ 53%]
+tests/golden/test_golden_self.py::test_fused_matmul_bias_gelu_consistency PASSED [ 60%]
+tests/golden/test_golden_self.py::test_fused_residual_rmsnorm_consistency PASSED [ 66%]
+tests/golden/test_golden_self.py::test_fused_softmax_mask_consistency PASSED [ 73%]
+tests/golden/test_golden_self.py::test_qkv_projection_splits_evenly PASSED [ 80%]
+tests/golden/test_golden_self.py::test_fused_kv_append_attention_shapes_and_append PASSED [ 86%]
+tests/golden/test_golden_self.py::test_metrics_perfect_match PASSED      [ 93%]
+tests/golden/test_golden_self.py::test_assert_correct_raises_on_perturbation PASSED [100%]
+
+============================== 15 passed in 0.03s ==============================

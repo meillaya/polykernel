@@ -1,0 +1,19 @@
+# Wave 2 / Todo 7 — NEGATIVE test: assert_correct must RAISE on a perturbed output (+5% noise)
+# A deliberately-wrong kernel output (5% multiplicative noise vs the bf16 reference) must be rejected.
+# Command: PYTHONPATH=tests/golden:$PYTHONPATH python /tmp/opencode/neg.py  (run inside nix develop)
+
+[neg] cosine     = 0.999549   (threshold >= 0.999)
+[neg] max_rel_err= 5.202308e-02   (threshold <= 1e-2)
+[neg] pcc        = 0.989067   (threshold >= 0.99)
+[neg] calling assert_correct(perturbed, ref) -- expect AssertionError ...
+Traceback (most recent call last):
+  File "/tmp/opencode/neg.py", line 23, in <module>
+    assert_correct(perturbed, ref)  # <-- must raise
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+  File "/home/mei/projects/polykernel/tests/golden/metrics.py", line 72, in assert_correct
+    raise AssertionError(
+    ...<4 lines>...
+    )
+AssertionError: golden assert_correct FAILED: cosine=0.999549 (need >= 0.999), max_rel_err=5.202308e-02 (need <= 1e-02), pcc=0.989067 (need >= 0.99)
+
+[neg] exit code = 1  (non-zero confirms the AssertionError propagated)
