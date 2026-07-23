@@ -5,6 +5,7 @@
 # see polykernel-opt.cpp for the rationale.
 set(LIBS
   MLIRPolyKernel
+  MLIRPolyKernelPasses
   MLIROptLib
   MLIRIR
   MLIRSupport

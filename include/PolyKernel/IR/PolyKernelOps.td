@@ -62,6 +62,42 @@ class PolyKernel_Op<string mnemonic, list<Trait> traits = []>
 // CommonTypeConstraints.td).
 
 //===----------------------------------------------------------------------===//
+// PolyKernel compute-op base class with shape inference (Todo 4 / Wave 1).
+//===----------------------------------------------------------------------===//
+//
+// Every compute op implements `InferTypeOpInterface` so its result type(s) can be
+// computed from its operands. The inference logic lives in each op's
+// adaptor-based `inferReturnTypes` (defined in PolyKernelOps.cpp); the
+// `--infer-shapes` pass calls it (via the interface) to refine result types and
+// signal failure on inconsistency.
+//
+// We declare BOTH `inferReturnTypes` and `refineReturnTypes`. `refineReturnTypes`
+// is overridden to a no-op so the InferTypeOpInterface verification hook does NOT
+// reject IR at parse time: shape consistency is enforced by the `--infer-shapes`
+// pass (which calls `inferReturnTypes` + `signalPassFailure`), not by the
+// verifier. This keeps fully-explicit round-trip IR valid even when a result type
+// is a not-yet-inferred placeholder, and makes the pass the meaningful enforcer.
+class PolyKernel_InferTypeOp<string mnemonic, list<Trait> traits = []>
+    : PolyKernel_Op<mnemonic, !listconcat(traits, [
+        DeclareOpInterfaceMethods<InferTypeOpInterface,
+                                  ["inferReturnTypes", "refineReturnTypes"]>
+      ])> {
+  let extraClassDeclaration = [{
+    /// Per-op shape inference (adaptor form), defined in PolyKernelOps.cpp:
+    /// compute the result type(s) from the operands, emitting a diagnostic +
+    /// returning failure on any inconsistency. The InferTypeOpInterface
+    /// full-signature `inferReturnTypes` (declared by DeclareOpInterfaceMethods)
+    /// builds the Adaptor and delegates here; `refineReturnTypes` is a no-op
+    /// (defined in PolyKernelOps.cpp) so the interface verification hook does not
+    /// reject IR at parse time — shape consistency is enforced by --infer-shapes.
+    static ::llvm::LogicalResult inferReturnTypes(
+        ::mlir::MLIRContext *context, std::optional<::mlir::Location> location,
+        Adaptor adaptor,
+        ::llvm::SmallVectorImpl<::mlir::Type> &inferredReturnTypes);
+  }];
+}
+
+//===----------------------------------------------------------------------===//
 // FuncOp
 //===----------------------------------------------------------------------===//
 
@@ -151,11 +187,11 @@ def PolyKernel_ReturnOp : PolyKernel_Op<"return",
 }
 
 //===----------------------------------------------------------------------===//
-// Elementwise / shape-preserving base ops (SameOperandsAndResultType).
+// Elementwise / shape-preserving base ops (result type == input type, inferred
+// via InferTypeOpInterface).
 //===----------------------------------------------------------------------===//
 
-def PolyKernel_RmsNormOp : PolyKernel_Op<"rmsnorm",
-    [Pure, SameOperandsAndResultType]> {
+def PolyKernel_RmsNormOp : PolyKernel_InferTypeOp<"rmsnorm", [Pure]> {
   let summary = "Root-mean-square normalization (shape-preserving)";
   let description = [{
     RMS normalization: `y = x / sqrt(mean(x^2) + epsilon)`. Result has the same
@@ -167,32 +203,28 @@ def PolyKernel_RmsNormOp : PolyKernel_Op<"rmsnorm",
   let assemblyFormat = "$input attr-dict `:` type($input)";
 }
 
-def PolyKernel_GeluOp : PolyKernel_Op<"gelu",
-    [Pure, SameOperandsAndResultType]> {
+def PolyKernel_GeluOp : PolyKernel_InferTypeOp<"gelu", [Pure]> {
   let summary = "GELU activation (elementwise, shape-preserving)";
   let arguments = (ins AnyTensor:$input);
   let results = (outs AnyTensor:$result);
   let assemblyFormat = "$input attr-dict `:` type($input)";
 }
 
-def PolyKernel_SiluOp : PolyKernel_Op<"silu",
-    [Pure, SameOperandsAndResultType]> {
+def PolyKernel_SiluOp : PolyKernel_InferTypeOp<"silu", [Pure]> {
   let summary = "SiLU / swish activation (elementwise, shape-preserving)";
   let arguments = (ins AnyTensor:$input);
   let results = (outs AnyTensor:$result);
   let assemblyFormat = "$input attr-dict `:` type($input)";
 }
 
-def PolyKernel_AddOp : PolyKernel_Op<"add",
-    [Pure, SameOperandsAndResultType]> {
+def PolyKernel_AddOp : PolyKernel_InferTypeOp<"add", [Pure, SameTypeOperands]> {
   let summary = "Elementwise (residual) add of two same-shaped tensors";
   let arguments = (ins AnyTensor:$lhs, AnyTensor:$rhs);
   let results = (outs AnyTensor:$result);
   let assemblyFormat = "$lhs `,` $rhs attr-dict `:` type($lhs)";
 }
 
-def PolyKernel_SoftmaxOp : PolyKernel_Op<"softmax",
-    [Pure, SameOperandsAndResultType]> {
+def PolyKernel_SoftmaxOp : PolyKernel_InferTypeOp<"softmax", [Pure]> {
   let summary = "Softmax (shape-preserving)";
   let description = [{
     Softmax over `axis` (defaults to the last dimension when unset). Result has
@@ -208,7 +240,7 @@ def PolyKernel_SoftmaxOp : PolyKernel_Op<"softmax",
 // Base ops with distinct operand/result shapes (explicit result types).
 //===----------------------------------------------------------------------===//
 
-def PolyKernel_MatMulOp : PolyKernel_Op<"matmul", [Pure]> {
+def PolyKernel_MatMulOp : PolyKernel_InferTypeOp<"matmul", [Pure]> {
   let summary = "Matrix multiply: A (MxK) x B (KxN) -> C (MxN)";
   let arguments = (ins AnyTensor:$a, AnyTensor:$b);
   let results = (outs AnyTensor:$result);
@@ -217,7 +249,7 @@ def PolyKernel_MatMulOp : PolyKernel_Op<"matmul", [Pure]> {
   let hasVerifier = 1;
 }
 
-def PolyKernel_BiasOp : PolyKernel_Op<"bias", [Pure]> {
+def PolyKernel_BiasOp : PolyKernel_InferTypeOp<"bias", [Pure]> {
   let summary = "Bias add: input + bias -> result";
   let description = [{
     Adds a bias tensor (typically 1-D over the last dim, broadcast) to the input.
@@ -230,7 +262,7 @@ def PolyKernel_BiasOp : PolyKernel_Op<"bias", [Pure]> {
       "type($result)";
 }
 
-def PolyKernel_RopeOp : PolyKernel_Op<"rope", [Pure]> {
+def PolyKernel_RopeOp : PolyKernel_InferTypeOp<"rope", [Pure]> {
   let summary = "Rotary position embedding";
   let description = [{
     Applies rotary position embedding to `input` using the precomputed `cos`
@@ -250,7 +282,7 @@ def PolyKernel_RopeOp : PolyKernel_Op<"rope", [Pure]> {
       "`,` type($sin) `->` type($result)";
 }
 
-def PolyKernel_AttentionOp : PolyKernel_Op<"attention", [Pure]> {
+def PolyKernel_AttentionOp : PolyKernel_InferTypeOp<"attention", [Pure]> {
   let summary = "Attention (prefill): Q, K, V -> output";
   let arguments = (ins AnyTensor:$query,
                        AnyTensor:$key,
@@ -262,7 +294,7 @@ def PolyKernel_AttentionOp : PolyKernel_Op<"attention", [Pure]> {
   let hasVerifier = 1;
 }
 
-def PolyKernel_KVCacheUpdateOp : PolyKernel_Op<"kv_cache_update", [Pure]> {
+def PolyKernel_KVCacheUpdateOp : PolyKernel_InferTypeOp<"kv_cache_update", [Pure]> {
   let summary = "Append new K/V into a KV cache -> updated cache";
   let arguments = (ins AnyTensor:$cache,
                        AnyTensor:$new_keys,
@@ -277,7 +309,7 @@ def PolyKernel_KVCacheUpdateOp : PolyKernel_Op<"kv_cache_update", [Pure]> {
 // Fused ops (combine the corresponding base ops' operands/results).
 //===----------------------------------------------------------------------===//
 
-def PolyKernel_FusedRmsNormMatMulOp : PolyKernel_Op<"fused_rmsnorm_matmul",
+def PolyKernel_FusedRmsNormMatMulOp : PolyKernel_InferTypeOp<"fused_rmsnorm_matmul",
     [Pure]> {
   let summary = "Fused RMSNorm + MatMul: input + weight -> output";
   let arguments = (ins AnyTensor:$input,
@@ -289,7 +321,7 @@ def PolyKernel_FusedRmsNormMatMulOp : PolyKernel_Op<"fused_rmsnorm_matmul",
       "type($result)";
 }
 
-def PolyKernel_FusedMatMulBiasGeluOp : PolyKernel_Op<"fused_matmul_bias_gelu",
+def PolyKernel_FusedMatMulBiasGeluOp : PolyKernel_InferTypeOp<"fused_matmul_bias_gelu",
     [Pure]> {
   let summary = "Fused MatMul + Bias + GELU: A + B + bias -> output";
   let arguments = (ins AnyTensor:$a,
@@ -301,7 +333,7 @@ def PolyKernel_FusedMatMulBiasGeluOp : PolyKernel_Op<"fused_matmul_bias_gelu",
       "`->` type($result)";
 }
 
-def PolyKernel_FusedResidualRmsNormOp : PolyKernel_Op<"fused_residual_rmsnorm",
+def PolyKernel_FusedResidualRmsNormOp : PolyKernel_InferTypeOp<"fused_residual_rmsnorm",
     [Pure]> {
   let summary = "Fused residual add + RMSNorm: residual + input -> output";
   let arguments = (ins AnyTensor:$residual,
@@ -313,7 +345,7 @@ def PolyKernel_FusedResidualRmsNormOp : PolyKernel_Op<"fused_residual_rmsnorm",
       "`->` type($result)";
 }
 
-def PolyKernel_FusedSoftmaxMaskOp : PolyKernel_Op<"fused_softmax_mask",
+def PolyKernel_FusedSoftmaxMaskOp : PolyKernel_InferTypeOp<"fused_softmax_mask",
     [Pure]> {
   let summary = "Fused mask + softmax: input + mask -> output";
   let arguments = (ins AnyTensor:$input, AnyTensor:$mask);
@@ -323,9 +355,17 @@ def PolyKernel_FusedSoftmaxMaskOp : PolyKernel_Op<"fused_softmax_mask",
       "type($result)";
 }
 
-def PolyKernel_QKVProjectionOp : PolyKernel_Op<"qkv_projection", [Pure]> {
+def PolyKernel_QKVProjectionOp : PolyKernel_InferTypeOp<"qkv_projection", [Pure]> {
   let summary = "QKV projection: input + qkv weight -> Q, K, V";
-  let arguments = (ins AnyTensor:$input, AnyTensor:$weight);
+  let description = [{
+    Projects `input` (shape `[batch, seq, hidden]`) by `weight` (shape
+    `[hidden, 3*hidden]`) and splits the result into the Q, K, V heads. Each of
+    Q/K/V has shape `[batch, num_heads, seq, hidden/num_heads]`, so `num_heads`
+    must divide `hidden`. `num_heads` is required for shape inference (the head
+    split is otherwise under-determined from the operand shapes alone).
+  }];
+  let arguments = (ins AnyTensor:$input, AnyTensor:$weight,
+                       OptionalAttr<I64Attr>:$num_heads);
   let results = (outs AnyTensor:$q,
                       AnyTensor:$k,
                       AnyTensor:$v);
@@ -335,7 +375,7 @@ def PolyKernel_QKVProjectionOp : PolyKernel_Op<"qkv_projection", [Pure]> {
 }
 
 def PolyKernel_FusedKVAppendAttentionOp
-    : PolyKernel_Op<"fused_kv_append_attention", [Pure]> {
+    : PolyKernel_InferTypeOp<"fused_kv_append_attention", [Pure]> {
   let summary = "Fused KV-append + attention: Q + cache + new K/V -> "
                 "output + updated cache";
   let arguments = (ins AnyTensor:$query,

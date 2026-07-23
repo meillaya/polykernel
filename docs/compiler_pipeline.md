@@ -230,3 +230,77 @@ double-generation): `MLIRPolyKernelDialectIncGen` (`-gen-dialect-decls/-defs` fr
 `reports/w1_dialect_roundtrip.log` (round-tripped IR for every op + op census =
 exactly the 18 named ops) and `reports/w1_unknown_op.log` (`polykernel.conv2d`
 rejected, exit 1).
+
+## Todo 4 (Wave 1): `--infer-shapes` pass (shape + dtype inference)
+
+Added the PolyKernel **pass infrastructure** (which Todo 5 `--canonicalize`
+extends) and the `--infer-shapes` pass: every compute op's result type(s) are
+computed from its operands via `InferTypeOpInterface` and refined by the pass.
+
+### Layout
+
+- `include/PolyKernel/Passes/Passes.td`: pass decls via `-gen-pass-decls
+  -name PolyKernel`. `def InferShapes : Pass<"infer-shapes", "ModuleOp">`. Todo 5
+  adds another `def ... : Pass<...>` here; `registerPolyKernelPasses()` picks it up.
+- `include/PolyKernel/Passes/InferShapes.h`: `createInferShapesPass()` + the
+  `GEN_PASS_DECL_INFERSHAPES` include.
+- `include/PolyKernel/Passes/Passes.h`: umbrella; `GEN_PASS_REGISTRATION` wrapped in
+  `namespace mlir::polykernel` so registration is `mlir::polykernel::registerPolyKernelPasses()`
+  / `registerInferShapesPass()`.
+- `lib/Passes/InferShapes.cpp`: the pass — `impl::InferShapesBase` (from
+  `GEN_PASS_DEF_INFERSHAPES`); walks the module, `dyn_cast<InferTypeOpInterface>`,
+  calls `inferReturnTypes`, sets result types, `signalPassFailure()` on mismatch.
+- `lib/Passes/CMakeLists.txt`: `add_mlir_library(MLIRPolyKernelPasses ...)` linking
+  `MLIRPolyKernel MLIRInferTypeOpInterface MLIRPass MLIRIR MLIRSupport`.
+- `tools/polykernel-opt`: calls `mlir::polykernel::registerPolyKernelPasses()` before
+  `MlirOptMain`; links `MLIRPolyKernelPasses`. **Explicit** registration (no
+  `registerAllPasses` / `MLIRRegisterAll*`).
+
+### Inference design (important for Todo 5)
+
+- Every compute op implements `InferTypeOpInterface` via
+  `DeclareOpInterfaceMethods<InferTypeOpInterface, ["inferReturnTypes","refineReturnTypes"]>`
+  (the `PolyKernel_InferTypeOp` base in `PolyKernelOps.td`). The per-op shape logic
+  lives in the adaptor-form `inferReturnTypes` in `PolyKernelOps.cpp`; a shared macro
+  `POLYKERNEL_DEFINE_INFER_TYPE_INTERFACE(OpClass)` emits the full-signature
+  `inferReturnTypes` (builds the Adaptor, delegates) + a **no-op `refineReturnTypes`**.
+- **`refineReturnTypes` is a deliberate no-op**: it disables the InferTypeOpInterface
+  verification hook so shape consistency is enforced by the `--infer-shapes` pass
+  (`signalPassFailure`), NOT at IR parse time. This keeps fully-explicit round-trip IR
+  valid even with placeholder result types, and makes the pass the meaningful enforcer
+  (the mismatch test exercises `signalPassFailure`). `verifyInferredResultTypes`
+  (mlir/lib/Interfaces/InferTypeOpInterface.cpp) calls `refineReturnTypes`, so a no-op
+  fully disables it.
+- `SameOperandsAndResultType` was **dropped** from rmsnorm/gelu/silu/softmax/add (it
+  auto-generates a conflicting `inferReturnTypes`); `add` keeps `SameTypeOperands` so
+  its `rhs` type stays inferable from `lhs` in the declarative format. Result type for
+  these is `input` (add checks equal operand shapes).
+- `qkv_projection` gained `OptionalAttr<I64Attr>:$num_heads` — the Q/K/V head split is
+  under-determined from operand shapes alone; inference needs `num_heads`
+  (Q=K=V=`[batch..., num_heads, seq, hidden/num_heads]`).
+- Shape rules: matmul `A<...xMxK> x B<...xKxN> -> <...xMxN>` (K must match, else
+  diagnostic); rmsnorm/gelu/silu/softmax/rope/fused_softmax_mask → input type;
+  add/fused_residual_rmsnorm → operand shape (equal shapes required); bias → input
+  shape (bias last dim must match); attention → query shape; kv_cache_update →
+  cache shape; fused_rmsnorm_matmul/fused_matmul_bias_gelu → matmul MxN;
+  fused_kv_append_attention → (query shape, cache shape).
+- **Result types stay explicit** in the assemblyFormat for matmul/bias/rope/attention/
+  kv_cache_update/fused (so inferred types are CHECK-able on the op line); the
+  shape-preserving ops keep their elided result type (inferred at parse via the
+  interface). MLIR IR is always fully typed, so the positive test uses correct types
+  (the pass recomputes + confirms; idempotent) and the **negative test** proves the
+  rules (mismatched matmul K → diagnostic + exit 1).
+
+### nix / build notes (Todo 4)
+
+- New upstream lib linked: `MLIRInferTypeOpInterface` (individual lib nix ships; in the
+  same `mlir-21.1.8` output as `MLIRFunctionInterfaces`). No `MLIRRegisterAll*`.
+- `MLIRPolyKernelPassesIncGen` (`-gen-pass-decls -name PolyKernel` → `Passes.h.inc`).
+  The per-pass decl macro is `GEN_PASS_DECL_INFERSHAPES` (no underscore); the base
+  class `impl::InferShapesBase` comes from `GEN_PASS_DEF_INFERSHAPES` in the .cpp.
+- `check-polykernel` → `Passed: 5 (100.00%)` (`smoke`, `op_set_closed`,
+  `dialect_roundtrip`, `infer_shapes`, `infer_shapes_mismatch`), deterministic across 2
+  runs. Evidence: `reports/w1_infer_shapes.log` (inferred IR for matmul/rmsnorm/gelu/
+  silu/softmax/add/fused/qkv on bf16+fp16 + lit summary) and
+  `reports/w1_shape_mismatch.log` (mismatched-K matmul → diagnostic + exit 1).
+- Op set unchanged: exactly **18** ops (census re-verified).

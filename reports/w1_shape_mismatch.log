@@ -1,0 +1,20 @@
+############################################################
+# W1 Todo 4: --infer-shapes  —  QA FAILURE (mismatched K)
+# date: 2026-07-23T00:33:31Z
+############################################################
+
+Input (test/infer_shapes_mismatch.mlir): matmul tensor<4x8xbf16> x tensor<16x4xbf16>
+  A is 4x8 -> contraction dim K = 8
+  B is 16x4 -> contraction dim K = 16   (8 != 16 -> mismatch)
+
+=== [1] polykernel-opt test/infer_shapes_mismatch.mlir --infer-shapes (expect non-zero exit + diagnostic) ===
+test/infer_shapes_mismatch.mlir:13:8: error: matmul shape mismatch: contraction dimension K differs (lhs K = 8 vs rhs K = 16)
+  %0 = polykernel.matmul %a, %b
+       ^
+polykernel-opt EXIT CODE: 1
+
+=== [2] not polykernel-opt ... --infer-shapes 2>&1 | FileCheck (the lit RUN line) ===
+FileCheck(infer_shapes_mismatch.mlir): PASS
+
+=== [3] Result ===
+CONFIRMED: --infer-shapes exits NON-ZERO (1) with a shape-mismatch diagnostic.

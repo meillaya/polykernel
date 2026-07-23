@@ -9,6 +9,7 @@
 #include "mlir/Tools/mlir-opt/MlirOptMain.h"
 
 #include "PolyKernel/IR/PolyKernelDialect.h"
+#include "PolyKernel/Passes/Passes.h"
 
 int main(int argc, char **argv) {
   // Register the PolyKernel dialect and hand off to MlirOptMain.
@@ -18,14 +19,15 @@ int main(int argc, char **argv) {
   // links MLIRRegisterAllDialects / MLIRRegisterAllPasses. nixpkgs builds MLIR
   // with MLIR_INSTALL_AGGREGATE_OBJECTS=1 and does NOT install
   // libMLIRRegisterAll{Dialects,Passes}.a, so those symbols are not linkable
-  // here (verified: no such archives in the mlir-21.1.8 store outputs). The W1
-  // spike only needs the PolyKernel dialect registered + a working MlirOptMain
-  // (the smoke test parses a builtin `module {}`), so we register PolyKernel
-  // directly. registerAll* + upstream passes/dialects can be revisited once we
-  // need them (Todo 3+), e.g. by linking the individual dialect/pass libs that
-  // nix DOES ship.
+  // here (verified: no such archives in the mlir-21.1.8 store outputs). We
+  // therefore register the PolyKernel dialect + the PolyKernel passes EXPLICITLY
+  // (the TableGen-generated registration in PolyKernel/Passes/Passes.h):
+  // registerPolyKernelPasses() registers every PolyKernel pass.
   mlir::DialectRegistry registry;
   registry.insert<mlir::polykernel::PolyKernelDialect>();
+
+  // Explicit PolyKernel pass registration (no registerAllPasses / MLIRRegisterAll*).
+  mlir::polykernel::registerPolyKernelPasses();
 
   return mlir::asMainReturnCode(
       mlir::MlirOptMain(argc, argv, "polykernel-opt\n", registry));

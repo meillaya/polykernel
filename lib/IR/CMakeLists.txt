@@ -8,6 +8,9 @@
 #   - MLIRFunctionInterfaces: FunctionOpInterface (used by polykernel.func) +
 #     the function_interface_impl::parse/printFunctionOp helpers. polykernel.func
 #     is our OWN op (not func.func), so MLIRFuncDialect is NOT required.
+#   - MLIRInferTypeOpInterface: InferTypeOpInterface (used by every compute op for
+#     shape inference, Todo 4) — provides detail::verifyInferredResultTypes + the
+#     interface's default method scaffolding.
 
 add_mlir_dialect_library(MLIRPolyKernel
   ${POLYKERNEL_SOURCE_DIR}/include/PolyKernel/IR/PolyKernelDialect.cpp
@@ -24,4 +27,5 @@ add_mlir_dialect_library(MLIRPolyKernel
   MLIRIR
   MLIRSupport
   MLIRFunctionInterfaces
+  MLIRInferTypeOpInterface
 )
