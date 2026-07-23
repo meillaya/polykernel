@@ -76,6 +76,27 @@ void launch_rmsnorm_cpu(const uint16_t *input, const uint16_t *weight,
                         uint16_t *output, int64_t rows, int64_t cols,
                         float epsilon);
 
+//===----------------------------------------------------------------------===//
+// GELU CPU reference.
+//===----------------------------------------------------------------------===//
+//
+// Exact erf-based GELU over `n` elements:
+//     y = 0.5 * x * (1 + erf(x / sqrt(2))).
+// `input`/`output` are bf16 (raw uint16 bits). Compute is fp32 (erf evaluated in
+// fp64 via std::erf then rounded, matching golden's math.erf); the output is
+// rounded back to bf16. Shape-agnostic: the caller flattens all dims into `n`.
+void launch_gelu_cpu(const uint16_t *input, uint16_t *output, int64_t n);
+
+//===----------------------------------------------------------------------===//
+// SiLU CPU reference.
+//===----------------------------------------------------------------------===//
+//
+// SiLU / swish over `n` elements:
+//     y = x / (1 + exp(-x)).
+// `input`/`output` are bf16 (raw uint16 bits). Compute is fp32 (std::exp); the
+// output is rounded back to bf16. Shape-agnostic: the caller flattens dims to `n`.
+void launch_silu_cpu(const uint16_t *input, uint16_t *output, int64_t n);
+
 } // namespace polykernel::cpu
 
 #endif // POLYKERNEL_KERNELS_CPU_CPU_REFERENCE_H

@@ -12,6 +12,8 @@
 #   - cpu_ref_rmsnorm:  driver exe (reads input.npy[+weight], writes output.npy).
 #                       Lands at build/kernels/cpu_ref_rmsnorm (no
 #                       LLVM_RUNTIME_OUTPUT_INTDIR is set project-wide).
+#   - cpu_ref_gelu:     driver exe (reads input.npy, writes GELU output.npy).
+#   - cpu_ref_silu:     driver exe (reads input.npy, writes SiLU output.npy).
 
 add_library(cpu_reference STATIC
   cpu/cpu_reference.cpp
@@ -22,3 +24,9 @@ target_link_libraries(cpu_reference PUBLIC m)
 
 add_executable(cpu_ref_rmsnorm cpu/cpu_ref_rmsnorm.cpp)
 target_link_libraries(cpu_ref_rmsnorm PRIVATE cpu_reference)
+
+add_executable(cpu_ref_gelu cpu/cpu_ref_gelu.cpp)
+target_link_libraries(cpu_ref_gelu PRIVATE cpu_reference)
+
+add_executable(cpu_ref_silu cpu/cpu_ref_silu.cpp)
+target_link_libraries(cpu_ref_silu PRIVATE cpu_reference)

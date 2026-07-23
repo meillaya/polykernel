@@ -83,3 +83,50 @@ def rand_bf16():
         return rng.uniform(low, high, size=shape).astype(ml_dtypes.bfloat16)
 
     return _make
+
+
+# Activation CPU-ref drivers (Todo 9): elementwise input.npy -> output.npy.
+CPU_REF_GELU_EXE = _PROJECT_ROOT / "build" / "kernels" / "cpu_ref_gelu"
+CPU_REF_SILU_EXE = _PROJECT_ROOT / "build" / "kernels" / "cpu_ref_silu"
+
+
+def _require_exe(path: Path) -> Path:
+    """Resolve a built CPU-ref driver, with a clear build hint if absent."""
+    if not path.exists():
+        raise FileNotFoundError(
+            f"{path.name} not found at {path}. Build it first:\n"
+            f"  nix develop -c cmake --build build --target {path.name}"
+        )
+    return path
+
+
+def _drive_activation(exe: Path, x: np.ndarray, tmp_path: Path) -> np.ndarray:
+    """Drive an elementwise CPU-ref driver: bf16 input.npy -> bf16 output.npy."""
+    in_path = tmp_path / "input.npy"
+    out_path = tmp_path / "output.npy"
+    np.save(in_path, x)
+    proc = subprocess.run(
+        [str(exe), str(in_path), str(out_path)],
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"{exe.name} failed (exit {proc.returncode}):\n{proc.stderr}"
+        )
+    return np.load(out_path).view(ml_dtypes.bfloat16)
+
+
+@pytest.fixture
+def run_gelu(tmp_path: Path):
+    """Drive the CPU-ref GELU on a bf16 input; return the bf16 output."""
+    exe = _require_exe(CPU_REF_GELU_EXE)
+    return lambda x: _drive_activation(exe, x, tmp_path)
+
+
+@pytest.fixture
+def run_silu(tmp_path: Path):
+    """Drive the CPU-ref SiLU on a bf16 input; return the bf16 output."""
+    exe = _require_exe(CPU_REF_SILU_EXE)
+    return lambda x: _drive_activation(exe, x, tmp_path)

@@ -41,4 +41,22 @@ void launch_rmsnorm_cpu(const uint16_t *input, const uint16_t *weight,
   }
 }
 
+void launch_gelu_cpu(const uint16_t *input, uint16_t *output, int64_t n) {
+  constexpr float kInvSqrt2 = 0.70710678118654752440f; // 1 / sqrt(2)
+  for (int64_t i = 0; i < n; ++i) {
+    float x = bf16_to_float(input[i]);
+    // erf in fp64 (std::erf, correctly rounded) then rounded to fp32, matching
+    // golden's math.erf; the surrounding multiply/add stay fp32 as in golden.
+    float e = static_cast<float>(std::erf(static_cast<double>(x * kInvSqrt2)));
+    output[i] = float_to_bf16(0.5f * x * (1.0f + e));
+  }
+}
+
+void launch_silu_cpu(const uint16_t *input, uint16_t *output, int64_t n) {
+  for (int64_t i = 0; i < n; ++i) {
+    float x = bf16_to_float(input[i]);
+    output[i] = float_to_bf16(x / (1.0f + std::exp(-x)));
+  }
+}
+
 } // namespace polykernel::cpu

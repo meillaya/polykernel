@@ -1,0 +1,141 @@
+##############################################################################
+# PolyKernel Todo 9 (Wave 2): CUDA GELU/SiLU kernels + CPU reference — QA log
+# Extends the Todo 8 framework (RMSNorm). Deliverables: gelu.cu + silu.cu CUDA
+# kernels (portable template), --lower-to-cuda gelu/silu emitters, launch_gelu_cpu
+# + launch_silu_cpu CPU refs + drivers, CPU-ref-vs-golden tests. RMSNorm re-confirmed.
+# ROUNDING CONTRACT: bf16 (RNE) in, fp32 compute, bf16 out (matches golden.py).
+# GELU = 0.5*x*(1+erf(x/sqrt(2))) [exact erf, NOT tanh approx]; SiLU = x/(1+exp(-x)).
+##############################################################################
+
+=== STEP 0: reconfigure (CMakeLists changed) + build ===
+-- Configuring done (0.1s)
+-- Generating done (0.0s)
+-- Build files have been written to: /home/mei/projects/polykernel/build
+configure exit: 0
+ninja: no work to do.
+build exit: 0
+
+=== STEP 1: polykernel-opt --lower-to-cuda emits gelu.cu + silu.cu (+rmsnorm.cu) ===
+--- input IR (rmsnorm + gelu + silu) ---
+polykernel.func @activations(%x: tensor<2048x4096xbf16>, %w: tensor<4096xbf16>) -> tensor<2048x4096xbf16> {
+  %0 = polykernel.rmsnorm %x {epsilon = 1.0e-05 : f32} : tensor<2048x4096xbf16>
+  %1 = polykernel.gelu %0 : tensor<2048x4096xbf16>
+  %2 = polykernel.silu %1 : tensor<2048x4096xbf16>
+  polykernel.return %2 : tensor<2048x4096xbf16>
+}
+--- run (default --output-dir=kernels/generated) ---
+polykernel-opt exit: 0
+total 16
+drwxr-x--- 1 mei mei   48 Jul 22 23:23 .
+drwxr-xr-x 1 mei mei   68 Jul 22 22:58 ..
+-rw-r--r-- 1 mei mei 2532 Jul 22 23:34 gelu.cu
+-rw-r--r-- 1 mei mei 4284 Jul 22 23:34 rmsnorm.cu
+-rw-r--r-- 1 mei mei 2421 Jul 22 23:34 silu.cu
+--- emitter output is byte-identical to the standalone deliverable .cu ---
+gelu.cu:   emitter == standalone (IDENTICAL)
+silu.cu:   emitter == standalone (IDENTICAL)
+rmsnorm.cu: emitter == standalone (IDENTICAL, regression)
+
+=== STEP 2: nvcc_driver.py --kernel gelu --arch sm_80,sm_90 --ptx ===
+kernel: kernels/generated/gelu.cu
+archs:  sm_80, sm_90
+nvcc:   /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/nvcc
+ptxas:  /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/ptxas
+========================================================================
+[nvcc] /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/nvcc -arch=sm_80 -DPOLYKERNEL_CUDA -Ikernels/template --ptx kernels/generated/gelu.cu -o build/nvcc/gelu_sm_80.ptx
+[ptxas] /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/ptxas -v -arch=sm_80 build/nvcc/gelu_sm_80.ptx -o build/nvcc/gelu_sm_80.cubin
+--- ptxas -v (sm_80) ---
+  ptxas info    : 0 bytes gmem
+  ptxas info    : Compiling entry function '_ZN39_GLOBAL__N__475e6f0a_7_gelu_cu_0862f7d611gelu_kernelEPK13__nv_bfloat16PS0_i' for 'sm_80'
+  ptxas info    : Function properties for _ZN39_GLOBAL__N__475e6f0a_7_gelu_cu_0862f7d611gelu_kernelEPK13__nv_bfloat16PS0_i
+  ptxas info    : Used 20 registers, used 0 barriers, 372 bytes cmem[0]
+  [parsed] registers=20 smem=0B spill_stores=0B spill_loads=0B stack=0B cmem0=372B
+  PTX: build/nvcc/gelu_sm_80.ptx
+========================================================================
+[nvcc] /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/nvcc -arch=sm_90 -DPOLYKERNEL_CUDA -Ikernels/template --ptx kernels/generated/gelu.cu -o build/nvcc/gelu_sm_90.ptx
+[ptxas] /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/ptxas -v -arch=sm_90 build/nvcc/gelu_sm_90.ptx -o build/nvcc/gelu_sm_90.cubin
+--- ptxas -v (sm_90) ---
+  ptxas info    : 0 bytes gmem
+  ptxas info    : Compiling entry function '_ZN39_GLOBAL__N__475e6f0a_7_gelu_cu_0862f7d611gelu_kernelEPK13__nv_bfloat16PS0_i' for 'sm_90'
+  ptxas info    : Function properties for _ZN39_GLOBAL__N__475e6f0a_7_gelu_cu_0862f7d611gelu_kernelEPK13__nv_bfloat16PS0_i
+  ptxas info    : Used 23 registers, used 0 barriers
+  [parsed] registers=23 smem=0B spill_stores=0B spill_loads=0B stack=0B cmem0=0B
+  PTX: build/nvcc/gelu_sm_90.ptx
+========================================================================
+OK: compiled gelu for sm_80, sm_90; PTX emitted.
+gelu nvcc_driver exit: 0
+
+=== STEP 3: nvcc_driver.py --kernel silu --arch sm_80,sm_90 --ptx ===
+kernel: kernels/generated/silu.cu
+archs:  sm_80, sm_90
+nvcc:   /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/nvcc
+ptxas:  /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/ptxas
+========================================================================
+[nvcc] /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/nvcc -arch=sm_80 -DPOLYKERNEL_CUDA -Ikernels/template --ptx kernels/generated/silu.cu -o build/nvcc/silu_sm_80.ptx
+[ptxas] /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/ptxas -v -arch=sm_80 build/nvcc/silu_sm_80.ptx -o build/nvcc/silu_sm_80.cubin
+--- ptxas -v (sm_80) ---
+  ptxas info    : 0 bytes gmem
+  ptxas info    : Compiling entry function '_ZN39_GLOBAL__N__a30d17ac_7_silu_cu_48ea8ca411silu_kernelEPK13__nv_bfloat16PS0_i' for 'sm_80'
+  ptxas info    : Function properties for _ZN39_GLOBAL__N__a30d17ac_7_silu_cu_48ea8ca411silu_kernelEPK13__nv_bfloat16PS0_i
+  ptxas info    : Used 19 registers, used 0 barriers, 372 bytes cmem[0]
+  [parsed] registers=19 smem=0B spill_stores=0B spill_loads=0B stack=0B cmem0=372B
+  PTX: build/nvcc/silu_sm_80.ptx
+========================================================================
+[nvcc] /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/nvcc -arch=sm_90 -DPOLYKERNEL_CUDA -Ikernels/template --ptx kernels/generated/silu.cu -o build/nvcc/silu_sm_90.ptx
+[ptxas] /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/ptxas -v -arch=sm_90 build/nvcc/silu_sm_90.ptx -o build/nvcc/silu_sm_90.cubin
+--- ptxas -v (sm_90) ---
+  ptxas info    : 0 bytes gmem
+  ptxas info    : Compiling entry function '_ZN39_GLOBAL__N__a30d17ac_7_silu_cu_48ea8ca411silu_kernelEPK13__nv_bfloat16PS0_i' for 'sm_90'
+  ptxas info    : Function properties for _ZN39_GLOBAL__N__a30d17ac_7_silu_cu_48ea8ca411silu_kernelEPK13__nv_bfloat16PS0_i
+  ptxas info    : Used 22 registers, used 0 barriers
+  [parsed] registers=22 smem=0B spill_stores=0B spill_loads=0B stack=0B cmem0=0B
+  PTX: build/nvcc/silu_sm_90.ptx
+========================================================================
+OK: compiled silu for sm_80, sm_90; PTX emitted.
+silu nvcc_driver exit: 0
+
+=== STEP 4: pytest tests/kernels/ -v (RUN 1) ===
+============================= test session starts ==============================
+platform linux -- Python 3.14.6, pytest-9.0.3, pluggy-1.6.0 -- /nix/store/jxyrvv4gbpnp3ap5iy7wxwl1sg4x2x88-python3-3.14.6/bin/python
+cachedir: .pytest_cache
+rootdir: /home/mei/projects/polykernel
+collecting ... collected 12 items
+
+tests/kernels/test_cpu_ref.py::test_rmsnorm_no_weight_small PASSED       [  8%]
+tests/kernels/test_cpu_ref.py::test_rmsnorm_with_weight PASSED           [ 16%]
+tests/kernels/test_cpu_ref.py::test_rmsnorm_odd_cols PASSED              [ 25%]
+tests/kernels/test_cpu_ref.py::test_rmsnorm_3d_flattens_leading_dims PASSED [ 33%]
+tests/kernels/test_cpu_ref.py::test_rmsnorm_custom_epsilon PASSED        [ 41%]
+tests/kernels/test_cpu_ref.py::test_rmsnorm_large_canonical_shape PASSED [ 50%]
+tests/kernels/test_cpu_ref_activations.py::test_gelu_small PASSED        [ 58%]
+tests/kernels/test_cpu_ref_activations.py::test_gelu_odd_length PASSED   [ 66%]
+tests/kernels/test_cpu_ref_activations.py::test_gelu_canonical_shape PASSED [ 75%]
+tests/kernels/test_cpu_ref_activations.py::test_silu_small PASSED        [ 83%]
+tests/kernels/test_cpu_ref_activations.py::test_silu_odd_length PASSED   [ 91%]
+tests/kernels/test_cpu_ref_activations.py::test_silu_canonical_shape PASSED [100%]
+
+============================== 12 passed in 2.14s ==============================
+run1 exit: 0
+
+=== STEP 4b: pytest tests/kernels/ -v (RUN 2 — determinism / flaky-tests class) ===
+============================= test session starts ==============================
+platform linux -- Python 3.14.6, pytest-9.0.3, pluggy-1.6.0 -- /nix/store/jxyrvv4gbpnp3ap5iy7wxwl1sg4x2x88-python3-3.14.6/bin/python
+cachedir: .pytest_cache
+rootdir: /home/mei/projects/polykernel
+collecting ... collected 12 items
+
+tests/kernels/test_cpu_ref.py::test_rmsnorm_no_weight_small PASSED       [  8%]
+tests/kernels/test_cpu_ref.py::test_rmsnorm_with_weight PASSED           [ 16%]
+tests/kernels/test_cpu_ref.py::test_rmsnorm_odd_cols PASSED              [ 25%]
+tests/kernels/test_cpu_ref.py::test_rmsnorm_3d_flattens_leading_dims PASSED [ 33%]
+tests/kernels/test_cpu_ref.py::test_rmsnorm_custom_epsilon PASSED        [ 41%]
+tests/kernels/test_cpu_ref.py::test_rmsnorm_large_canonical_shape PASSED [ 50%]
+tests/kernels/test_cpu_ref_activations.py::test_gelu_small PASSED        [ 58%]
+tests/kernels/test_cpu_ref_activations.py::test_gelu_odd_length PASSED   [ 66%]
+tests/kernels/test_cpu_ref_activations.py::test_gelu_canonical_shape PASSED [ 75%]
+tests/kernels/test_cpu_ref_activations.py::test_silu_small PASSED        [ 83%]
+tests/kernels/test_cpu_ref_activations.py::test_silu_odd_length PASSED   [ 91%]
+tests/kernels/test_cpu_ref_activations.py::test_silu_canonical_shape PASSED [100%]
+
+============================== 12 passed in 2.17s ==============================
+run2 exit: 0

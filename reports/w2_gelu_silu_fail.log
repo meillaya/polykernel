@@ -1,0 +1,27 @@
+
+##############################################################################
+# PolyKernel Todo 9 (Wave 2): GELU/SiLU — NEGATIVE test (QA failure case)
+# A deliberately-broken GELU CPU ref (tanh approximation instead of the exact
+# erf-based definition) MUST fail golden.assert_correct. Proves the test harness
+# catches a wrong-math kernel: the golden contract REQUIRES exact erf-based GELU
+# because the tanh approximation violates max_rel_err <= 1e-2 in the activation
+# tails (realistic FFN pre-activation range [-4, 4]).
+# Command: PYTHONPATH=tests/golden python /tmp/opencode/fail_gelu.py (nix develop)
+##############################################################################
+
+[fail] broken GELU = tanh approximation (NOT exact erf-based), range [-4,4]
+[fail] cosine     = 1.000002   (threshold >= 0.999)
+[fail] max_rel_err= 4.438690e-01   (threshold <= 1e-2)
+[fail] pcc        = 1.000000   (threshold >= 0.99)
+[fail] calling assert_correct(broken_tanh_gelu, golden_erf_gelu) -- expect AssertionError ...
+Traceback (most recent call last):
+  File "/tmp/opencode/fail_gelu.py", line 33, in <module>
+    assert_correct(broken, ref)  # <-- must raise
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "/home/mei/projects/polykernel/tests/golden/metrics.py", line 72, in assert_correct
+    raise AssertionError(
+    ...<4 lines>...
+    )
+AssertionError: golden assert_correct FAILED: cosine=1.000002 (need >= 0.999), max_rel_err=4.438690e-01 (need <= 1e-02), pcc=1.000000 (need >= 0.99)
+
+[fail] exit code = 1  (non-zero confirms the AssertionError propagated)
