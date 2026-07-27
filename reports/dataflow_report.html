@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<!--
+  PolyKernel dataflow simulator HTML visualizer (Todo 39 / Wave 7).
+
+  STATIC + SELF-CONTAINED: inline CSS + inline JS + an embedded viz-data JSON
+  blob (a script element with id viz-data, type application/json). No external
+  dependencies, no network fetch, no framework, no build step -> renders fully
+  OFFLINE. tools/polykernel-report/dataflow_viz.py populates the __*__
+  placeholders below from the Todo 38 dataflow metrics (dataflow_report.py).
+
+  TERMINOLOGY GUARDRAIL (F4): this visualizes a FUNCTIONAL / CYCLE MODEL of a
+  Cerebras-style dataflow fabric (CE + FMAC, fabin_dsd/fabout_dsd,
+  @set_color_config rx/tx). It is NOT real CSL, NOT a cslc compiler, and NOT
+  Cerebras hardware. The SDK analogs modelled are cslc - -out-routes and
+  calculate_cycles.
+
+  Rendered sections (structural QA targets): #pe-grid (PE grid + A-east/B-south
+  tile routes), #sram-heatmap (per-PE SRAM-pressure heatmap), #message-traffic,
+  #fusion-savings, #critical-path, and the #viz-data JSON payload.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PolyKernel Dataflow Visualizer</title>
+<style>
+  :root {
+    --bg: #0b1020; --panel: #131a2e; --panel2: #0f1526; --ink: #e6ecff;
+    --muted: #93a1c4; --line: #26304d; --accent: #5b8cff;
+    --a: #3b82f6; --b: #f97316; --good: #22c55e; --warn: #eab308; --bad: #ef4444;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  header { padding: 22px 28px 10px; border-bottom: 1px solid var(--line); }
+  header h1 { margin: 0 0 6px; font-size: 20px; letter-spacing: .2px; }
+  header .disclaimer {
+    margin: 0; color: var(--muted); font-size: 12.5px; max-width: 100ch;
+  }
+  header .meta { margin: 8px 0 0; color: var(--muted); font-size: 12px; }
+  main { padding: 20px 28px 48px; max-width: 1180px; margin: 0 auto; }
+  section { margin: 22px 0; }
+  section > h2 {
+    font-size: 15px; margin: 0 0 12px; padding-bottom: 6px;
+    border-bottom: 1px solid var(--line); color: var(--ink);
+  }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 14px;
+  }
+  .card .k { color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: .5px; }
+  .card .v { font-size: 22px; font-weight: 650; margin-top: 4px; }
+  .card .s { color: var(--muted); font-size: 11.5px; margin-top: 2px; }
+  .panel {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 16px; overflow-x: auto;
+  }
+  .legend { color: var(--muted); font-size: 12.5px; margin-top: 10px; }
+  .legend code { color: var(--ink); }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; }
+  .pill.a { background: rgba(59,130,246,.16); color: #93c5fd; }
+  .pill.b { background: rgba(249,115,22,.16); color: #fdba74; }
+  .pill.good { background: rgba(34,197,94,.16); color: #86efac; }
+  .pill.warn { background: rgba(234,179,8,.16); color: #fde047; }
+  .pill.bad { background: rgba(239,68,68,.16); color: #fca5a5; }
+  table.kv { border-collapse: collapse; width: 100%; font-size: 13px; }
+  table.kv td { padding: 5px 8px; border-bottom: 1px solid var(--panel2); vertical-align: top; }
+  table.kv td:first-child { color: var(--muted); width: 46%; }
+  table.kv td:last-child { font-variant-numeric: tabular-nums; }
+  .bar-row { display: grid; grid-template-columns: 190px 1fr 130px; align-items: center; gap: 10px; margin: 7px 0; }
+  .bar-row .lbl { color: var(--muted); font-size: 12.5px; }
+  .bar-track { background: var(--panel2); border-radius: 6px; height: 16px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 6px; }
+  .bar-row .num { text-align: right; font-variant-numeric: tabular-nums; font-size: 12.5px; }
+  svg text { font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; }
+  .pe-cell { cursor: default; }
+  footer { padding: 16px 28px 40px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--line); }
+  #tooltip {
+    position: fixed; pointer-events: none; z-index: 10; display: none;
+    background: #050814; border: 1px solid var(--accent); color: var(--ink);
+    padding: 6px 9px; border-radius: 8px; font-size: 12px; max-width: 260px;
+    box-shadow: 0 6px 24px rgba(0,0,0,.5);
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>PolyKernel Dataflow Simulator &mdash; SUMMA Matmul Visualizer</h1>
+  <p class="disclaimer">
+    Functional / cycle model of a Cerebras-style dataflow fabric (CE&nbsp;+&nbsp;FMAC,
+    48&nbsp;KB SRAM/PE, 5-port router, wavelet/color routing). This is a
+    <strong>simulator</strong> &mdash; NOT real CSL, NOT a cslc compiler, NOT Cerebras
+    hardware. SDK analogs modelled: <code>cslc --out-routes</code>, <code>calculate_cycles</code>.
+  </p>
+  <p class="meta">input: <code>examples/mlp_block.mlir</code> &middot; representative shape 32&times;32&times;32 (M,N,K) on a 4&times;4 grid &middot; SUMMA tiles 8&times;8&times;8, 4 steps</p>
+</header>
+
+<main>
+  <section id="summary-panel">
+    <h2>Summary</h2>
+    <div id="summary-cards" class="cards"><div class="card"><div class="k">Grid utilization</div><div class="v">100%</div><div class="s">16/16 PEs active</div></div><div class="card"><div class="k">SRAM pressure</div><div class="v">2.60%</div><div class="s">1,280 / 49,152 B</div></div><div class="card"><div class="k">Messages sent</div><div class="v">2,048</div><div class="s">A 1,024 + B 1,024</div></div><div class="card"><div class="k">Avg hop distance</div><div class="v">3.0</div><div class="s">hops (1 cycle/hop)</div></div><div class="card"><div class="k">Critical path</div><div class="v">7</div><div class="s">cycles (analytic)</div></div><div class="card"><div class="k">Bottleneck</div><div class="v"><span class="pill good">active</span></div><div class="s">cause: none</div></div><div class="card"><div class="k">Fusion reduction</div><div class="v">99.99%</div><div class="s">16,777,216 wavelets removed</div></div></div>
+  </section>
+
+  <section id="grid-panel">
+    <h2>PE Grid &amp; Tile Routes (A &rarr; east, B &rarr; south)</h2>
+    <div id="pe-grid" class="panel"><svg viewBox="0 0 434 434" width="434" height="434" role="img" aria-label="PE grid and SUMMA tile routes"><defs><marker id="ah-a" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,7 Z" fill="#3b82f6"/></marker><marker id="ah-b" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,7 Z" fill="#f97316"/></marker></defs><rect class="pe-cell" data-pe="PE(0,0)" x="58" y="58" width="60" height="60" rx="7" fill="#0f1526" stroke="#26304d"/><text x="88.0" y="92.0" text-anchor="middle" font-size="11" fill="#93a1c4">(0,0)</text><rect class="pe-cell" data-pe="PE(1,0)" x="144" y="58" width="60" height="60" rx="7" fill="#0f1526" stroke="#26304d"/><text x="174.0" y="92.0" text-anchor="middle" font-size="11" fill="#93a1c4">(1,0)</text><rect class="pe-cell" data-pe="PE(2,0)" x="230" y="58" width="60" height="60" rx="7" fill="#0f1526" stroke="#26304d"/><text x="260.0" y="92.0" text-anchor="middle" font-size="11" fill="#93a1c4">(2,0)</text><rect class="pe-cell" data-pe="PE(3,0)" x="316" y="58" width="60" height="60" rx="7" fill="#0f1526" stroke="#26304d"/><text x="346.0" y="92.0" text-anchor="middle" font-size="11" fill="#93a1c4">(3,0)</text><rect class="pe-cell" data-pe="PE(0,1)" x="58" y="144" width="60" height="60" rx="7" fill="#0f1526" stroke="#26304d"/><text x="88.0" y="178.0" text-anchor="middle" font-size="11" fill="#93a1c4">(0,1)</text><rect class="pe-cell" data-pe="PE(1,1)" x="144" y="144" width="60" height="60" rx="7" fill="#0f1526" stroke="#26304d"/><text x="174.0" y="178.0" text-anchor="middle" font-size="11" fill="#93a1c4">(1,1)</text><rect class="pe-cell" data-pe="PE(2,1)" x="230" y="144" width="60" height="60" rx="7" fill="#0f1526" stroke="#26304d"/><text x="260.0" y="178.0" text-anchor="middle" font-size="11" fill="#93a1c4">(2,1)</text><rect class="pe-cell" data-pe="PE(3,1)" x="316" y="144" width="60" height="60" rx="7" fill="#0f1526" stroke="#26304d"/><text x="346.0" y="178.0" text-anchor="middle" font-size="11" fill="#93a1c4">(3,1)</text><rect class="pe-cell" data-pe="PE(0,2)" x="58" y="230" width="60" height="60" rx="7" fill="#0f1526" stroke="#26304d"/><text x="88.0" y="264.0" text-anchor="middle" font-size="11" fill="#93a1c4">(0,2)</text><rect class="pe-cell" data-pe="PE(1,2)" x="144" y="230" width="60" height="60" rx="7" fill="#0f1526" stroke="#26304d"/><text x="174.0" y="264.0" text-anchor="middle" font-size="11" fill="#93a1c4">(1,2)</text><rect class="pe-cell" data-pe="PE(2,2)" x="230" y="230" width="60" height="60" rx="7" fill="#0f1526" stroke="#26304d"/><text x="260.0" y="264.0" text-anchor="middle" font-size="11" fill="#93a1c4">(2,2)</text><rect class="pe-cell" data-pe="PE(3,2)" x="316" y="230" width="60" height="60" rx="7" fill="#0f1526" stroke="#26304d"/><text x="346.0" y="264.0" text-anchor="middle" font-size="11" fill="#93a1c4">(3,2)</text><rect class="pe-cell" data-pe="PE(0,3)" x="58" y="316" width="60" height="60" rx="7" fill="#0f1526" stroke="#26304d"/><text x="88.0" y="350.0" text-anchor="middle" font-size="11" fill="#93a1c4">(0,3)</text><rect class="pe-cell" data-pe="PE(1,3)" x="144" y="316" width="60" height="60" rx="7" fill="#0f1526" stroke="#26304d"/><text x="174.0" y="350.0" text-anchor="middle" font-size="11" fill="#93a1c4">(1,3)</text><rect class="pe-cell" data-pe="PE(2,3)" x="230" y="316" width="60" height="60" rx="7" fill="#0f1526" stroke="#26304d"/><text x="260.0" y="350.0" text-anchor="middle" font-size="11" fill="#93a1c4">(2,3)</text><rect class="pe-cell" data-pe="PE(3,3)" x="316" y="316" width="60" height="60" rx="7" fill="#0f1526" stroke="#26304d"/><text x="346.0" y="350.0" text-anchor="middle" font-size="11" fill="#93a1c4">(3,3)</text><line x1="10" y1="88.0" x2="50" y2="88.0" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#ah-a)"/><line x1="121" y1="88.0" x2="141" y2="88.0" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#ah-a)"/><line x1="207" y1="88.0" x2="227" y2="88.0" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#ah-a)"/><line x1="293" y1="88.0" x2="313" y2="88.0" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#ah-a)"/><line x1="10" y1="174.0" x2="50" y2="174.0" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#ah-a)"/><line x1="121" y1="174.0" x2="141" y2="174.0" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#ah-a)"/><line x1="207" y1="174.0" x2="227" y2="174.0" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#ah-a)"/><line x1="293" y1="174.0" x2="313" y2="174.0" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#ah-a)"/><line x1="10" y1="260.0" x2="50" y2="260.0" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#ah-a)"/><line x1="121" y1="260.0" x2="141" y2="260.0" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#ah-a)"/><line x1="207" y1="260.0" x2="227" y2="260.0" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#ah-a)"/><line x1="293" y1="260.0" x2="313" y2="260.0" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#ah-a)"/><line x1="10" y1="346.0" x2="50" y2="346.0" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#ah-a)"/><line x1="121" y1="346.0" x2="141" y2="346.0" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#ah-a)"/><line x1="207" y1="346.0" x2="227" y2="346.0" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#ah-a)"/><line x1="293" y1="346.0" x2="313" y2="346.0" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#ah-a)"/><line x1="88.0" y1="10" x2="88.0" y2="50" stroke="#f97316" stroke-width="2.5" marker-end="url(#ah-b)"/><line x1="88.0" y1="121" x2="88.0" y2="141" stroke="#f97316" stroke-width="2.5" marker-end="url(#ah-b)"/><line x1="88.0" y1="207" x2="88.0" y2="227" stroke="#f97316" stroke-width="2.5" marker-end="url(#ah-b)"/><line x1="88.0" y1="293" x2="88.0" y2="313" stroke="#f97316" stroke-width="2.5" marker-end="url(#ah-b)"/><line x1="174.0" y1="10" x2="174.0" y2="50" stroke="#f97316" stroke-width="2.5" marker-end="url(#ah-b)"/><line x1="174.0" y1="121" x2="174.0" y2="141" stroke="#f97316" stroke-width="2.5" marker-end="url(#ah-b)"/><line x1="174.0" y1="207" x2="174.0" y2="227" stroke="#f97316" stroke-width="2.5" marker-end="url(#ah-b)"/><line x1="174.0" y1="293" x2="174.0" y2="313" stroke="#f97316" stroke-width="2.5" marker-end="url(#ah-b)"/><line x1="260.0" y1="10" x2="260.0" y2="50" stroke="#f97316" stroke-width="2.5" marker-end="url(#ah-b)"/><line x1="260.0" y1="121" x2="260.0" y2="141" stroke="#f97316" stroke-width="2.5" marker-end="url(#ah-b)"/><line x1="260.0" y1="207" x2="260.0" y2="227" stroke="#f97316" stroke-width="2.5" marker-end="url(#ah-b)"/><line x1="260.0" y1="293" x2="260.0" y2="313" stroke="#f97316" stroke-width="2.5" marker-end="url(#ah-b)"/><line x1="346.0" y1="10" x2="346.0" y2="50" stroke="#f97316" stroke-width="2.5" marker-end="url(#ah-b)"/><line x1="346.0" y1="121" x2="346.0" y2="141" stroke="#f97316" stroke-width="2.5" marker-end="url(#ah-b)"/><line x1="346.0" y1="207" x2="346.0" y2="227" stroke="#f97316" stroke-width="2.5" marker-end="url(#ah-b)"/><line x1="346.0" y1="293" x2="346.0" y2="313" stroke="#f97316" stroke-width="2.5" marker-end="url(#ah-b)"/><text x="10" y="44" font-size="12" fill="#93c5fd">A &#8594; EAST</text><text x="144" y="22" font-size="12" fill="#fdba74">B &#8595; SOUTH</text></svg></div>
+    <p id="tile-routes" class="legend">SUMMA mapping on a 4&times;4 grid. <span class="pill a">A</span> panels broadcast <strong>east</strong> along each row (injected at the west edge, re-emitted east by each PE); <span class="pill b">B</span> panels broadcast <strong>south</strong> along each column (injected at the north edge); C accumulates <em>output-stationary</em> in each PE&rsquo;s local SRAM. Ping-pong colours double-buffer A/B. Average broadcast span = P&#8722;1 = 3 hops.</p>
+  </section>
+
+  <section id="sram-panel">
+    <h2>Local SRAM Pressure Heatmap</h2>
+    <div id="sram-heatmap" class="panel"><svg viewBox="0 0 434 494" width="434" height="494" role="img" aria-label="per-PE SRAM pressure heatmap"><defs><linearGradient id="hg" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#22c55e"/><stop offset="0.5" stop-color="#eab308"/><stop offset="1" stop-color="#ef4444"/></linearGradient></defs><rect class="pe-cell" data-pe="PE(0,0)" data-info="PE(0,0): SRAM 2.60% (1,280 / 49,152 B)" x="58" y="58" width="60" height="60" rx="7" fill="#2cc45a" stroke="#26304d"/><text x="88.0" y="92.0" text-anchor="middle" font-size="11" fill="#0b1020">2.6%</text><rect class="pe-cell" data-pe="PE(1,0)" data-info="PE(1,0): SRAM 2.60% (1,280 / 49,152 B)" x="144" y="58" width="60" height="60" rx="7" fill="#2cc45a" stroke="#26304d"/><text x="174.0" y="92.0" text-anchor="middle" font-size="11" fill="#0b1020">2.6%</text><rect class="pe-cell" data-pe="PE(2,0)" data-info="PE(2,0): SRAM 2.60% (1,280 / 49,152 B)" x="230" y="58" width="60" height="60" rx="7" fill="#2cc45a" stroke="#26304d"/><text x="260.0" y="92.0" text-anchor="middle" font-size="11" fill="#0b1020">2.6%</text><rect class="pe-cell" data-pe="PE(3,0)" data-info="PE(3,0): SRAM 2.60% (1,280 / 49,152 B)" x="316" y="58" width="60" height="60" rx="7" fill="#2cc45a" stroke="#26304d"/><text x="346.0" y="92.0" text-anchor="middle" font-size="11" fill="#0b1020">2.6%</text><rect class="pe-cell" data-pe="PE(0,1)" data-info="PE(0,1): SRAM 2.60% (1,280 / 49,152 B)" x="58" y="144" width="60" height="60" rx="7" fill="#2cc45a" stroke="#26304d"/><text x="88.0" y="178.0" text-anchor="middle" font-size="11" fill="#0b1020">2.6%</text><rect class="pe-cell" data-pe="PE(1,1)" data-info="PE(1,1): SRAM 2.60% (1,280 / 49,152 B)" x="144" y="144" width="60" height="60" rx="7" fill="#2cc45a" stroke="#26304d"/><text x="174.0" y="178.0" text-anchor="middle" font-size="11" fill="#0b1020">2.6%</text><rect class="pe-cell" data-pe="PE(2,1)" data-info="PE(2,1): SRAM 2.60% (1,280 / 49,152 B)" x="230" y="144" width="60" height="60" rx="7" fill="#2cc45a" stroke="#26304d"/><text x="260.0" y="178.0" text-anchor="middle" font-size="11" fill="#0b1020">2.6%</text><rect class="pe-cell" data-pe="PE(3,1)" data-info="PE(3,1): SRAM 2.60% (1,280 / 49,152 B)" x="316" y="144" width="60" height="60" rx="7" fill="#2cc45a" stroke="#26304d"/><text x="346.0" y="178.0" text-anchor="middle" font-size="11" fill="#0b1020">2.6%</text><rect class="pe-cell" data-pe="PE(0,2)" data-info="PE(0,2): SRAM 2.60% (1,280 / 49,152 B)" x="58" y="230" width="60" height="60" rx="7" fill="#2cc45a" stroke="#26304d"/><text x="88.0" y="264.0" text-anchor="middle" font-size="11" fill="#0b1020">2.6%</text><rect class="pe-cell" data-pe="PE(1,2)" data-info="PE(1,2): SRAM 2.60% (1,280 / 49,152 B)" x="144" y="230" width="60" height="60" rx="7" fill="#2cc45a" stroke="#26304d"/><text x="174.0" y="264.0" text-anchor="middle" font-size="11" fill="#0b1020">2.6%</text><rect class="pe-cell" data-pe="PE(2,2)" data-info="PE(2,2): SRAM 2.60% (1,280 / 49,152 B)" x="230" y="230" width="60" height="60" rx="7" fill="#2cc45a" stroke="#26304d"/><text x="260.0" y="264.0" text-anchor="middle" font-size="11" fill="#0b1020">2.6%</text><rect class="pe-cell" data-pe="PE(3,2)" data-info="PE(3,2): SRAM 2.60% (1,280 / 49,152 B)" x="316" y="230" width="60" height="60" rx="7" fill="#2cc45a" stroke="#26304d"/><text x="346.0" y="264.0" text-anchor="middle" font-size="11" fill="#0b1020">2.6%</text><rect class="pe-cell" data-pe="PE(0,3)" data-info="PE(0,3): SRAM 2.60% (1,280 / 49,152 B)" x="58" y="316" width="60" height="60" rx="7" fill="#2cc45a" stroke="#26304d"/><text x="88.0" y="350.0" text-anchor="middle" font-size="11" fill="#0b1020">2.6%</text><rect class="pe-cell" data-pe="PE(1,3)" data-info="PE(1,3): SRAM 2.60% (1,280 / 49,152 B)" x="144" y="316" width="60" height="60" rx="7" fill="#2cc45a" stroke="#26304d"/><text x="174.0" y="350.0" text-anchor="middle" font-size="11" fill="#0b1020">2.6%</text><rect class="pe-cell" data-pe="PE(2,3)" data-info="PE(2,3): SRAM 2.60% (1,280 / 49,152 B)" x="230" y="316" width="60" height="60" rx="7" fill="#2cc45a" stroke="#26304d"/><text x="260.0" y="350.0" text-anchor="middle" font-size="11" fill="#0b1020">2.6%</text><rect class="pe-cell" data-pe="PE(3,3)" data-info="PE(3,3): SRAM 2.60% (1,280 / 49,152 B)" x="316" y="316" width="60" height="60" rx="7" fill="#2cc45a" stroke="#26304d"/><text x="346.0" y="350.0" text-anchor="middle" font-size="11" fill="#0b1020">2.6%</text><rect x="58" y="446" width="318" height="14" rx="4" fill="url(#hg)" stroke="#26304d"/><text x="58" y="476" font-size="11" fill="#93a1c4">0%</text><text x="217.0" y="476" text-anchor="middle" font-size="11" fill="#93a1c4">50%</text><text x="376" y="476" text-anchor="end" font-size="11" fill="#93a1c4">&#8805;100% over-subscription</text></svg></div>
+    <p id="sram-legend" class="legend">Per-PE resident footprint = output-stationary C tile (tileM&times;tileN) + ping-pong A/B double-buffers, vs the 48&nbsp;KB SRAM. Colour scale green (low) &rarr; red (&ge;100% = over-subscription &rarr; backpressure). This mapping: 1,280 B / 49,152 B = 2.60% (uniform across the full grid).</p>
+  </section>
+
+  <section id="traffic-panel">
+    <h2>Message Traffic</h2>
+    <div id="message-traffic" class="panel"><div class="bar-row"><span class="lbl">A wavelets (east broadcast)</span><span class="bar-track"><span class="bar-fill" style="width:50.0%;background:#3b82f6"></span></span><span class="num">1,024</span></div><div class="bar-row"><span class="lbl">B wavelets (south broadcast)</span><span class="bar-track"><span class="bar-fill" style="width:50.0%;background:#f97316"></span></span><span class="num">1,024</span></div><div class="bar-row"><span class="lbl">Total messages sent</span><span class="bar-track"><span class="bar-fill" style="width:100.0%;background:#5b8cff"></span></span><span class="num">2,048</span></div><table class="kv"><tr><td>Messages sent (CE fabin injections)</td><td>2,048 wavelets</td></tr><tr><td>Average hop distance</td><td>3.0 hops (1 cycle/hop)</td></tr><tr><td>Panel computes fired</td><td>64</td></tr></table></div>
+  </section>
+
+  <section id="fusion-panel">
+    <h2>Fusion Savings</h2>
+    <div id="fusion-savings" class="panel"><div class="bar-row"><span class="lbl">Unfused (intermediate round-trip + broadcast)</span><span class="bar-track"><span class="bar-fill" style="width:100.0%;background:#ef4444"></span></span><span class="num">16,779,264</span></div><div class="bar-row"><span class="lbl">Fused (matmul broadcast only)</span><span class="bar-track"><span class="bar-fill" style="width:45.8%;background:#22c55e"></span></span><span class="num">2,048</span></div><table class="kv"><tr><td>Fused op</td><td>fused_rmsnorm_matmul (from rmsnorm_matmul)</td></tr><tr><td>Eliminated intermediate</td><td>tensor&lt;1x2048x4096xbf16&gt;</td></tr><tr><td>Eliminated round-trip</td><td>33,554,432 B</td></tr><tr><td>Eliminated wavelets</td><td>16,777,216</td></tr><tr><td>Traffic reduction</td><td>99.9878%</td></tr></table><p class="legend">Fusion keeps the eliminated intermediate in local SRAM, so it crosses the fabric as <strong>zero</strong> wavelets. Bars log-scaled.</p></div>
+  </section>
+
+  <section id="critical-panel">
+    <h2>Critical Path</h2>
+    <div id="critical-path" class="panel"><div class="bar-row"><span class="lbl">Broadcast fill (P&#8722;1 hops)</span><span class="bar-track"><span class="bar-fill" style="width:42.9%;background:#3b82f6"></span></span><span class="num">3</span></div><div class="bar-row"><span class="lbl">Pipelined compute (steps)</span><span class="bar-track"><span class="bar-fill" style="width:57.1%;background:#f97316"></span></span><span class="num">4</span></div><table class="kv"><tr><td>Critical-path cycles</td><td>7</td></tr><tr><td>Breakdown</td><td>broadcast fill (P&#8722;1 = 3 hops) + pipelined compute (4 steps) = 7</td></tr><tr><td>Panel computes</td><td>64</td></tr><tr><td>Bottleneck</td><td>active (cause: none)</td></tr></table></div>
+  </section>
+</main>
+
+<footer>
+  Self-contained static report &mdash; opens offline, no external dependencies.
+  Data embedded inline below (<code>#viz-data</code>). Generated by
+  <code>tools/polykernel-report/dataflow_viz.py</code> (Todo&nbsp;39 / Wave&nbsp;7).
+  <span id="viz-provenance"></span>
+</footer>
+
+<!-- Embedded metrics payload (machine-readable; the single source of truth). -->
+<script id="viz-data" type="application/json">{"generated_by": "tools/polykernel-report/dataflow_viz.py (Todo 39 / Wave 7)", "simulator": "PolyKernel dataflow simulator (functional/cycle model; NOT real CSL, NOT Cerebras hardware)", "sdk_analogs": ["cslc --out-routes", "calculate_cycles"], "input": "examples/mlp_block.mlir", "grid": {"p": 4, "active_pes": 16, "total_pes": 16, "utilization_pct": 100.0}, "tiles": {"m": 8, "n": 8, "k": 8, "steps": 4, "representative_shape": [32, 32, 32]}, "routes": {"a": "EAST", "b": "SOUTH", "scheme": "SUMMA: A broadcast east along rows, B broadcast south along columns, output-stationary C in local SRAM"}, "sram": {"bytes": 49152, "resident_bytes": 1280, "pressure_pct": 2.6041666666666665, "per_pe_pressure_pct": [2.6041666666666665, 2.6041666666666665, 2.6041666666666665, 2.6041666666666665, 2.6041666666666665, 2.6041666666666665, 2.6041666666666665, 2.6041666666666665, 2.6041666666666665, 2.6041666666666665, 2.6041666666666665, 2.6041666666666665, 2.6041666666666665, 2.6041666666666665, 2.6041666666666665, 2.6041666666666665]}, "traffic": {"a_wavelets": 1024, "b_wavelets": 1024, "messages_sent": 2048, "avg_hop_distance": 3.0, "panel_computes": 64}, "critical_path": {"cycles": 7, "broadcast_fill_hops": 3, "pipelined_steps": 4}, "bottleneck": {"state": "active", "cause": "none"}, "fusion": {"fused_op": "fused_rmsnorm_matmul", "fused_from": "rmsnorm_matmul", "eliminated_intermediate": "tensor<1x2048x4096xbf16>", "eliminated_round_trip_bytes": 33554432, "eliminated_wavelets": 16777216, "unfused_wavelets": 16779264, "fused_wavelets": 2048, "traffic_reduction_pct": 99.98779445868425}}</script>
+
+<!-- Inline JS: progressive enhancement only. The static SVG/HTML above already
+     renders every section with JS disabled; this adds per-PE hover tooltips and
+     a client-side provenance check that the embedded payload parses. -->
+<script>
+"use strict";
+(function () {
+  var dataEl = document.getElementById("viz-data");
+  var DATA = null;
+  try {
+    DATA = JSON.parse(dataEl.textContent);
+  } catch (e) {
+    document.getElementById("viz-provenance").textContent =
+      " [embedded payload failed to parse]";
+    return;
+  }
+
+  var prov = document.getElementById("viz-provenance");
+  prov.textContent = " Embedded payload OK: " + DATA.input +
+    " (grid " + DATA.grid.p + "x" + DATA.grid.p + ", " +
+    DATA.traffic.messages_sent + " wavelets).";
+
+  // Per-PE hover tooltips: each PE cell carries data-pe / data-info attrs.
+  var tip = document.createElement("div");
+  tip.id = "tooltip";
+  document.body.appendChild(tip);
+  var cells = document.querySelectorAll(".pe-cell");
+  for (var i = 0; i < cells.length; i++) {
+    (function (cell) {
+      cell.addEventListener("mouseenter", function (ev) {
+        tip.textContent = cell.getAttribute("data-info") || cell.getAttribute("data-pe") || "";
+        tip.style.display = "block";
+      });
+      cell.addEventListener("mousemove", function (ev) {
+        tip.style.left = (ev.clientX + 14) + "px";
+        tip.style.top = (ev.clientY + 14) + "px";
+      });
+      cell.addEventListener("mouseleave", function () {
+        tip.style.display = "none";
+      });
+    })(cells[i]);
+  }
+})();
+</script>
+</body>
+</html>

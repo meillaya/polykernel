@@ -1,0 +1,37 @@
+===================================================================
+ T39 (Wave 7) dataflow HTML viz - SELF-CONTAINMENT / OFFLINE proof
+===================================================================
+target:   reports/dataflow_report.html
+command:  python3 tools/polykernel-report/dataflow_viz.py --backend=dataflow --viz examples/mlp_block.mlir
+date:     2026-07-27T15:40:07Z
+size:     25800 bytes
+
+--- [1] external-reference grep (MUST be zero matches) ---
+  grep -F 'http://'    : 0 match(es)
+  grep -F 'https://'   : 0 match(es)
+  grep -F '<script src' : 0 match(es)
+  grep -F '<link '     : 0 match(es)
+  grep -F 'xmlns'      : 0 match(es)
+  grep -F 'xlink'      : 0 match(es)
+  grep -F '@import'    : 0 match(es)
+  grep -F 'url(http'   : 0 match(es)
+  grep -F 'url(//'     : 0 match(es)
+  grep -i 'cdn'        : 0 match(es)
+
+--- [2] inline-only asset inventory ---
+  inline <style> / <script> / viz-data JSON / <svg>: 1 / 1 / 1 / 2
+  external <script src=> / <link>: 0 / 0
+
+--- [3] rendered-element grep (QA happy) ---
+  id="pe-grid": 1
+  id="tile-routes": 1
+  id="sram-heatmap": 1
+  id="message-traffic": 1
+  id="fusion-savings": 1
+  id="critical-path": 1
+  A->EAST arrows: 16 | B->SOUTH arrows: 16 | PE cells: 32
+
+--- [4] offline render check ---
+  html.parser: parsed OK (266 start tags, 2 <svg>); no fetch required
+
+RESULT: PASS - zero external references; fully self-contained, renders OFFLINE.

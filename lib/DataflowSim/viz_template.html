@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<!--
+  PolyKernel dataflow simulator HTML visualizer (Todo 39 / Wave 7).
+
+  STATIC + SELF-CONTAINED: inline CSS + inline JS + an embedded viz-data JSON
+  blob (a script element with id viz-data, type application/json). No external
+  dependencies, no network fetch, no framework, no build step -> renders fully
+  OFFLINE. tools/polykernel-report/dataflow_viz.py populates the __*__
+  placeholders below from the Todo 38 dataflow metrics (dataflow_report.py).
+
+  TERMINOLOGY GUARDRAIL (F4): this visualizes a FUNCTIONAL / CYCLE MODEL of a
+  Cerebras-style dataflow fabric (CE + FMAC, fabin_dsd/fabout_dsd,
+  @set_color_config rx/tx). It is NOT real CSL, NOT a cslc compiler, and NOT
+  Cerebras hardware. The SDK analogs modelled are cslc - -out-routes and
+  calculate_cycles.
+
+  Rendered sections (structural QA targets): #pe-grid (PE grid + A-east/B-south
+  tile routes), #sram-heatmap (per-PE SRAM-pressure heatmap), #message-traffic,
+  #fusion-savings, #critical-path, and the #viz-data JSON payload.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PolyKernel Dataflow Visualizer</title>
+<style>
+  :root {
+    --bg: #0b1020; --panel: #131a2e; --panel2: #0f1526; --ink: #e6ecff;
+    --muted: #93a1c4; --line: #26304d; --accent: #5b8cff;
+    --a: #3b82f6; --b: #f97316; --good: #22c55e; --warn: #eab308; --bad: #ef4444;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  header { padding: 22px 28px 10px; border-bottom: 1px solid var(--line); }
+  header h1 { margin: 0 0 6px; font-size: 20px; letter-spacing: .2px; }
+  header .disclaimer {
+    margin: 0; color: var(--muted); font-size: 12.5px; max-width: 100ch;
+  }
+  header .meta { margin: 8px 0 0; color: var(--muted); font-size: 12px; }
+  main { padding: 20px 28px 48px; max-width: 1180px; margin: 0 auto; }
+  section { margin: 22px 0; }
+  section > h2 {
+    font-size: 15px; margin: 0 0 12px; padding-bottom: 6px;
+    border-bottom: 1px solid var(--line); color: var(--ink);
+  }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 14px;
+  }
+  .card .k { color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: .5px; }
+  .card .v { font-size: 22px; font-weight: 650; margin-top: 4px; }
+  .card .s { color: var(--muted); font-size: 11.5px; margin-top: 2px; }
+  .panel {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 16px; overflow-x: auto;
+  }
+  .legend { color: var(--muted); font-size: 12.5px; margin-top: 10px; }
+  .legend code { color: var(--ink); }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; }
+  .pill.a { background: rgba(59,130,246,.16); color: #93c5fd; }
+  .pill.b { background: rgba(249,115,22,.16); color: #fdba74; }
+  .pill.good { background: rgba(34,197,94,.16); color: #86efac; }
+  .pill.warn { background: rgba(234,179,8,.16); color: #fde047; }
+  .pill.bad { background: rgba(239,68,68,.16); color: #fca5a5; }
+  table.kv { border-collapse: collapse; width: 100%; font-size: 13px; }
+  table.kv td { padding: 5px 8px; border-bottom: 1px solid var(--panel2); vertical-align: top; }
+  table.kv td:first-child { color: var(--muted); width: 46%; }
+  table.kv td:last-child { font-variant-numeric: tabular-nums; }
+  .bar-row { display: grid; grid-template-columns: 190px 1fr 130px; align-items: center; gap: 10px; margin: 7px 0; }
+  .bar-row .lbl { color: var(--muted); font-size: 12.5px; }
+  .bar-track { background: var(--panel2); border-radius: 6px; height: 16px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 6px; }
+  .bar-row .num { text-align: right; font-variant-numeric: tabular-nums; font-size: 12.5px; }
+  svg text { font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; }
+  .pe-cell { cursor: default; }
+  footer { padding: 16px 28px 40px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--line); }
+  #tooltip {
+    position: fixed; pointer-events: none; z-index: 10; display: none;
+    background: #050814; border: 1px solid var(--accent); color: var(--ink);
+    padding: 6px 9px; border-radius: 8px; font-size: 12px; max-width: 260px;
+    box-shadow: 0 6px 24px rgba(0,0,0,.5);
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>PolyKernel Dataflow Simulator &mdash; SUMMA Matmul Visualizer</h1>
+  <p class="disclaimer">
+    Functional / cycle model of a Cerebras-style dataflow fabric (CE&nbsp;+&nbsp;FMAC,
+    48&nbsp;KB SRAM/PE, 5-port router, wavelet/color routing). This is a
+    <strong>simulator</strong> &mdash; NOT real CSL, NOT a cslc compiler, NOT Cerebras
+    hardware. SDK analogs modelled: <code>cslc --out-routes</code>, <code>calculate_cycles</code>.
+  </p>
+  <p class="meta">__GENERATED_META__</p>
+</header>
+
+<main>
+  <section id="summary-panel">
+    <h2>Summary</h2>
+    <div id="summary-cards" class="cards">__SUMMARY_CARDS__</div>
+  </section>
+
+  <section id="grid-panel">
+    <h2>PE Grid &amp; Tile Routes (A &rarr; east, B &rarr; south)</h2>
+    <div id="pe-grid" class="panel">__PE_GRID_SVG__</div>
+    <p id="tile-routes" class="legend">__ROUTE_LEGEND__</p>
+  </section>
+
+  <section id="sram-panel">
+    <h2>Local SRAM Pressure Heatmap</h2>
+    <div id="sram-heatmap" class="panel">__SRAM_HEATMAP_SVG__</div>
+    <p id="sram-legend" class="legend">__SRAM_LEGEND__</p>
+  </section>
+
+  <section id="traffic-panel">
+    <h2>Message Traffic</h2>
+    <div id="message-traffic" class="panel">__TRAFFIC_HTML__</div>
+  </section>
+
+  <section id="fusion-panel">
+    <h2>Fusion Savings</h2>
+    <div id="fusion-savings" class="panel">__FUSION_HTML__</div>
+  </section>
+
+  <section id="critical-panel">
+    <h2>Critical Path</h2>
+    <div id="critical-path" class="panel">__CRITICAL_HTML__</div>
+  </section>
+</main>
+
+<footer>
+  Self-contained static report &mdash; opens offline, no external dependencies.
+  Data embedded inline below (<code>#viz-data</code>). Generated by
+  <code>tools/polykernel-report/dataflow_viz.py</code> (Todo&nbsp;39 / Wave&nbsp;7).
+  <span id="viz-provenance"></span>
+</footer>
+
+<!-- Embedded metrics payload (machine-readable; the single source of truth). -->
+<script id="viz-data" type="application/json">__VIZ_DATA__</script>
+
+<!-- Inline JS: progressive enhancement only. The static SVG/HTML above already
+     renders every section with JS disabled; this adds per-PE hover tooltips and
+     a client-side provenance check that the embedded payload parses. -->
+<script>
+"use strict";
+(function () {
+  var dataEl = document.getElementById("viz-data");
+  var DATA = null;
+  try {
+    DATA = JSON.parse(dataEl.textContent);
+  } catch (e) {
+    document.getElementById("viz-provenance").textContent =
+      " [embedded payload failed to parse]";
+    return;
+  }
+
+  var prov = document.getElementById("viz-provenance");
+  prov.textContent = " Embedded payload OK: " + DATA.input +
+    " (grid " + DATA.grid.p + "x" + DATA.grid.p + ", " +
+    DATA.traffic.messages_sent + " wavelets).";
+
+  // Per-PE hover tooltips: each PE cell carries data-pe / data-info attrs.
+  var tip = document.createElement("div");
+  tip.id = "tooltip";
+  document.body.appendChild(tip);
+  var cells = document.querySelectorAll(".pe-cell");
+  for (var i = 0; i < cells.length; i++) {
+    (function (cell) {
+      cell.addEventListener("mouseenter", function (ev) {
+        tip.textContent = cell.getAttribute("data-info") || cell.getAttribute("data-pe") || "";
+        tip.style.display = "block";
+      });
+      cell.addEventListener("mousemove", function (ev) {
+        tip.style.left = (ev.clientX + 14) + "px";
+        tip.style.top = (ev.clientY + 14) + "px";
+      });
+      cell.addEventListener("mouseleave", function () {
+        tip.style.display = "none";
+      });
+    })(cells[i]);
+  }
+})();
+</script>
+</body>
+</html>
