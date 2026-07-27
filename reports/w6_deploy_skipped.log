@@ -1,0 +1,44 @@
+======================================================================
+PolyKernel T33 (Wave 6): Modal deploy + live cold-start — SKIPPED (no token)
+======================================================================
+UTC: 2026-07-27T17:07:46Z
+
+STATUS: SKIPPED (not FAILED). Missing credential: MODAL_TOKEN
+Detection: os.environ["MODAL_TOKEN"] is unset/empty -> no Modal auth available.
+
+ACTION TAKEN: graceful skip. NO `modal deploy`, NO Modal API call, NO image build,
+NO GPU container provisioned, NO spend. The full app (modal/app.py), the local
+`modal serve` dev path, and the documented `modal deploy` flow all exist; the cloud
+deploy is OPT-IN and gated behind the absent credential.
+
+Deploy flow that is SKIPPED (would run with a token):
+  - modal deploy modal/app.py            (persistent deploy of modal.App("polykernel"))
+  - verify deployed /predict (POST) /kernels /report (GET) respond
+  - python3 modal/cold_start.py --url URL  (live cold-vs-warm latency, autoscaling)
+  - write reports/w6_deploy.log (deploy URL, cold/warm latency, autoscaling)
+
+EXACT modal setup + deploy commands (an owner runs these to deploy):
+  # 0. One-time auth (register at https://modal.com, then create a token):
+  modal setup                      # interactive: creates ~/.modal.toml credentials
+  #   (or non-interactively: export MODAL_TOKEN=<token>  /  modal token new)
+
+  # 1. (Optional) secrets the app reads at runtime:
+  modal secret create polykernel-secrets HF_TOKEN=<...> --force
+
+  # 2. Upload weights into the app's Volume (mounted at /weights, see modal/app.py):
+  modal volume put polykernel-weights ./weights.bin /weights/weights.bin
+
+  # 3. Persistent deploy (builds the CUDA image + provisions the A10 GPU container):
+  modal deploy modal/app.py        # prints the deployed *.modal.run web URLs
+
+  # Local dev alternative (ephemeral URL, also needs a token):
+  modal serve modal/app.py
+
+  NOTE: Modal free tier / trial credits likely cover a small demo (~$0).
+
+OPT-IN: to perform the REAL deploy, set the credential and re-run:
+    export MODAL_TOKEN=<your-token>
+    python3 modal/deploy.py
+  -> evidence: reports/w6_deploy.log
+
+VERDICT: SKIPPED — graceful degradation, no crash, no surprise spend.
