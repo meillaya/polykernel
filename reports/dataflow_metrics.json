@@ -1,0 +1,51 @@
+{
+  "input": "examples/mlp_block.mlir",
+  "backend": "dataflow",
+  "simulator": "PolyKernel dataflow simulator (functional/cycle model; NOT real CSL, NOT Cerebras hardware)",
+  "sdk_analogs": [
+    "cslc --out-routes",
+    "calculate_cycles"
+  ],
+  "dataflow_metrics": {
+    "representative_shape": [
+      32,
+      32,
+      32
+    ],
+    "grid_p": 4,
+    "tile_m": 8,
+    "tile_n": 8,
+    "tile_k": 8,
+    "steps": 4,
+    "active_pes": 16,
+    "total_pes": 16,
+    "utilization_pct": 100.0,
+    "resident_bytes": 1280,
+    "sram_bytes": 49152,
+    "sram_pressure_pct": 2.6041666666666665,
+    "a_wavelets": 1024,
+    "b_wavelets": 1024,
+    "messages_sent": 2048,
+    "avg_hop_distance": 3.0,
+    "critical_path_cycles": 7,
+    "panel_computes": 64,
+    "bottleneck": "active",
+    "bottleneck_cause": "none"
+  },
+  "fusion": {
+    "fused_op": "fused_rmsnorm_matmul",
+    "fused_from": "rmsnorm_matmul",
+    "eliminated_intermediate": "tensor<1x2048x4096xbf16>",
+    "eliminated_elements": 8388608,
+    "eliminated_round_trip_bytes": 33554432,
+    "eliminated_wavelets": 16777216,
+    "matmul_broadcast_wavelets": 2048,
+    "unfused_wavelets": 16779264,
+    "fused_wavelets": 2048,
+    "traffic_reduction_pct": 99.98779445868425,
+    "cross_reference": {
+      "report": "reports/mlp_traffic.json",
+      "note": "Todo 17 global-traffic report: fusion eliminates the same intermediate's global round-trip (reduction_pct there is the whole-pipeline global-byte view; here it is the eliminated intermediate's fabric wavelets vs the matmul broadcast)."
+    }
+  }
+}

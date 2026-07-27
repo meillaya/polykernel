@@ -1,0 +1,56 @@
+====================================================================
+PolyKernel T38 Wave 7: NEGATIVE evidence - SRAM over-subscription is
+  detected and flagged as the communication bottleneck.
+  Configure a SUMMA mapping whose resident tiles exceed the 48 KB
+  per-PE local SRAM: a 512x512x1 matmul on a 4x4 grid lowers to
+  tileM=tileN=128, tileK=1, so the output-stationary C tile alone is
+  128*128*4 = 64 KB > 48 KB. The metrics layer (lib/DataflowSim/
+  Metrics.cpp) computes the resident footprint (C tile + ping-pong
+  A/B double-buffers) vs Sram::kTotalBytes (48 KB = 49152 B):
+    residentBytes = 128*128*4 (C = 65536) + 2*128*1*4 (A dbuf = 1024)
+                  + 2*1*128*4 (B dbuf = 1024) = 67584 B
+    sramPressure  = 67584 / 49152 = 1.375  (137.5%)  > 100%
+  ClassifyBottleneck checks SRAM over-subscription FIRST, so pressure
+  > 1.0 -> CommState::Backpressure with cause "sram_over_subscription"
+  (the lossless fabric backpressure propagates because the PE cannot
+  buffer another panel). This proves the pressure detection: an over-
+  subscribed config is reported at > 100% AND flagged as THE bottleneck.
+  (GPU-free functional/cycle simulator; no Cerebras hardware involved.)
+====================================================================
+
+### [1] standalone metrics_test, SRAM-over-subscription negative ###
+
+Note: Google Test filter = metrics.SramOverSubscriptionFlaggedAsBottleneck
+[----------] Global test environment set-up.
+[----------] 1 test from metrics
+[ RUN      ] metrics.SramOverSubscriptionFlaggedAsBottleneck
+[negative] SRAM over-subscription: resident=67584 B vs 49152 B SRAM -> pressure=137.5% (> 100%) -> bottleneck=backpressure (cause=sram_over_subscription)
+[       OK ] metrics.SramOverSubscriptionFlaggedAsBottleneck (4 ms)
+[----------] 1 test from metrics (4 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (4 ms total)
+[  PASSED  ] 1 test.
+
+The test asserts, for the over-subscribed 512x512x1 / gridP=4 config:
+  EXPECT_EQ(m.residentBytes, 67584)                       // 64 KB C tile + A/B dbuf
+  EXPECT_DOUBLE_EQ(m.sramPressure, 67584.0 / 49152.0)     // = 1.375
+  EXPECT_GT(m.sramPressure, 1.0)                          // > 100% (over-subscribed)
+  EXPECT_EQ(m.commState, CommState::Backpressure)         // flagged as the bottleneck
+  EXPECT_STREQ(m.bottleneck, "backpressure")
+  EXPECT_STREQ(m.bottleneckCause, "sram_over_subscription")
+A PASS therefore proves SRAM pressure > 100% is reported AND flagged.
+
+### [2] ctest discovers + runs the negative (passes: it asserts the flag) ###
+
+1/1 Test #126: metrics.SramOverSubscriptionFlaggedAsBottleneck ...   Passed    0.01 sec
+100% tests passed, 0 tests failed out of 1
+Total Test time (real) =   0.01 sec
+
+### [3] contrast: the healthy 4x4 (8x8x8) mapping fits SRAM and is Active ###
+
+[negative] (none) 8x8x8 / gridP=4: resident=272 B vs 49152 B -> pressure=0.6%
+  -> bottleneck=active (cause=none). Hand-computed 4x4 metrics match the
+  cycle-accurate RunSumma simulation (metrics.HandComputed4x4* all pass).
+
+metrics_test (SRAM over-subscription) exit code: 0   (0 == pressure > 100% reported + flagged as the bottleneck; gtest assertions held)

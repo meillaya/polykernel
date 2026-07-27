@@ -18,14 +18,18 @@
 #     Scheduler.cpp also hosts the TaskPicker selector, plus the Todo 37 SUMMA
 #     matmul mapping: Summa.cpp runs the SUMMA tile program on the Grid and
 #     LowerToDataflow.cpp is the simulator lowering of polykernel.matmul /
-#     fused-matmul onto the SUMMA schedule).
+#     fused-matmul onto the SUMMA schedule, plus the Todo 38 metrics layer:
+#     Metrics.cpp computes grid utilization / SRAM pressure / messages / hops /
+#     communication bottleneck / critical-path cycles / fusion traffic reduction
+#     from the SummaPlan + RunSumma result).
 #   - tests/: router_test + color_test + grid_test (Todo 35), scheduler_test
-#             (Todo 36), and summa_test + dataflow_correctness_test (Todo 37)
-#             gtest executables, registered with CTest via gtest_discover_tests
-#             (mirrors lib/Autotune). The gtest SUITE names are `router`, `color`,
-#             `grid`, `scheduler`, `summa`, `dataflow_correctness` so
-#             `ctest -R 'router|color|grid'`, `ctest -R scheduler`, and
-#             `ctest -R 'summa|dataflow_correctness'` discover them.
+#             (Todo 36), summa_test + dataflow_correctness_test (Todo 37), and
+#             metrics_test (Todo 38) gtest executables, registered with CTest via
+#             gtest_discover_tests (mirrors lib/Autotune). The gtest SUITE names
+#             are `router`, `color`, `grid`, `scheduler`, `summa`,
+#             `dataflow_correctness`, `metrics` so `ctest -R 'router|color|grid'`,
+#             `ctest -R scheduler`, `ctest -R 'summa|dataflow_correctness'`, and
+#             `ctest -R metrics` discover them.
 
 add_library(PolyKernelDataflowSim STATIC
   Color.cpp
@@ -37,6 +41,7 @@ add_library(PolyKernelDataflowSim STATIC
   Scheduler.cpp
   Summa.cpp
   LowerToDataflow.cpp
+  Metrics.cpp
 )
 # Public headers live under include/PolyKernel/Dataflow/ (project-wide include
 # path, re-added for standalone use).
