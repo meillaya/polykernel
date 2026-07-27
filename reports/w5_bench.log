@@ -1,0 +1,68 @@
+====================================================================
+PolyKernel T25 Wave 5: Correctness-gated benchmarking harness (polykernel-bench)
+Evidence: golden BEFORE timing; fastest VALIDATED variant -> contract-H cache (validated:true)
+GPU: RX 7800 XT (gfx1101). HIP-event timing (hipEventRecord/hipEventElapsedTime).
+====================================================================
+
+### [1] QA happy: pytest tests/autotune/test_bench_gate.py -q ###
+..                                                                       [100%]
+2 passed in 1.87s
+
+### [2] C++ gate + fastest-validated selection gtest: ctest -R benchmark ###
+
+100% tests passed, 0 tests failed out of 11
+
+Total Test time (real) =   0.02 sec
+
+### [3] ACCEPTANCE: polykernel-bench --autotune --op fused_matmul_bias_gelu \
+###     --shape 2048,4096,11008 --dtype bf16 --backend hip --arch gfx1101 ###
+[bench] op=fused_matmul_bias_gelu shape=M=2048,N=4096,K=11008 dtype=bf16 arch=gfx1101 rel_ceiling=inf
+[bench] variant set: 4 pruned ConfigSpace configs
+==============================================================================
+[bench] VALIDATED config_0     config=(16, 32, 32, 4, 1, 4, 2) cosine=1.000000 rel=1.953e+03 pcc=1.000000 min_ms=72.39228 median_ms=72.44949
+[bench] VALIDATED config_1     config=(16, 32, 32, 4, 1, 4, 3) cosine=1.000000 rel=1.953e+03 pcc=1.000000 min_ms=72.66841 median_ms=72.76509
+[bench] VALIDATED config_2     config=(16, 32, 32, 4, 1, 4, 4) cosine=1.000000 rel=1.953e+03 pcc=1.000000 min_ms=71.27070 median_ms=71.38921
+[bench] VALIDATED config_3     config=(16, 32, 32, 4, 2, 2, 2) cosine=1.000000 rel=1.953e+03 pcc=1.000000 min_ms=71.27978 median_ms=71.33742
+==============================================================================
+[bench] BEST (fastest validated): config_3 config=(16, 32, 32, 4, 2, 2, 2) median_ms=71.33742
+[bench] tuning cache written to build/polykernel-bench/acceptance_cache.json (validated:true):
+{"entries":[{"best":{"block_k":32,"block_m":16,"block_n":32,"num_warps":4,"shared_memory_stages":2,"unroll":2,"vector_width":2},"correctness":{"cosine":1,"max_rel_err":1953.125,"pcc":1},"gpu":"gfx1101","op":"fused_matmul_bias_gelu","scored_by":"measure","shape":{"K":11008,"M":2048,"N":4096,"dtype":"bf16"},"time_ms":71.337419999999995,"validated":true}],"version":1}
+
+### [4] Winning contract-H cache entry (validated:true, scored_by:measure, measured time_ms) ###
+{
+  "entries": [
+    {
+      "best": {
+        "block_k": 32,
+        "block_m": 16,
+        "block_n": 32,
+        "num_warps": 4,
+        "shared_memory_stages": 2,
+        "unroll": 2,
+        "vector_width": 2
+      },
+      "correctness": {
+        "cosine": 1,
+        "max_rel_err": 1953.125,
+        "pcc": 1
+      },
+      "gpu": "gfx1101",
+      "op": "fused_matmul_bias_gelu",
+      "scored_by": "measure",
+      "shape": {
+        "K": 11008,
+        "M": 2048,
+        "N": 4096,
+        "dtype": "bf16"
+      },
+      "time_ms": 71.33742,
+      "validated": true
+    }
+  ],
+  "version": 1
+}
+
+NOTE: max_rel_err is large (1953) because at K=11008 an isolated near-zero gelu
+reference divides by ~eps; cosine == pcc == 1.0 (correct). The gate uses the robust
+cosine>=0.999 + pcc>=0.99 metrics there (documented large-K class, test_hip_run.py);
+max_rel_err<=1e-2 is enforced only in the small-K/non-fused regime (see [1] matmul case).

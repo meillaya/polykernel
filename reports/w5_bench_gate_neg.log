@@ -1,0 +1,32 @@
+====================================================================
+PolyKernel T25 Wave 5: Correctness gate NEGATIVE - fast-but-wrong variant EXCLUDED
+A deliberately-broken variant (constant-fill: trivially FAST, numerically garbage)
+is injected. The gate (golden BEFORE timing) must EXCLUDE it: validated:false,
+NEVER timed, NEVER selected - and a real VALIDATED kernel wins instead.
+====================================================================
+
+### [1] QA failure: pytest tests/autotune/test_bench_gate.py::test_broken_variant_excluded -q ###
+.                                                                        [100%]
+1 passed in 1.26s
+
+### [2] polykernel-bench --autotune --inject-broken at the ACCEPTANCE shape ###
+###     --op fused_matmul_bias_gelu --shape 2048,4096,11008 --dtype bf16 --backend hip --arch gfx1101 ###
+[bench] op=fused_matmul_bias_gelu shape=M=2048,N=4096,K=11008 dtype=bf16 arch=gfx1101 rel_ceiling=inf
+[bench] variant set: 4 pruned ConfigSpace configs + injected broken
+==============================================================================
+[bench] VALIDATED config_0     config=(16, 32, 32, 4, 1, 4, 2) cosine=1.000000 rel=1.953e+03 pcc=1.000000 min_ms=71.29244 median_ms=71.30328
+[bench] VALIDATED config_1     config=(16, 32, 32, 4, 1, 4, 3) cosine=1.000000 rel=1.953e+03 pcc=1.000000 min_ms=71.35226 median_ms=71.36977
+[bench] VALIDATED config_2     config=(16, 32, 32, 4, 1, 4, 4) cosine=1.000000 rel=1.953e+03 pcc=1.000000 min_ms=71.32131 median_ms=71.92886
+[bench] VALIDATED config_3     config=(16, 32, 32, 4, 2, 2, 2) cosine=1.000000 rel=1.953e+03 pcc=1.000000 min_ms=72.33154 median_ms=72.36523
+[bench] REJECTED  broken_fast  config=(16, 32, 32, 4, 1, 4, 2) cosine=0.564037 rel=7.000e+06 pcc=0.000000 -> validated:false, NOT timed, excluded
+          gate log: REJECTED fused_matmul_bias_gelu/broken: correctness gate FAILED (cosine=0.564037 max_rel_err=7.000000e+06 pcc=0.000000 ceiling=inf) - excluded, NOT timed, never best
+==============================================================================
+[bench] BEST (fastest validated): config_0 config=(16, 32, 32, 4, 1, 4, 2) median_ms=71.30328
+[bench] tuning cache written to build/polykernel-bench/neg_cache.json (validated:true):
+{"entries":[{"best":{"block_k":32,"block_m":16,"block_n":32,"num_warps":4,"shared_memory_stages":2,"unroll":4,"vector_width":1},"correctness":{"cosine":1,"max_rel_err":1953.125,"pcc":1},"gpu":"gfx1101","op":"fused_matmul_bias_gelu","scored_by":"measure","shape":{"K":11008,"M":2048,"N":4096,"dtype":"bf16"},"time_ms":71.303280000000001,"validated":true}],"version":1}
+
+### [3] Winning cache entry is a REAL validated kernel (validated:true); broken_fast is absent ###
+op=fused_matmul_bias_gelu validated=True time_ms=71.30328 cosine=1 pcc=1
+
+RESULT: broken_fast (fast-but-wrong) -> REJECTED by the correctness gate (cosine=0.54,
+pcc=0.0), validated:false, NOT timed, never best. The fastest VALIDATED real kernel wins.
