@@ -304,3 +304,91 @@ computed from its operands via `InferTypeOpInterface` and refined by the pass.
   silu/softmax/add/fused/qkv on bf16+fp16 + lit summary) and
   `reports/w1_shape_mismatch.log` (mismatched-K matmul → diagnostic + exit 1).
 - Op set unchanged: exactly **18** ops (census re-verified).
+
+## The full pass pipeline (Waves 1-5)
+
+The dialect ships **11 passes** (all declared in `include/PolyKernel/Passes/Passes.td`,
+registered explicitly via `registerPolyKernelPasses()` — never `registerAllPasses`, per
+the nix out-of-tree constraint above). The canonical end-to-end order:
+
+```
+--infer-shapes            # Todo 4  (Wave 1) shape + dtype inference
+--canonicalize            # Todo 5  (Wave 1) identity-add elim, const fold, DCE
+--fuse-rmsnorm-matmul     # Todo 12 (Wave 3) single-use rmsnorm+matmul -> fused
+--fuse-matmul-bias-gelu   # Todo 13 (Wave 3) single-use matmul+bias+gelu -> fused
+--fuse-residual-rmsnorm   # Todo 13 (Wave 3) single-use add+rmsnorm -> fused
+--fuse-softmax-mask       # Todo 13 (Wave 3) single-use mask-add+softmax -> fused
+--infer-tile-layout       # Todo 15 (Wave 3) BLOCK_M/N/K + layout attrs per matmul
+--plan-memory             # Todo 16 (Wave 3) smem budget + workspace + over-budget guard
+--lower-to-cuda           # Todo 8  (Wave 2) emit portable .cu (POLYKERNEL_CUDA)
+--lower-to-hip            # Todo 19 (Wave 4) emit portable .cu (POLYKERNEL_HIP)
+--emit-kernel-report      # Todo 27 (Wave 5) attach/emit the contract-H report skeleton
+```
+
+| Pass | Wave | What it does | Evidence |
+|---|---|---|---|
+| `--infer-shapes` | 1 | computes each op's result type from its operands via `InferTypeOpInterface`; mismatch → `signalPassFailure` | `reports/w1_infer_shapes.log`, `reports/w1_shape_mismatch.log` |
+| `--canonicalize` | 1 | `add(x,0)→x`, pure-elementwise const fold, softmax-of-splat → uniform, DCE (greedy pattern driver) | `reports/w1_canonicalize.log`, `reports/w1_canonicalize_noop.log` |
+| `--fuse-rmsnorm-matmul` | 3 | `rmsnorm(x);matmul(rms,w)` → `fused_rmsnorm_matmul(x,w)` (single-use only) | `reports/w3_fuse_rmsnorm_matmul.log` |
+| `--fuse-matmul-bias-gelu` | 3 | `matmul;bias;gelu` → `fused_matmul_bias_gelu` (single-use chain) | `reports/w3_fused_kernels.log` |
+| `--fuse-residual-rmsnorm` | 3 | `add(residual,x);rmsnorm` → `fused_residual_rmsnorm` | `reports/w3_fuse_remaining.log` |
+| `--fuse-softmax-mask` | 3 | `add(x,mask);softmax` → `fused_softmax_mask` | `reports/w3_fuse_remaining.log` |
+| `--infer-tile-layout` | 3 | assigns `polykernel.tile_m/n/k` + `polykernel.layout` (largest power-of-2 ≤ dim, clamped) | `reports/w3_tile_layout.log` |
+| `--plan-memory` | 3 | `polykernel.smem_bytes` + `polykernel.workspace_bytes` (0 for fused) + over-budget guard | `reports/w3_plan_memory.log` |
+| `--lower-to-cuda` | 2 | custom source emitter → `kernels/generated/*.cu` (see below) | `reports/w2_template.log` |
+| `--lower-to-hip` | 4 | same emitter; the HIP define is a *driver* concern, not an emitter concern | `reports/w4_hipcc_compile.log` |
+| `--emit-kernel-report` | 5 | attaches the IR-derivable contract-H fields + emits `kernel_report.json` | `reports/kernel_report_example.json` |
+
+**Fusion guardrails (all four fusion passes).** Each pass matches its exact op chain and
+requires every absorbed intermediate to have **exactly one use** (a multi-use producer is
+never fused — fusing would duplicate it). Each fused op is tagged with
+`polykernel.fused_from` + `polykernel.eliminated_type[_N]` discardable attributes so the
+traffic report can compute the saved global round-trip (`2 × numel × bytes` per eliminated
+intermediate). The op set stays **closed**: tile/layout, memory-plan, and report fields are
+all *discardable attributes*, never new declared op attributes.
+
+## Lowering is custom source emission (Pinned contract F)
+
+`--lower-to-cuda` / `--lower-to-hip` do **not** use the upstream `gpu-to-llvm` /
+`convert-to-llvm` paths. They walk the (lowered) IR and, for each recognized compute op,
+**string-emit** a portable CUDA/HIP kernel source file into `--output-dir`
+(default `kernels/generated/`). The emitted `.cu` is written against
+`kernels/template/kernel_common.h`, which maps `__global__` / shared memory / launch to
+CUDA vs HIP via `#ifdef POLYKERNEL_CUDA` / `#ifdef POLYKERNEL_HIP`. The two passes emit
+**byte-identical** compute; they differ only in which driver compiles the output
+(`nvcc -DPOLYKERNEL_CUDA` vs `hipcc -DPOLYKERNEL_HIP`). The IR itself is left unchanged.
+Seven kernels are emitted (rmsnorm, gelu, silu, matmul, softmax, fused_rmsnorm_matmul,
+fused_matmul_bias_gelu); `kernels/generated/matmul_wmma.cu` is the additive WMMA bf16
+variant (Todo 22).
+
+## The tools
+
+| Tool | Purpose |
+|---|---|
+| `polykernel-opt` | pass driver (`MlirOptMain` + the registered PolyKernel dialect + passes) |
+| `polykernel-translate` | `--mlir-to-cuda-source` / `--mlir-to-hip-source` source emit |
+| `polykernel-analyze` | standalone GPU-free compile-time analyzer (Todo 11; reused by `-bench`/`-report`) |
+| `polykernel-bench` | correctness-gated autotuner + analyzer CLI (Todo 25) |
+| `polykernel-report` | `--traffic` (Todo 17), `--backend=dataflow [--viz]` (Todo 38/39), per-kernel `report.py` (Todo 27), `--dashboard` (Todo 34) |
+
+## End-to-end example
+
+```bash
+nix develop --impure --accept-flake-config -c bash -c '
+  # full pipeline on the MLP fragment: infer + canonicalize + fuse + tile + plan + lower
+  ./build/tools/polykernel-opt/polykernel-opt examples/mlp_block.mlir \
+      --infer-shapes --canonicalize \
+      --fuse-rmsnorm-matmul --fuse-matmul-bias-gelu \
+      --infer-tile-layout --plan-memory \
+      --lower-to-cuda --output-dir=kernels/generated
+  # the whole lit suite (13 tests)
+  cmake --build build --target check-polykernel
+'
+```
+
+`check-polykernel` runs lit over `test/` (13 `.mlir` tests: smoke, op-set-closed,
+dialect round-trip, infer-shapes ± mismatch, canonicalize, the four fusion passes,
+tile-layout, plan-memory, e2e-parse). The before/after fusion traffic report
+(`polykernel-report --traffic examples/mlp_block.mlir`) quantifies the global-memory
+reduction; for the MLP block fusion eliminates a 32 MiB intermediate round-trip
+(7.02% of fragment traffic — `reports/mlp_traffic.md`).

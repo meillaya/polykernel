@@ -1,0 +1,74 @@
+# PolyKernel benchmark dashboard (Todo 34 / Wave 6)
+
+Generated: 2026-07-27T16:15:16Z by `tools/polykernel-report/dashboard.py --dashboard`.
+
+## Model fragment
+
+- **Fragment:** `MLP block (examples/mlp_block.mlir): rmsnorm+matmul+gelu+matmul+add`
+- **dtype / shape:** bf16, {"M": 2048, "N_up": 11008, "K": 4096, "N_dn": 4096}
+
+## Backends enabled
+
+| backend | archs | status |
+|---|---|---|
+| CUDA | sm_80 (A100), sm_90 (H100) | compile + PTX + GPU-free compile-time analysis (no local NVIDIA GPU); H100/A100 speedups PROJECTED |
+| HIP / ROCm | gfx1101 (local RX 7800 XT), gfx942 (MI300) | runs locally on gfx1101 + WMMA bf16; MI300 cross-compile; MI300 speedups PROJECTED |
+| Dataflow | 64x64 PE grid (CE + FMAC, 48 KB SRAM/PE) | functional/cycle SIMULATOR (NOT real CSL, NOT Cerebras hardware) |
+
+## Correctness (golden contract C) — PASS
+
+- **failed correctness: 0**
+- validated: 10 / 10 ops pass the golden (cosine >= 0.999, max rel err <= 1e-2, PCC >= 0.99)
+- source: tests/e2e/test_mlp_correctness.py (CPU-ref vs golden, contract C)
+
+## CUDA speedups (unfused = 1.00x baseline)
+
+> PROJECTED (not measured): PROJECTED (no rental; run benchmarks/rent_runpod.sh with RUNPOD_API_KEY set for real measured numbers)
+
+| arch | backend | unfused | fused | autotuned |
+|---|---|---|---|---|
+| NVIDIA H100 (SXM5, sm_90) | cuda (sm_90) | 1.000x | 1.004x | 2.838x |
+| NVIDIA A100 (80GB, sm_80) | cuda (sm_80) | 1.000x | 1.003x | 2.862x |
+
+## AMD speedups (unfused = 1.00x baseline)
+
+> PROJECTED (not measured): PROJECTED (no rental; run benchmarks/rent_runpod.sh with RUNPOD_API_KEY set for real measured numbers)
+
+| arch | backend | unfused | fused | autotuned |
+|---|---|---|---|---|
+| AMD Instinct MI300X (gfx942) | hip (gfx942) | 1.000x | 1.003x | 2.850x |
+
+## Dataflow simulator metrics
+
+> PolyKernel dataflow simulator (functional/cycle model; NOT real CSL, NOT Cerebras hardware)
+
+- grid utilization: 100.00% (16/16 PEs)
+- SRAM pressure: 2.60%
+- messages sent: 2,048 wavelets
+- avg hop distance: 3.0
+- critical path: 7 cycles
+- bottleneck: active
+- fusion traffic reduction: 99.9878%
+- visualizer: reports/dataflow_report.html (Todo 39; linked, not regenerated here)
+
+## Compiler stats
+
+- passes: 11 (InferShapes, Canonicalize, LowerToCuda, LowerToHip, FuseRmsnormMatmul, FuseMatmulBiasGelu, FuseResidualRmsnorm, FuseSoftmaxMask, InferTileLayout, PlanMemory, EmitKernelReport)
+- generated kernels: 8 (fused_matmul_bias_gelu.cu, fused_rmsnorm_matmul.cu, gelu.cu, matmul.cu, matmul_wmma.cu, rmsnorm.cu, silu.cu, softmax.cu)
+- dialect ops: 18 (closed set)
+- lit tests (check-polykernel): 13
+- validated kernels: 10
+- **failed correctness: 0**
+
+## Reports
+
+- reports/benchmark_report.html (this dashboard, self-contained)
+- reports/h100_report.html (CUDA H100/A100 detail, self-contained)
+- reports/mi300_report.html (AMD MI300 detail, self-contained)
+- reports/dataflow_report.html (dataflow viz, Todo 39)
+
+## Caveats
+
+- H100/A100/MI300 speedups are PROJECTED (roofline + analytic traffic), not measured on rented hardware.
+- The dataflow backend is a functional/cycle SIMULATOR (NOT real CSL, NOT Cerebras hardware).
+- No SOTA-performance claim: the goal is the compiler/runtime machinery, not beating vLLM.
