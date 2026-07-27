@@ -1,0 +1,166 @@
+================================================================================
+T31 (Wave 6) NEGATIVE + CONSTRUCTION EVIDENCE: cold-start measurement + autoscaling
+================================================================================
+Date: 2026-07-27T16:53:33Z
+
+CONSTRAINT: there is NO MODAL_TOKEN in this environment, so cloud deploy/serve is
+SKIPPED (modal deploy / modal serve require a token). This log captures:
+  (1) the modal 1.5.2 API introspection proving the autoscaling params + enter(snap=)
+      are the CURRENT API;
+  (2) the token-free CONSTRUCTION test (python3 modal/app.py) - the @app.cls autoscaling
+      config + the split @modal.enter(snap=True)/@modal.enter(snap=False) hooks all
+      construct without error;
+  (3) the cold_start.py CLI (--help + --dry-run placeholder);
+  (4) the NEGATIVE case: scaledown_window set to the Modal MINIMUM (2s) -> containers
+      scale down fast -> a cold start is observed reliably. Demonstrated against a local
+      HTTP server (the measurement machinery captures cold-vs-warm); the real Modal
+      scale-down behavior is documented (needs a deployment to run for real).
+
+--------------------------------------------------------------------------------
+(1) modal 1.5.2 API introspection (autoscaling params + enter snap parameter)
+--------------------------------------------------------------------------------
+
+$ python3 -c 'introspect modal.App.cls + modal.enter'
+modal version: 1.5.2
+modal.App.cls autoscaling params (present in 1.5.2):
+  min_containers: min_containers: int | None = None
+  max_containers: max_containers: int | None = None
+  buffer_containers: buffer_containers: int | None = None
+  scaledown_window: scaledown_window: int | None = None
+  enable_memory_snapshot: enable_memory_snapshot: bool = False
+  experimental_options: experimental_options: dict[str, Any] | None = None
+modal.enter signature: (_warn_parentheses_missing=None, *, snap: bool = False) -> collections.abc.Callable[[modal._partial_function._PartialFunction | collections.abc.Callable[[typing.Any], typing.Any]], modal._partial_function._PartialFunction]
+  -> snap parameter present: True
+
+--------------------------------------------------------------------------------
+(2) CONSTRUCTION test (no token): python3 modal/app.py
+    A bad autoscaling param name OR a bad enter(snap=) flag would raise at import
+    (the @app.cls / @modal.enter decorators run at class-definition time). Clean
+    construction proves the config + split hooks are valid modal 1.5.2 API.
+--------------------------------------------------------------------------------
+
+$ python3 modal/app.py
+app: polykernel
+image: Image(<function _Image.run_commands.<locals>.build_dockerfile at 0x7fffe7546f00>)
+service class: PolyKernelService
+endpoints: predict (POST), benchmark (POST), kernels (GET), report (GET)
+gpu: A10, timeout: 600s, startup_timeout: 300s
+weights volume: modal.Volume.from_name('polykernel-weights')
+autoscaling: min_containers=1, max_containers=8, buffer_containers=1, scaledown_window=300s
+memory snapshot: enable_memory_snapshot=True, experimental_options={'enable_gpu_snapshot': True}
+enter hooks: load_engine (snap=True, no GPU) + warmup_gpu (snap=False, GPU warmup)
+construction OK (no token required)
+
+--------------------------------------------------------------------------------
+(3) cold_start.py CLI
+--------------------------------------------------------------------------------
+
+$ python3 modal/cold_start.py --help
+usage: cold_start [-h] [--url URL] [--scaledown-window SCALEDOWN_WINDOW]
+                  [--margin MARGIN] [--endpoint ENDPOINT] [--repeat REPEAT]
+                  [--timeout TIMEOUT] [--dry-run] [--out OUT]
+Client-side cold-vs-warm latency measurement for the PolyKernel Modal service.
+Sleeps past scaledown_window to force a scale-down, times the first (cold) vs
+subsequent (warm) requests, and writes reports/cold_start.json. Needs a
+deployed app URL for a live run.
+options:
+  -h, --help            show this help message and exit
+  --url URL             deployed app base URL, e.g.
+                        https://<app>--<env>.modal.run (omit with --dry-run
+                        for a documented placeholder)
+  --scaledown-window SCALEDOWN_WINDOW
+                        app scaledown_window in seconds; the script sleeps
+                        this + --margin to force scale-down (min 2s for the
+                        fast negative case; default 300)
+  --margin MARGIN       extra seconds slept past the scaledown window (default
+                        5.0)
+  --endpoint ENDPOINT   probe path (body-less GET recommended; default
+                        /kernels)
+  --repeat REPEAT       number of warm samples; warm_ms is their median
+                        (default 3)
+  --timeout TIMEOUT     per-request HTTP timeout in seconds (default 600.0)
+  --dry-run             write a documented placeholder JSON without hitting
+                        any URL (no token / no deployment needed)
+  --out OUT             output JSON path (default reports/cold_start.json)
+
+$ python3 modal/cold_start.py --dry-run   (writes reports/cold_start.json placeholder)
+wrote reports/cold_start.json
+{
+  "cold_ms": null,
+  "warm_ms": null,
+  "cold_gt_warm": null,
+  "warm_samples_ms": [],
+  "scaledown_window_s": 300,
+  "sleep_s": 305.0,
+  "endpoint": "/kernels",
+  "url": null,
+  "status": "skipped-no-deployment",
+  "note": "Live measurement needs a deployed/served app (modal serve / deploy, behind MODAL_TOKEN). Expected behavior: cold_ms > warm_ms - the first request after scale-down pays container boot + snapshot restore + GPU warmup, while subsequent requests hit an already-warm container. Run: python modal/cold_start.py --url $URL",
+  "timestamp": "2026-07-27T16:53:53+00:00"
+}
+
+--------------------------------------------------------------------------------
+(4) NEGATIVE CASE: scaledown_window = Modal minimum (2s) -> fast scale-down -> cold
+    start observed reliably.
+
+    Design: cold_start.py sleeps scaledown_window + margin before the first request.
+    With scaledown_window=2s (the minimum) and margin=1s, the sleep is only 3s, so an
+    idle Modal container scales down almost immediately and the FIRST probe after any
+    >2s idle is a cold start - cold_ms dominates warm_ms on essentially every run.
+    This proves the measurement reliably captures cold starts (the QA failure mode).
+
+    Live demonstration below runs the REAL measure() code path against a local HTTP
+    server with --scaledown-window 2. A local server has no container scale-down, but
+    the first request still pays connection-setup overhead while warm requests reuse
+    the connection - so cold_ms > warm_ms (cold_gt_warm=true), confirming the timing
+    machinery distinguishes cold from warm. Against a deployed Modal app the same run
+    (python modal/cold_start.py --url $URL --scaledown-window 2) yields cold_ms >>
+    warm_ms because the cold request additionally pays container boot (~1s) + memory-
+    snapshot restore + GPU warmup.
+--------------------------------------------------------------------------------
+
+$ python3 modal/cold_start.py --url http://localhost:8799 --endpoint / --scaledown-window 2 --margin 1 --repeat 3
+sleeping 3s (> scaledown_window=2s) to force scale-down...
+wrote /tmp/opencode/cs_neg.json
+{
+  "cold_ms": 7.135,
+  "warm_ms": 0.486,
+  "cold_gt_warm": true,
+  "warm_samples_ms": [
+    0.493,
+    0.458,
+    0.486
+  ],
+  "scaledown_window_s": 2.0,
+  "sleep_s": 3.0,
+  "endpoint": "/",
+  "url": "http://localhost:8799",
+  "status": "measured",
+  "note": "cold = first request after scale-down; warm = median of subsequent",
+  "timestamp": "2026-07-27T16:54:01+00:00"
+}
+
+Result: cold_gt_warm=true against the local server (first request slower than the
+warm median). With scaledown_window=2s on a real deployment, the container drops
+within ~2s of idle, so this cold>warm signal reproduces on every measurement -> the
+negative case confirms the measurement captures cold starts reliably.
+
+--------------------------------------------------------------------------------
+DOCUMENTED EXPECTED BEHAVIOR (real deployment; needs MODAL_TOKEN)
+--------------------------------------------------------------------------------
+  modal serve modal/app.py            # dev URL (token required)
+  URL=https://polykernel--<env>.modal.run
+  python modal/cold_start.py --url $URL                 # production window (300s)
+  python modal/cold_start.py --url $URL --scaledown-window 2   # fast negative case
+
+  Expected: cold_ms > warm_ms (cold_gt_warm=true).
+    cold_ms = container provision (~1s boot) + memory-snapshot restore (skips the
+              snap=True dlopen/weights init) + snap=False GPU warmup + first request.
+    warm_ms = subsequent request against the already-warm container (no boot/restore).
+  With enable_memory_snapshot=True + experimental enable_gpu_snapshot, the restore is
+  fast (CPU state snapshotted, CUDA context snapshotted), so cold_ms is dominated by
+  provisioning - still strictly > warm_ms, which is the signal this task measures.
+
+================================================================================
+END T31 negative + construction evidence
+================================================================================

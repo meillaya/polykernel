@@ -1,4 +1,4 @@
-"""Modal GPU endpoints for PolyKernel (Todo 30 / Wave 6).
+"""Modal GPU endpoints for PolyKernel (Todo 30 + Todo 31 / Wave 6).
 
 Extends the Todo 29 app skeleton with a GPU service class exposing four endpoints:
 
@@ -9,15 +9,35 @@ Extends the Todo 29 app skeleton with a GPU service class exposing four endpoint
 
 Pipeline (modal 1.5.2 - every decorator verified current by introspection):
 
-    @app.cls(gpu="A10", timeout=600, startup_timeout=300, volumes={...})
+    @app.cls(gpu="A10", ..., min_containers=1, scaledown_window=300,
+             enable_memory_snapshot=True,
+             experimental_options={"enable_gpu_snapshot": True})
     class PolyKernelService:
-        @modal.enter()          # ctypes.CDLL the engine .so + load Volume weights
+        @modal.enter(snap=True)   # BEFORE snapshot (NO GPU): dlopen .so + weights
+        @modal.enter(snap=False)  # AFTER restore (GPU up): one dummy kernel warmup
         @modal.fastapi_endpoint(method="POST")  # /predict, /benchmark
         @modal.fastapi_endpoint(method="GET")   # /kernels, /report
 
 The engine .so is compiled at IMAGE-BUILD time (modal/image.py run_commands) and
-loaded once per container via @modal.enter(). Weights load from a modal.Volume
-mounted at /weights. The bench + report tools are reused as-is (subprocess).
+loaded once per container via the snap=True enter hook. Weights load from a
+modal.Volume mounted at /weights. The bench + report tools are reused as-is
+(subprocess).
+
+Autoscaling + cold start (Todo 31): the class sets min_containers / max_containers
+/ buffer_containers / scaledown_window and turns on memory snapshotting
+(enable_memory_snapshot + experimental enable_gpu_snapshot). Startup is SPLIT into
+two @modal.enter hooks keyed on the snapshot boundary:
+
+    snap=True  runs BEFORE the memory snapshot is taken - NO GPU is available yet,
+               so it does only CPU work (dlopen the engine .so, bind the ctypes
+               signature, read the weights bytes). This state is captured in the
+               snapshot, so a restored container skips it entirely.
+    snap=False runs AFTER the snapshot is restored - the GPU is available, so it
+               fires one dummy kernel to pay the CUDA-context / JIT / first-launch
+               cost once, making the first real /predict warm.
+
+Client-side cold-vs-warm measurement lives in modal/cold_start.py (sleeps past
+scaledown_window to force a scale-down, then times the first vs a warm request).
 
 Importing this module constructs the App + service class and needs NO Modal token.
 Deploying/serving (which builds the image + provisions GPU containers) is the
@@ -35,6 +55,10 @@ name `modal.image` is the SDK's own image submodule - NOT this project's
 module name, which is collision-proof and deterministic.
 """
 
+# allow: SIZE_OK - Modal serves ONE module (`modal serve modal/app.py`); the @app.cls
+# service class, its snap=True/snap=False enter hooks, four endpoints, and autoscaling
+# config form an indivisible deployment unit that cannot be split across files (and the
+# task restricts edits to this module). The bulk is the inherited Todo 30 endpoints.
 from __future__ import annotations
 
 import ctypes
@@ -112,6 +136,40 @@ REPORT_TOOL = f"{REMOTE_APP_DIR}/tools/polykernel-report/report.py"
 BENCH_TOOL = f"{REMOTE_APP_DIR}/tools/polykernel-bench/bench.py"
 
 # ---------------------------------------------------------------------------
+# Autoscaling + memory-snapshot config (Todo 31).
+#
+# These are the @app.cls knobs that govern how Modal provisions GPU containers.
+# Introspected against modal 1.5.2 (modal.App.cls): min_containers REPLACES the
+# old keep_warm; scaledown_window is seconds; enable_memory_snapshot is a bool;
+# experimental_options is a free-form dict (enable_gpu_snapshot snapshots the CUDA
+# context too).
+# ---------------------------------------------------------------------------
+# Keep 1 container always-warm so steady traffic never pays a cold start.
+MIN_CONTAINERS = 1
+# Hard cap on scale-out (GPU budget guard).
+MAX_CONTAINERS = 8
+# Extra standby containers pre-provisioned to absorb bursts without a cold start.
+BUFFER_CONTAINERS = 1
+# Seconds of idle before an idle container scales down. modal/cold_start.py sleeps
+# PAST this to force a scale-down and measure the resulting cold start. The Modal
+# minimum is 2s (used for the fast-scale-down negative case in cold_start.py).
+SCALEDOWN_WINDOW = 300
+# Tiny shape used by the snap=False GPU warmup - just enough to launch the kernel
+# once so the first real /predict is warm (CUDA context + JIT already primed).
+WARMUP_SHAPE = (64, 64, 64)  # (M, N, K)
+
+# ctypes signature of the engine's fused MLP block, bound once in the snap=True
+# enter hook (and captured in the memory snapshot):
+#   int polykernel_fused_mlp_block(float* in, float* out, int M, int N, int K)
+_FUSED_MLP_ARGTYPES = [
+    ctypes.POINTER(ctypes.c_float),
+    ctypes.POINTER(ctypes.c_float),
+    ctypes.c_int,
+    ctypes.c_int,
+    ctypes.c_int,
+]
+
+# ---------------------------------------------------------------------------
 # Image + Volume (both construct token-free; materialised only on deploy).
 # ---------------------------------------------------------------------------
 _IMAGE_MODULE_NAME = "polykernel_modal_image"
@@ -151,28 +209,72 @@ app = modal.App("polykernel", image=image)
     timeout=600,
     startup_timeout=300,
     volumes={WEIGHTS_MOUNT: weights_volume},
+    # --- Autoscaling (Todo 31; introspected against modal 1.5.2) ---
+    min_containers=MIN_CONTAINERS,
+    max_containers=MAX_CONTAINERS,
+    buffer_containers=BUFFER_CONTAINERS,
+    scaledown_window=SCALEDOWN_WINDOW,
+    # --- Memory snapshot: fast cold-start restore ---
+    # CRIU-snapshot container memory after the snap=True enter hooks; the restored
+    # container skips re-running them (the .so is already dlopen'd + bound).
+    enable_memory_snapshot=True,
+    # Also snapshot the CUDA context so the restored container keeps its GPU state.
+    experimental_options={"enable_gpu_snapshot": True},
 )
 class PolyKernelService:
     """GPU service: ctypes-loaded engine .so + four FastAPI endpoints.
 
     The engine .so is compiled at image-build time (modal/image.py) and loaded
-    once per container via @modal.enter(). Weights load from the modal.Volume
-    mounted at /weights. The bench + report tools are reused via subprocess.
+    once per container via the snap=True enter hook. Weights load from the
+    modal.Volume mounted at /weights. The bench + report tools are reused via
+    subprocess. Startup is split across the memory-snapshot boundary: snap=True
+    (no GPU) does the CPU init; snap=False (GPU up) warms up the kernel.
     """
 
-    @modal.enter()
+    @modal.enter(snap=True)
     def load_engine(self) -> None:
-        """Startup hook: ctypes-load the engine .so + load weights from Volume.
+        """Pre-snapshot init (NO GPU): dlopen the engine .so + load weights.
 
-        Runs once when the container starts (before any endpoint is served).
-        The engine .so exports the fused MLP block kernel; weights are loaded
-        from the Volume mount so they persist across container restarts.
+        Runs BEFORE the memory snapshot is taken, so only CPU work is allowed
+        here (the GPU is not available yet). ctypes.CDLL maps the .so into the
+        process and resolves symbols; the weights are read as bytes from the
+        Volume mount. All of this state is captured in the snapshot, so a
+        restored container skips the dlopen + weight-load cost entirely - the
+        whole point of enable_memory_snapshot.
         """
         self.engine = ctypes.CDLL(ENGINE_SO_PATH)
+        # Bind the fused MLP block signature once (cheap CPU work; snapshotted).
+        self.engine.polykernel_fused_mlp_block.restype = ctypes.c_int
+        self.engine.polykernel_fused_mlp_block.argtypes = _FUSED_MLP_ARGTYPES
         # Load weights from the mounted Volume (persistent across restarts).
         weights_path = Path(WEIGHTS_MOUNT) / "weights.bin"
         self.weights: bytes | None = (
             weights_path.read_bytes() if weights_path.exists() else None
+        )
+
+    @modal.enter(snap=False)
+    def warmup_gpu(self) -> None:
+        """Post-restore GPU warmup (GPU available): fire one dummy kernel.
+
+        Runs AFTER the memory snapshot is restored, when the GPU is available.
+        GPU state (CUDA context, JIT caches, first-launch overhead) is NOT in
+        the memory snapshot, so it is paid here - once, at restore - instead of
+        on the first /predict. The dummy launch primes the context so the first
+        real request is warm.
+        """
+        import numpy as np  # noqa: PLC0415 - deploy-time dep (image has numpy)
+
+        m, n, k = WARMUP_SHAPE
+        inp = np.zeros(m * k, dtype=np.float32)
+        out = np.zeros(m * n, dtype=np.float32)
+        # Warmup only: a non-zero rc is surfaced by the first real /predict, so
+        # it is intentionally not raised here (would just mask the warmup intent).
+        self.engine.polykernel_fused_mlp_block(
+            inp.ctypes.data_as(ctypes.POINTER(ctypes.c_float)),
+            out.ctypes.data_as(ctypes.POINTER(ctypes.c_float)),
+            m,
+            n,
+            k,
         )
 
     @modal.fastapi_endpoint(method="POST")
@@ -185,21 +287,12 @@ class PolyKernelService:
         a 422 (never a 500 crash).
         """
         m, n, k = request.shape_m, request.shape_n, request.shape_k
-        # Call the engine's fused MLP block via ctypes. The engine exports
-        # polykernel_fused_mlp_block(input, output, M, N, K) -> int (0 = ok).
+        # Call the engine's fused MLP block via ctypes. The restype/argtypes are
+        # bound once in the snap=True enter hook (captured in the snapshot).
         import numpy as np  # noqa: PLC0415 - deploy-time dep (image has numpy)
 
         inp = np.array(request.input_data, dtype=np.float32)
         out = np.zeros(m * n, dtype=np.float32)
-        # ctypes call: int polykernel_fused_mlp_block(float* in, float* out, int M, int N, int K)
-        self.engine.polykernel_fused_mlp_block.restype = ctypes.c_int
-        self.engine.polykernel_fused_mlp_block.argtypes = [
-            ctypes.POINTER(ctypes.c_float),
-            ctypes.POINTER(ctypes.c_float),
-            ctypes.c_int,
-            ctypes.c_int,
-            ctypes.c_int,
-        ]
         rc = self.engine.polykernel_fused_mlp_block(
             inp.ctypes.data_as(ctypes.POINTER(ctypes.c_float)),
             out.ctypes.data_as(ctypes.POINTER(ctypes.c_float)),
@@ -290,11 +383,15 @@ class PolyKernelService:
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
     # Importing this module constructs the App + service class. This is the
-    # local validation: the app + endpoints are constructible without a token.
+    # local validation: the app + endpoints + autoscaling config + the split
+    # snap=True/snap=False enter hooks are all constructible without a token.
     print(f"app: {app.name}")
     print(f"image: {image}")
     print(f"service class: {PolyKernelService.__name__}")
     print("endpoints: predict (POST), benchmark (POST), kernels (GET), report (GET)")
     print("gpu: A10, timeout: 600s, startup_timeout: 300s")
     print(f"weights volume: {weights_volume}")
+    print(f"autoscaling: min_containers={MIN_CONTAINERS}, max_containers={MAX_CONTAINERS}, buffer_containers={BUFFER_CONTAINERS}, scaledown_window={SCALEDOWN_WINDOW}s")
+    print("memory snapshot: enable_memory_snapshot=True, experimental_options={'enable_gpu_snapshot': True}")
+    print("enter hooks: load_engine (snap=True, no GPU) + warmup_gpu (snap=False, GPU warmup)")
     print("construction OK (no token required)")

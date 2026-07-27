@@ -1,0 +1,13 @@
+{
+  "cold_ms": null,
+  "warm_ms": null,
+  "cold_gt_warm": null,
+  "warm_samples_ms": [],
+  "scaledown_window_s": 300,
+  "sleep_s": 305.0,
+  "endpoint": "/kernels",
+  "url": null,
+  "status": "skipped-no-deployment",
+  "note": "Live measurement needs a deployed/served app (modal serve / deploy, behind MODAL_TOKEN). Expected behavior: cold_ms > warm_ms - the first request after scale-down pays container boot + snapshot restore + GPU warmup, while subsequent requests hit an already-warm container. Run: python modal/cold_start.py --url $URL",
+  "timestamp": "2026-07-27T17:00:00+00:00"
+}
