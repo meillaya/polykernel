@@ -21,3 +21,10 @@ gtest_discover_tests(device_detect_test)
 add_executable(runtime_test runtime_test.cpp)
 target_link_libraries(runtime_test PRIVATE PolyKernelRuntime GTest::gtest_main)
 gtest_discover_tests(runtime_test)
+
+# Todo 42 (Wave 8): GPU-free tests of the hardened kernel cache - persist/reload,
+# hash-keyed invalidation, multi-GPU per-GPU selection, graceful re-autotune fallback.
+# Suite name `kernel_cache_persist` so `ctest -R kernel_cache_persist` discovers it.
+add_executable(kernel_cache_persist_test kernel_cache_persist_test.cpp)
+target_link_libraries(kernel_cache_persist_test PRIVATE PolyKernelRuntime GTest::gtest_main)
+gtest_discover_tests(kernel_cache_persist_test)

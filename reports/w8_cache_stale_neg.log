@@ -1,0 +1,61 @@
+# T42 (Wave 8) QA NEGATIVE: stale/missing cached binary -> invalidate + re-autotune fallback
+# 2026-07-27T14:21:34-04:00
+# A corrupted cached binary (on-disk hash != recorded kernel-hash) or a missing .so
+# is INVALIDATED (dropped from the tuning DB + binary map); selection then falls back
+# to the graceful "run the autotuner" miss - a stale/wrong binary is NEVER served.
+# GPU-free: the binary is a temp file the test corrupts/deletes.
+#
+UpdateCTestConfiguration  from :/home/mei/projects/polykernel/build_t42/DartConfiguration.tcl
+Test project /home/mei/projects/polykernel/build_t42
+Constructing a list of tests
+Done constructing a list of tests
+Updating test list for fixtures
+Added 0 tests to meet fixture requirements
+Checking test dependency graph...
+Checking test dependency graph end
+test 146
+    Start 146: kernel_cache_persist.StaleBinaryInvalidatedFallsBackToMiss
+
+146: Test command: /home/mei/projects/polykernel/build_t42/lib/Runtime/tests/kernel_cache_persist_test "--gtest_filter=kernel_cache_persist.StaleBinaryInvalidatedFallsBackToMiss" "--gtest_also_run_disabled_tests"
+146: Working Directory: /home/mei/projects/polykernel/build_t42/lib/Runtime/tests
+146: Test timeout computed to be: 10000000
+146: Running main() from /build/source/googletest/src/gtest_main.cc
+146: Note: Google Test filter = kernel_cache_persist.StaleBinaryInvalidatedFallsBackToMiss
+146: [==========] Running 1 test from 1 test suite.
+146: [----------] Global test environment set-up.
+146: [----------] 1 test from kernel_cache_persist
+146: [ RUN      ] kernel_cache_persist.StaleBinaryInvalidatedFallsBackToMiss
+146: [       OK ] kernel_cache_persist.StaleBinaryInvalidatedFallsBackToMiss (0 ms)
+146: [----------] 1 test from kernel_cache_persist (0 ms total)
+146: 
+146: [----------] Global test environment tear-down
+146: [==========] 1 test from 1 test suite ran. (0 ms total)
+146: [  PASSED  ] 1 test.
+1/2 Test #146: kernel_cache_persist.StaleBinaryInvalidatedFallsBackToMiss ...   Passed    0.03 sec
+test 147
+    Start 147: kernel_cache_persist.MissingBinaryInvalidated
+
+147: Test command: /home/mei/projects/polykernel/build_t42/lib/Runtime/tests/kernel_cache_persist_test "--gtest_filter=kernel_cache_persist.MissingBinaryInvalidated" "--gtest_also_run_disabled_tests"
+147: Working Directory: /home/mei/projects/polykernel/build_t42/lib/Runtime/tests
+147: Test timeout computed to be: 10000000
+147: Running main() from /build/source/googletest/src/gtest_main.cc
+147: Note: Google Test filter = kernel_cache_persist.MissingBinaryInvalidated
+147: [==========] Running 1 test from 1 test suite.
+147: [----------] Global test environment set-up.
+147: [----------] 1 test from kernel_cache_persist
+147: [ RUN      ] kernel_cache_persist.MissingBinaryInvalidated
+147: [       OK ] kernel_cache_persist.MissingBinaryInvalidated (0 ms)
+147: [----------] 1 test from kernel_cache_persist (0 ms total)
+147: 
+147: [----------] Global test environment tear-down
+147: [==========] 1 test from 1 test suite ran. (0 ms total)
+147: [  PASSED  ] 1 test.
+2/2 Test #147: kernel_cache_persist.MissingBinaryInvalidated ................   Passed    0.03 sec
+
+The following tests passed:
+	kernel_cache_persist.StaleBinaryInvalidatedFallsBackToMiss
+	kernel_cache_persist.MissingBinaryInvalidated
+
+100% tests passed, 0 tests failed out of 2
+
+Total Test time (real) =   0.07 sec

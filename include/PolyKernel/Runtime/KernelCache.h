@@ -28,10 +28,12 @@
 #include "PolyKernel/Autotune/TuningCache.h"
 
 #include <cstddef>
+#include <map>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace polykernel::runtime {
 
@@ -54,6 +56,29 @@ struct SelectionResult {
 
   [[nodiscard]] bool ok() const { return entry.has_value(); }
 };
+
+/// Hardening metadata for a cached COMPILED BINARY (Todo 42 / Wave 8): where the
+/// compiled .so lives on disk + the kernel-hash (a hash of the binary's bytes)
+/// recorded when it was cached. This is the invalidation layer ON TOP of the
+/// contract-H tuning entry (which carries the tuned config, NOT the binary): the
+/// invalidation key is (gpu, op, shape, dtype, kernel-hash). Invalidation recomputes
+/// the hash of the on-disk .so and compares; a mismatch (or a missing/unreadable .so)
+/// means the cached binary is STALE and the entry is dropped so selection falls back
+/// to re-autotuning - a stale/wrong binary is never served. NOT part of contract H
+/// (the tuning schema is unchanged; modal/app.py mirrors only the tuning entry).
+struct CachedBinary {
+  std::string so_path;     ///< Path to the compiled .so on disk.
+  std::string kernel_hash; ///< Hash of the binary's bytes at cache time.
+
+  [[nodiscard]] bool operator==(const CachedBinary &) const = default;
+};
+
+/// Compute a stable hex kernel-hash (FNV-1a 64-bit) of the bytes of the file at
+/// `so_path`. GPU-free + deterministic: the gtest hashes temp files it controls, the
+/// on-GPU path hashes the real compiled .so. Returns false + a clear error if the
+/// file cannot be opened/read (a missing/unreadable binary is treated as stale).
+[[nodiscard]] bool HashFile(std::string_view so_path, std::string &hash_out,
+                            std::string &error);
 
 /// Maps (gpu, op, shape) -> the best compiled variant from the tuning DB. Reuses
 /// the contract-H schema (Todo 24 TuningCache / Todo 23 AmdTuningDb). Selection
@@ -80,8 +105,53 @@ public:
   /// Total cached entries across all gpu namespaces.
   [[nodiscard]] std::size_t Size() const { return db_.Size(); }
 
+  // ---- Hardening (Todo 42 / Wave 8): persist + invalidate + multi-GPU ----
+
+  /// Record the compiled binary (.so path + kernel-hash) backing the entry for
+  /// (gpu, op, shape). Returns false (no-op) if gpu is empty OR there is no tuning
+  /// entry for that key - a binary must back a real, present tuning entry.
+  bool PutBinary(std::string_view gpu, std::string_view op, const Shape &shape,
+                 CachedBinary binary);
+
+  /// The cached binary metadata for (gpu, op, shape), if one was recorded.
+  [[nodiscard]] std::optional<CachedBinary>
+  GetBinary(std::string_view gpu, std::string_view op, const Shape &shape) const;
+
+  /// Persist the tuning DB + binary metadata to `cache_dir` (created if absent) as
+  /// two documented files: tuning_db.json (the contract-H envelope, via the AmdTuningDb
+  /// serializer) + binaries.json (the hardening metadata). Error-checked I/O: returns
+  /// false + a clear error on any directory/file failure. Inverse of LoadPersisted.
+  [[nodiscard]] bool Persist(std::string_view cache_dir, std::string &error) const;
+
+  /// Load a cache persisted by Persist (inverse). Parse-don't-validate: a malformed
+  /// or unreadable cache yields false + a field-path error and leaves the cache
+  /// UNCHANGED (no partial load, no silent default). A missing cache dir/file is an
+  /// error. The tuning part reuses the contract-H parser (field-path errors intact);
+  /// a binary record with no matching tuning entry is rejected as inconsistent.
+  bool LoadPersisted(std::string_view cache_dir, std::string &error);
+
+  /// Drop every entry whose cached binary is STALE: recompute the on-disk .so hash
+  /// (HashFile) and compare to the recorded kernel-hash. A hash mismatch OR a
+  /// missing/unreadable .so invalidates the entry - it is removed from the tuning DB
+  /// AND the binary map - so a later Select falls back to the graceful "run the
+  /// autotuner" miss. A stale/wrong binary is never served. Entries with no recorded
+  /// binary are left untouched. Returns the number of entries invalidated.
+  std::size_t InvalidateStale();
+
+  /// Multi-GPU selection: for EACH gpu in `gpus` (in input order), Select the best
+  /// VALIDATED cached kernel for (gpu, op, shape). Per-gpu graceful miss: a gpu with
+  /// no/unvalidated entry yields the clear "no tuned kernel" error for THAT gpu (the
+  /// byte-identical miss), never a wrong kernel. Returns one (gpu, result) pair per
+  /// input gpu - the best cached kernel PER GPU.
+  [[nodiscard]] std::vector<std::pair<std::string, SelectionResult>>
+  SelectPerGpu(const std::vector<std::string> &gpus, std::string_view op,
+               const Shape &shape) const;
+
 private:
   autotune::AmdTuningDb db_;
+  /// Hardening metadata keyed by FormatKey(gpu, op, shape) - parallel to db_, holding
+  /// the compiled-binary location + kernel-hash the tuning entry itself does not carry.
+  std::map<std::string, CachedBinary> binaries_;
 };
 
 } // namespace polykernel::runtime

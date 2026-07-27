@@ -1,0 +1,25 @@
+# T42 (Wave 8) QA HAPPY: runtime kernel cache hardening - persist/reload/multi-GPU
+# 2026-07-27T14:21:16-04:00
+# ctest -R kernel_cache_persist (GPU-free; binaries mocked as temp files)
+#
+Test project /home/mei/projects/polykernel/build_t42
+    Start 143: kernel_cache_persist.PersistThenReloadAcrossRuns
+1/8 Test #143: kernel_cache_persist.PersistThenReloadAcrossRuns .............   Passed    0.03 sec
+    Start 144: kernel_cache_persist.MultiGpuSelectsBestPerGpu
+2/8 Test #144: kernel_cache_persist.MultiGpuSelectsBestPerGpu ...............   Passed    0.03 sec
+    Start 145: kernel_cache_persist.ReloadedCacheSelectsPerGpu
+3/8 Test #145: kernel_cache_persist.ReloadedCacheSelectsPerGpu ..............   Passed    0.03 sec
+    Start 146: kernel_cache_persist.StaleBinaryInvalidatedFallsBackToMiss
+4/8 Test #146: kernel_cache_persist.StaleBinaryInvalidatedFallsBackToMiss ...   Passed    0.03 sec
+    Start 147: kernel_cache_persist.MissingBinaryInvalidated
+5/8 Test #147: kernel_cache_persist.MissingBinaryInvalidated ................   Passed    0.03 sec
+    Start 148: kernel_cache_persist.FreshBinaryNotInvalidated
+6/8 Test #148: kernel_cache_persist.FreshBinaryNotInvalidated ...............   Passed    0.03 sec
+    Start 149: kernel_cache_persist.LoadPersistedRejectsMalformedBinaries
+7/8 Test #149: kernel_cache_persist.LoadPersistedRejectsMalformedBinaries ...   Passed    0.03 sec
+    Start 150: kernel_cache_persist.HashFileMissingFileIsError
+8/8 Test #150: kernel_cache_persist.HashFileMissingFileIsError ..............   Passed    0.03 sec
+
+100% tests passed, 0 tests failed out of 8
+
+Total Test time (real) =   0.24 sec
