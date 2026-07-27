@@ -1,0 +1,59 @@
+##############################################################################
+# PolyKernel Todo 20 (Wave 4): HIP INVALID-LAUNCH NEGATIVE PATH — QA log (FAILURE PATH)
+# Host: Linux 7.1.4-1-cachyos x86_64   Date: 2026-07-27T09:52:30Z
+# GPU:  AMD Radeon RX 7800 XT (Navi 32) = gfx1101   ROCm/clr: 7.2.3
+# Driver: build/hip_run/hip_run neg  (hipcc --offload-arch=gfx1101 -DPOLYKERNEL_HIP)
+# Verdict: PASS — the invalid launch is CAUGHT + reported; non-zero exit; NO silent corruption, NO crash
+##############################################################################
+
+=== WHAT THIS PROVES (the QA failure-path requirement) ===
+An out-of-bounds / too-large block launch returns a HIP error that the runtime
+CATCHES and REPORTS — it never silently writes a wrong result and never crashes.
+This is the negative half of the Todo 20 acceptance: error surfacing must be proven,
+not just the happy path.
+
+=== THE INVALID LAUNCH ===
+hip_run_main.cpp run_neg() allocates a 16-element device buffer, then launches a
+probe kernel with an INTENTIONALLY INVALID block dim:
+
+    neg_probe_kernel<<<dim3(1), dim3(2048), 0, nullptr>>>(d);   // 2048 > gfx1101 max 1024
+
+The launch is asynchronous, so the error surfaces at hipGetLastError() /
+hipDeviceSynchronize(). run_neg() uses RAW (non-aborting) HIP calls here on purpose,
+so it can OBSERVE the error code rather than exit on it: it probes hipGetLastError()
+via runtime::ProbeLaunchError(...), then calls hipDeviceSynchronize(), and PASSES
+only if at least one of them is a real error. It then exits 1 (the test asserts the
+error path is reached) and writes NO output file.
+
+=== COMMAND ===
+nix develop --impure --accept-flake-config -c ./build/hip_run/hip_run neg
+
+=== OUTPUT (stderr, verbatim; exit code 1) ===
+[polykernel-hip] neg out-of-bounds block (2048 > 1024): caught launch error: invalid configuration argument
+[polykernel-hip] neg: launch-config error = invalid configuration argument
+[polykernel-hip] neg: sync error          = no error
+[polykernel-hip] neg: PASS - invalid launch CAUGHT + reported; no output written, no crash
+
+exit code: 1
+
+=== READBACK ===
+- hipGetLastError() (via ProbeLaunchError) returned hipErrorInvalidConfiguration
+  ("invalid configuration argument") — the too-large block WAS caught at the launch
+  probe, and the message was printed with the HIP error string (no silent continue).
+- hipDeviceSynchronize() returned "no error": the sticky launch error was already
+  consumed by hipGetLastError(), exactly as the HIP/CUDA error model specifies. The
+  runtime treats EITHER a non-success probe OR a non-success sync as a caught error,
+  so this is the correct, non-silent outcome (not a miss).
+- Non-zero exit (1); NO output .npy written; NO crash/abort/segfault. Reproduced
+  identically on a second run (exit 1).
+
+=== PYTEST (the negative test asserts exactly this contract) ===
+nix develop --impure --accept-flake-config -c \
+  python3 -m pytest tests/kernels/test_hip_run.py::test_hip_negative_launch_caught -q
+.                                                                        [100%]
+1 passed in 13.23s
+
+test_hip_negative_launch_caught asserts: returncode == 1, "caught launch error" in
+stderr, "invalid configuration argument" in stderr, "PASS - invalid launch CAUGHT"
+in stderr. All hold. The runtime's error discipline (PK_HIP_CHECK on every real call
++ ProbeLaunchError on the intentional bad launch) is proven to CATCH a bad launch.
