@@ -1,0 +1,25 @@
+===== Todo 17 (Wave 3): e2e NEGATIVE test - broken fused kernel must be detected =====
+command: nix develop --impure --accept-flake-config -c python3 tests/e2e/test_mlp_correctness.py --corrupt fused_rmsnorm_matmul
+
+Injected bug: the fused_rmsnorm_matmul CPU-ref output is scaled by a wrong factor (-1.0),
+simulating a broken fused kernel. The harness must report the failing op + cosine/rel/PCC
+and exit non-zero (the 0-failures criterion is enforced).
+
+
+RESULT: FAIL — 5 op(s) failed golden contract C
+variant   op                       kind           cosine   max_rel_err         pcc  status
+------------------------------------------------------------------------------------------
+unfused   rmsnorm                  cpu-ref      1.000000     0.000e+00    1.000000  PASS
+unfused   matmul#1                 cpu-ref      1.000000     0.000e+00    1.000000  PASS
+unfused   gelu                     cpu-ref      1.000000     0.000e+00    1.000000  PASS
+unfused   matmul#2                 cpu-ref      1.000000     0.000e+00    1.000000  PASS
+unfused   add                      ref-only     1.000000     0.000e+00    1.000000  PASS
+fused     fused_rmsnorm_matmul     cpu-ref     -1.000000     2.000e+00   -1.000000  FAIL
+fused     gelu                     cpu-ref     -0.003590     1.700e+07   -0.452822  FAIL
+fused     matmul#2                 cpu-ref     -0.053875     5.102e+03   -0.056996  FAIL
+fused     add                      ref-only    -0.052724     9.409e+02   -0.055732  FAIL
+cross     fused==unfused output    pipeline    -0.052724     9.409e+02   -0.055732  FAIL
+
+5 failed / 10 ops (contract C: cosine>=0.999, max_rel_err<=1e-02, pcc>=0.99)
+
+exit code: 1  (non-zero => the 0-failures criterion IS enforced; the broken kernel is detected)

@@ -1,0 +1,138 @@
+===== Todo 17 (Wave 3): End-to-end MLP correctness + before/after fusion memory-traffic report =====
+Date: 2026-07-27
+Environment: nix develop --impure --accept-flake-config (llvmPackages_21 MLIR 21.1.8; numpy 2.5.0; pytest 9.0.3; ml_dtypes)
+
+DELIVERABLES CREATED
+  tools/polykernel-report/traffic_report.py   analytic before/after fusion memory-traffic CLI
+  tools/polykernel-report/mlir_traffic.py     IR -> per-op global-traffic parser (reused by the CLI + the e2e real-file test)
+  tools/polykernel-report/polykernel-report   thin executable wrapper (makes the QA command runnable)
+  tests/e2e/conftest.py                       e2e fixtures reusing the tests/kernels CPU-ref mechanism + golden harness
+  tests/e2e/test_mlp_correctness.py           whole-block e2e correctness (unfused + fused) + negative test + standalone harness
+  reports/mlp_traffic.json                    machine-readable traffic report
+  reports/mlp_traffic.md                      human-readable traffic report
+  reports/w3_e2e_neg.log                      negative-test evidence (broken fused kernel -> non-zero exit)
+
+TRAFFIC MODEL (analytic, not measured)
+  traffic(op) = sum(numel(t)*bytes(t) for operand t) + sum(numel(t)*bytes(t) for result t)   # global reads + writes
+  fusion saves each eliminated intermediate's global ROUND-TRIP = 2 * numel * bytes (one write + one read removed).
+  Eliminated intermediates read from the discardable attrs the fusion passes attach
+  (polykernel.fused_from + polykernel.eliminated_type[_N]); polykernel.workspace_bytes (--plan-memory, Todo 16)
+  cross-checked (0 for a fused op). before/after totals (sum of per-op traffic over unfused vs fused IR) are
+  cross-checked against the sum of eliminated round-trips (they must agree; the tool fails otherwise).
+
+================================================================================
+QA HAPPY 1: pytest tests/e2e/test_mlp_correctness.py -q
+================================================================================
+command: nix develop --impure --accept-flake-config -c python3 -m pytest tests/e2e/test_mlp_correctness.py -q
+.....                                                                    [100%]
+5 passed in 0.09s
+
+  tests:
+    test_mlp_unfused_all_ops_pass_golden          unfused rmsnorm/matmul#1/gelu/matmul#2/add all pass golden (contract C)
+    test_mlp_fused_all_ops_pass_golden            fused fused_rmsnorm_matmul/gelu/matmul#2/add + fused==unfused all pass
+    test_mlp_block_zero_failures_end_to_end       0 failures across the whole block (unfused + fused)
+    test_mlp_block_real_file_fuses_as_expected    examples/mlp_block.mlir fuses (parsed, not executed): exactly one
+                                                  fused_rmsnorm_matmul, fused_from=rmsnorm_matmul,
+                                                  eliminated_type=tensor<1x2048x4096xbf16>, saved round-trip=33,554,432 B
+    test_negative_broken_fused_kernel_is_detected broken fused kernel -> failing op + metrics surfaced, harness fails
+
+  Per-op metrics (standalone happy harness; every op BIT-EXACT at the mini-MLP scale):
+    variant   op                       kind           cosine   max_rel_err         pcc  status
+    unfused   rmsnorm                  cpu-ref      1.000000     0.000e+00    1.000000  PASS
+    unfused   matmul#1                 cpu-ref      1.000000     0.000e+00    1.000000  PASS
+    unfused   gelu                     cpu-ref      1.000000     0.000e+00    1.000000  PASS
+    unfused   matmul#2                 cpu-ref      1.000000     0.000e+00    1.000000  PASS
+    unfused   add                      ref-only     1.000000     0.000e+00    1.000000  PASS
+    fused     fused_rmsnorm_matmul     cpu-ref      1.000000     0.000e+00    1.000000  PASS
+    fused     gelu                     cpu-ref      1.000000     0.000e+00    1.000000  PASS
+    fused     matmul#2                 cpu-ref      1.000000     0.000e+00    1.000000  PASS
+    fused     add                      ref-only     1.000000     0.000e+00    1.000000  PASS
+    cross     fused==unfused output    pipeline     1.000000     0.000e+00    1.000000  PASS
+    0 failed / 10 ops (contract C: cosine>=0.999, max_rel_err<=1e-02, pcc>=0.99)
+    RESULT: PASS - 0 failures (all ops pass golden contract C); standalone exit code 0
+
+================================================================================
+QA HAPPY 2: polykernel-report --traffic examples/mlp_block.mlir  (traffic reduction > 0)
+================================================================================
+command: ./tools/polykernel-report/polykernel-report --traffic examples/mlp_block.mlir
+   (equivalent: python tools/polykernel-report/traffic_report.py --traffic examples/mlp_block.mlir)
+exit code: 0
+wrote reports/mlp_traffic.json and reports/mlp_traffic.md
+
+  Headline (real Llama-2-7B MLP shapes from examples/mlp_block.mlir):
+    Before fusion: 478,150,656 bytes (456.00 MiB)
+    After fusion:  444,596,224 bytes (424.00 MiB)
+    Reduction:      33,554,432 bytes ( 32.00 MiB) = 7.02%
+    Consistent (before-after == eliminated round-trips): True
+
+  Per-fused-op breakdown:
+    fused_rmsnorm_matmul (fused_from=rmsnorm_matmul) eliminates 32.00 MiB intermediate write+read
+    (33,554,432 bytes) from tensor<1x2048x4096xbf16>
+
+  Unfused per-op traffic:                 Fused per-op traffic:
+    rmsnorm   reads 16,777,216 writes 16,777,216  traffic 33,554,432     fused_rmsnorm_matmul traffic 152,043,520 workspace 0
+    matmul    traffic 152,043,520                                        gelu                 traffic  90,177,536
+    gelu      traffic  90,177,536                                        matmul               traffic 152,043,520 workspace 16,777,216
+    matmul    traffic 152,043,520                                        add                  traffic  50,331,648
+    add       traffic  50,331,648
+    TOTAL     478,150,656                                                TOTAL                444,596,224
+
+  Only --fuse-rmsnorm-matmul fires on this block: there is no polykernel.bias op (so --fuse-matmul-bias-gelu
+  cannot match the matmul->gelu pair) and the residual add is terminal (so --fuse-residual-rmsnorm has no
+  following rmsnorm). The fusion removes the rmsnorm result's global round-trip: written by rmsnorm and read
+  back by matmul in the unfused pipeline (2 * 1*2048*4096 * 2 bytes = 32 MiB), kept on-chip when fused.
+
+================================================================================
+QA FAILURE: negative test (broken fused kernel -> non-zero exit) -- see reports/w3_e2e_neg.log
+================================================================================
+command: nix develop --impure --accept-flake-config -c python3 tests/e2e/test_mlp_correctness.py --corrupt fused_rmsnorm_matmul
+exit code: 1 (non-zero => the 0-failures criterion IS enforced)
+
+  Injected bug: fused_rmsnorm_matmul CPU-ref output scaled by a wrong factor (-1.0).
+  The harness reports the failing op + cosine/rel/PCC and exits non-zero:
+    fused   fused_rmsnorm_matmul   cpu-ref   cosine=-1.000000  max_rel_err=2.000e+00  pcc=-1.000000  FAIL  (root cause)
+    fused   gelu                   cpu-ref   cosine=-0.003590  max_rel_err=1.700e+07  pcc=-0.452822  FAIL  (propagated)
+    fused   matmul#2               cpu-ref   cosine=-0.053875  max_rel_err=5.102e+03  pcc=-0.056996  FAIL  (propagated)
+    fused   add                    ref-only  cosine=-0.052724  max_rel_err=9.409e+02  pcc=-0.055732  FAIL  (propagated)
+    cross   fused==unfused output  pipeline  cosine=-0.052724  max_rel_err=9.409e+02  pcc=-0.055732  FAIL  (propagated)
+    5 failed / 10 ops; RESULT: FAIL; full table in reports/w3_e2e_neg.log
+
+================================================================================
+REGRESSION: cmake --build build --target check-polykernel  (must stay 13/13)
+================================================================================
+command: nix develop --impure --accept-flake-config -c cmake --build build --target check-polykernel
+-- Testing: 13 tests, 13 workers --
+PASS: POLYKERNEL :: infer_tile_layout.mlir (1 of 13)
+PASS: POLYKERNEL :: fuse_matmul_bias_gelu.mlir (2 of 13)
+PASS: POLYKERNEL :: e2e_parse.mlir (3 of 13)
+PASS: POLYKERNEL :: fuse_residual_rmsnorm.mlir (4 of 13)
+PASS: POLYKERNEL :: canonicalize.mlir (5 of 13)
+PASS: POLYKERNEL :: fuse_softmax_mask.mlir (6 of 13)
+PASS: POLYKERNEL :: fuse_rmsnorm_matmul.mlir (7 of 13)
+PASS: POLYKERNEL :: infer_shapes.mlir (8 of 13)
+PASS: POLYKERNEL :: dialect_roundtrip.mlir (9 of 13)
+PASS: POLYKERNEL :: op_set_closed.mlir (10 of 13)
+PASS: POLYKERNEL :: infer_shapes_mismatch.mlir (11 of 13)
+PASS: POLYKERNEL :: smoke.mlir (12 of 13)
+PASS: POLYKERNEL :: plan_memory.mlir (13 of 13)
+Testing Time: 0.13s
+Total Discovered Tests: 13
+  Passed: 13 (100.00%)
+
+================================================================================
+DESIGN NOTES
+================================================================================
+* REUSE, not reinvention: the e2e test drives the SAME built CPU-ref executables + file-based .npy bridge as
+  tests/kernels/conftest.py (imported as a module: SEED, exe paths, _require_exe, _drive_activation reused; no
+  duplicated seed/paths/bridge) and asserts the SAME golden harness (tests/golden) thresholds (contract C via
+  metrics' pinned constants). The traffic report reads the discardable attrs the fusion passes already attach.
+* NO new polykernel ops, NO new declared op attributes, NO changes to the dialect/passes/kernels/golden harness.
+  This task only READS existing discardable attrs and adds external Python tooling + reports.
+* SCALE: the real mlp_block.mlir matmuls are ~92 GFLOP under the naive CPU ref (too large to execute in a test),
+  so correctness is validated on a tractable mini-MLP (seq=32, d_model=64, ffn=128) with the IDENTICAL op
+  structure; at this scale every op (incl. the two-reduction fused_rmsnorm_matmul) is BIT-EXACT vs the golden,
+  so uniform contract C thresholds apply with no relaxed ceiling. The analytic traffic report covers the real
+  shapes (shape arithmetic, no execution). A dedicated test confirms the real file fuses as expected (parsed).
+* ADD op: kernels/cpu ships no add kernel (trivial elementwise op fully determined by the rounding contract);
+  the harness computes it inline (fp32-add + bf16 RNE, identical to golden.add by construction) and flags it
+  ref-only. The compute ops (rmsnorm, matmul, gelu, fused_rmsnorm_matmul) are validated against real executables.
