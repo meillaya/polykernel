@@ -1,0 +1,83 @@
+====================================================================
+PolyKernel T37 Wave 7: SUMMA matmul mapping + lowering + golden
+  Maps polykernel.matmul (and fused-matmul) onto the SUMMA schedule
+  on the Todo 35 Grid: a P x P grid, output-stationary C (each PE
+  accumulates its C tile in local SRAM), step s broadcasts the A
+  panel EAST along every row and the B panel SOUTH along every
+  column, each PE accumulates C_tile += A_panel * B_panel via the CE
+  FMAC (Todo 35 Pe::Compute().Fma, @fmacs-style outer product). 2
+  colors/axis (A0/A1, B0/B1) ping-pong double-buffer. The compute
+  rendezvous fires the panel accumulate only after BOTH panels
+  arrive: x_done (A complete) -> @activate(compute), y_done (B
+  complete) -> @unblock(compute); the compute task is a data task
+  bound to TWO rendezvous colors that fires only after BOTH tokens
+  arrive (Todo 36 Scheduler). The simulator FUNCTIONALLY EXECUTES the
+  tile program (wavelets routed A-east/B-south via dataflow
+  receive-and-retransmit), so C is validated vs the fp32 golden under
+  contract C (cosine>=0.999, max_rel_err<=1e-2, pcc>=0.99).
+  NOTE: a GPU-free functional/cycle SIMULATOR - does NOT compile real
+  CSL and does NOT run on Cerebras hardware. CE+FMAC (no FMU/PMU);
+  @set_color_config rx/tx; @activate/@block/@unblock (no @compute/
+  @data decorators).
+  Golden test size: 32x32x32 matmul on a 4x4 grid (8x8 output tiles,
+  8-wide K-slab, 4 SUMMA steps); +/-1 inputs (exact in fp16) so the
+  FMAC accumulate is bit-exact vs the fp32 reference.
+Evidence: ctest -R 'summa|dataflow_correctness' (routing A-east/
+          B-south; 2-input rendezvous; ping-pong colors; simulator-
+          executed matmul matches golden; broken rendezvous fails).
+====================================================================
+
+### ctest --test-dir build -R 'summa|dataflow_correctness' --output-on-failure ###
+
+Test project /home/mei/projects/polykernel/build
+1/9 Test #113: summa.LoweringMapsMatmulOntoSummaSchedule ...................   Passed    0.00 sec
+2/9 Test #114: summa.LoweringMapsFusedMatmulOntoSameSchedule ...............   Passed    0.00 sec
+3/9 Test #115: summa.PingPongTwoColorsPerAxis ..............................   Passed    0.00 sec
+4/9 Test #116: summa.RoutingPatternAEastBSouth .............................   Passed    0.00 sec
+5/9 Test #117: summa.RendezvousComputeFiresOnlyAfterBothPanels .............   Passed    0.00 sec
+6/9 Test #118: summa.RunSummaTinyMatchesReference ..........................   Passed    0.00 sec
+7/9 Test #119: dataflow_correctness.SimulatorExecutedMatmulMatchesGolden ...   Passed    0.00 sec
+8/9 Test #120: dataflow_correctness.OutputStationaryAccumulateIsExact ......   Passed    0.00 sec
+9/9 Test #121: dataflow_correctness.BrokenRendezvousFailsGolden ............   Passed    0.00 sec
+100% tests passed, 0 tests failed out of 9
+Total Test time (real) =   0.03 sec
+
+### standalone dataflow_correctness_test: simulator-executed matmul matches golden ###
+
+Running main() from /build/source/googletest/src/gtest_main.cc
+[==========] Running 3 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 3 tests from dataflow_correctness
+[ RUN      ] dataflow_correctness.SimulatorExecutedMatmulMatchesGolden
+[golden] 32x32x32 SUMMA: cosine=1.000000 max_rel_err=0.000000e+00 pcc=1.000000 -> PASS
+[       OK ] dataflow_correctness.SimulatorExecutedMatmulMatchesGolden (1 ms)
+[ RUN      ] dataflow_correctness.OutputStationaryAccumulateIsExact
+[       OK ] dataflow_correctness.OutputStationaryAccumulateIsExact (0 ms)
+[ RUN      ] dataflow_correctness.BrokenRendezvousFailsGolden
+[negative] broken rendezvous: cosine=0.000000 max_rel_err=9.999999e-01 pcc=0.000000 -> FAIL (expected FAIL)
+[       OK ] dataflow_correctness.BrokenRendezvousFailsGolden (0 ms)
+[----------] 3 tests from dataflow_correctness (3 ms total)
+
+[----------] Global test environment tear-down
+[==========] 3 tests from 1 test suite ran. (3 ms total)
+[  PASSED  ] 3 tests.
+
+### standalone summa_test: routing (A east / B south) + rendezvous + ping-pong ###
+
+[----------] 6 tests from summa
+[ RUN      ] summa.LoweringMapsMatmulOntoSummaSchedule
+[       OK ] summa.LoweringMapsMatmulOntoSummaSchedule (0 ms)
+[ RUN      ] summa.LoweringMapsFusedMatmulOntoSameSchedule
+[       OK ] summa.LoweringMapsFusedMatmulOntoSameSchedule (0 ms)
+[ RUN      ] summa.PingPongTwoColorsPerAxis
+[       OK ] summa.PingPongTwoColorsPerAxis (0 ms)
+[ RUN      ] summa.RoutingPatternAEastBSouth
+[       OK ] summa.RoutingPatternAEastBSouth (0 ms)
+[ RUN      ] summa.RendezvousComputeFiresOnlyAfterBothPanels
+[       OK ] summa.RendezvousComputeFiresOnlyAfterBothPanels (0 ms)
+[ RUN      ] summa.RunSummaTinyMatchesReference
+[       OK ] summa.RunSummaTinyMatchesReference (0 ms)
+[----------] 6 tests from summa (1 ms total)
+[  PASSED  ] 6 tests.
+
+dataflow_correctness_test exit code: 0   (simulator-executed matmul matches golden; A-east/B-south routing)

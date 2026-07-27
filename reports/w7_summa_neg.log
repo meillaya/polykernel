@@ -1,0 +1,52 @@
+====================================================================
+PolyKernel T37 Wave 7: NEGATIVE evidence - broken rendezvous is caught
+  Break the SUMMA dataflow rendezvous: fire the per-PE compute on the
+  A panel ALONE (the compute task is bound to ONLY the x_done color;
+  the B broadcast is skipped). The compute then accumulates C_tile +=
+  A_panel * (empty B panel) = 0, so the simulator output is WRONG (C
+  is all zeros) and FAILS the golden contract C (cosine < 0.999,
+  max_rel_err > 1e-2, pcc < 0.99). This proves the dataflow_correctness
+  test catches dataflow bugs: a correct rendezvous (compute fires only
+  after BOTH the A and B panels arrive) is required for golden-correct
+  output.
+  (GPU-free functional simulator; no Cerebras hardware involved.)
+====================================================================
+
+### [1] standalone dataflow_correctness_test, broken-rendezvous negative ###
+
+Running main() from /build/source/googletest/src/gtest_main.cc
+Note: Google Test filter = dataflow_correctness.BrokenRendezvousFailsGolden
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from dataflow_correctness
+[ RUN      ] dataflow_correctness.BrokenRendezvousFailsGolden
+[negative] broken rendezvous: cosine=0.000000 max_rel_err=9.999999e-01 pcc=0.000000 -> FAIL (expected FAIL)
+[       OK ] dataflow_correctness.BrokenRendezvousFailsGolden (1 ms)
+[----------] 1 test from dataflow_correctness (1 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (1 ms total)
+[  PASSED  ] 1 test.
+
+The test asserts, for the broken-rendezvous run (compute fires on A alone):
+  EXPECT_EQ(res.bWavelets, 0u)        // no B broadcast: compute did not wait for B
+  EXPECT_EQ(max|C|, 0.0)              // output is (wrongly) all zeros
+  EXPECT_FALSE(contractC.pass)        // FAILS golden contract C
+  EXPECT_LT(cosine, 0.999)            // cosine = 0.0
+  EXPECT_GT(max_rel_err, 1e-2)        // max_rel_err ~= 1.0
+  EXPECT_LT(pcc, 0.99)                // pcc = 0.0
+A PASS therefore proves the broken output is wrong AND fails the golden.
+
+### [2] contrast: the SAME matmul with a correct rendezvous PASSES golden ###
+
+[golden] 32x32x32 SUMMA: cosine=1.000000 max_rel_err=0.000000e+00 pcc=1.000000 -> PASS
+[       OK ] dataflow_correctness.SimulatorExecutedMatmulMatchesGolden (2 ms)
+[  PASSED  ] 1 test.
+
+### [3] ctest discovers + runs the negative (passes as a test: it asserts wrongness) ###
+
+1/1 Test #121: dataflow_correctness.BrokenRendezvousFailsGolden ...   Passed    0.00 sec
+100% tests passed, 0 tests failed out of 1
+Total Test time (real) =   0.01 sec
+
+dataflow_correctness_test (broken rendezvous) exit code: 0   (0 == broken output is wrong + fails golden; gtest assertions held)
