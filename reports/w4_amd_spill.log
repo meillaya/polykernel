@@ -1,0 +1,74 @@
+=== T21 (Wave 4): AMDGPU ISA analyzer — spill detection negative evidence ===
+=== 2026-07-27T03:59:13-04:00 ===
+
+--- Spill fixture: lib/Analysis/tests/fixtures/spill_gfx1101.s ---
+--- (crafted .s with scratch_store_*/scratch_load_* + private_segment_fixed_size=16) ---
+
+kernel:                 spill_test
+backend:                hip
+arch:                   gfx1101
+registers_per_thread:   20  (VGPR)
+sgpr:                   16
+smem_per_block_bytes:   2048  (LDS)
+spill_stores_bytes:     16
+spill_loads_bytes:      8
+scratch_per_thread:     16
+has_spills:             True
+occupancy:
+  active_warps_per_sm:  32
+  max_warps_per_sm:     32
+  occupancy_pct:        100.0
+  limiter:              warps
+bottleneck:             latency
+path:                   scalar
+suggested_fixes:
+  - reduce register pressure (smaller tile/fewer live values)
+
+
+JSON:
+{
+  "kernel": "spill_test",
+  "backend": "hip",
+  "arch": "gfx1101",
+  "registers_per_thread": 20,
+  "smem_per_block_bytes": 2048,
+  "spill_stores_bytes": 16,
+  "spill_loads_bytes": 8,
+  "occupancy": {
+    "active_warps_per_sm": 32,
+    "max_warps_per_sm": 32,
+    "occupancy_pct": 100.0,
+    "limiter": "warps"
+  },
+  "traffic": {
+    "global_read_bytes": 0,
+    "global_write_bytes": 0,
+    "arithmetic_intensity_flop_per_byte": 0.0,
+    "roofline": "memory-bound"
+  },
+  "bottleneck": "latency",
+  "suggested_fixes": [
+    "reduce register pressure (smaller tile/fewer live values)"
+  ],
+  "path": "scalar",
+  "amd_isa": {
+    "sgpr": 16,
+    "scratch_bytes_per_thread": 16,
+    "scratch_store_count": 4,
+    "scratch_load_count": 2,
+    "has_spills": true
+  }
+}
+
+--- ctest -R amd_isa (spill tests) ---
+Test project /home/mei/projects/polykernel/build
+    Start 21: amd_isa.SpillFixtureParses
+1/2 Test #21: amd_isa.SpillFixtureParses .......   Passed    0.00 sec
+    Start 22: amd_isa.SpillFixtureDetected
+2/2 Test #22: amd_isa.SpillFixtureDetected .....   Passed    0.00 sec
+
+100% tests passed, 0 tests failed out of 2
+
+Total Test time (real) =   0.01 sec
+
+=== END ===

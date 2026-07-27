@@ -16,6 +16,7 @@ add_library(PolyKernelAnalysis STATIC
   Occupancy.cpp
   Roofline.cpp
   KernelReport.cpp
+  AmdIsaAnalyzer.cpp
 )
 # Occupancy/Roofline/KernelReport headers are colocated here; PtxasParser.h is
 # public under include/ (project-wide include path, re-added for standalone use).
@@ -40,3 +41,10 @@ gtest_discover_tests(occupancy_test)
 add_executable(roofline_test tests/roofline_test.cpp)
 target_link_libraries(roofline_test PRIVATE PolyKernelAnalysis GTest::gtest_main)
 gtest_discover_tests(roofline_test)
+
+add_executable(amd_isa_test tests/amd_isa_test.cpp)
+target_link_libraries(amd_isa_test PRIVATE PolyKernelAnalysis GTest::gtest_main)
+target_compile_definitions(amd_isa_test PRIVATE
+  AMD_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures"
+)
+gtest_discover_tests(amd_isa_test)

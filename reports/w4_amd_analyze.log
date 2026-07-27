@@ -1,0 +1,93 @@
+=== T21 (Wave 4): AMDGPU ISA analyzer — happy evidence ===
+=== 2026-07-27T03:58:52-04:00 ===
+
+--- ctest -R amd_isa ---
+Test project /home/mei/projects/polykernel/build
+      Start 19: amd_isa.MatmulFixtureParses
+ 1/13 Test #19: amd_isa.MatmulFixtureParses .......   Passed    0.00 sec
+      Start 20: amd_isa.MatmulFixtureNoSpills
+ 2/13 Test #20: amd_isa.MatmulFixtureNoSpills .....   Passed    0.00 sec
+      Start 21: amd_isa.SpillFixtureParses
+ 3/13 Test #21: amd_isa.SpillFixtureParses ........   Passed    0.00 sec
+      Start 22: amd_isa.SpillFixtureDetected
+ 4/13 Test #22: amd_isa.SpillFixtureDetected ......   Passed    0.00 sec
+      Start 23: amd_isa.InlineMinimal
+ 5/13 Test #23: amd_isa.InlineMinimal .............   Passed    0.00 sec
+      Start 24: amd_isa.GarbageInputIsError
+ 6/13 Test #24: amd_isa.GarbageInputIsError .......   Passed    0.00 sec
+      Start 25: amd_isa.EmptyInputIsError
+ 7/13 Test #25: amd_isa.EmptyInputIsError .........   Passed    0.00 sec
+      Start 26: amd_isa.OccupancyWaveLimited
+ 8/13 Test #26: amd_isa.OccupancyWaveLimited ......   Passed    0.00 sec
+      Start 27: amd_isa.OccupancyVgprLimited
+ 9/13 Test #27: amd_isa.OccupancyVgprLimited ......   Passed    0.00 sec
+      Start 28: amd_isa.OccupancyLdsLimited
+10/13 Test #28: amd_isa.OccupancyLdsLimited .......   Passed    0.00 sec
+      Start 29: amd_isa.OccupancySgprLimited
+11/13 Test #29: amd_isa.OccupancySgprLimited ......   Passed    0.00 sec
+      Start 30: amd_isa.LimiterNames
+12/13 Test #30: amd_isa.LimiterNames ..............   Passed    0.00 sec
+      Start 31: amd_isa.LimiterContractHMapping
+13/13 Test #31: amd_isa.LimiterContractHMapping ...   Passed    0.00 sec
+
+100% tests passed, 0 tests failed out of 13
+
+Total Test time (real) =   0.02 sec
+
+--- amd_analyze.py --kernel matmul --arch gfx1101 (text) ---
+[amd_analyze] /nix/store/jc7q7dm8y1r2317sg888mi7pxzarg7m2-clr-7.2.3/bin/hipcc --save-temps --offload-arch=gfx1101 -DPOLYKERNEL_HIP -I/home/mei/projects/polykernel/kernels/template -c /home/mei/projects/polykernel/kernels/generated/matmul.cu -o /tmp/amd_analyze_3sw3nqhx/matmul.o
+kernel:                 matmul
+backend:                hip
+arch:                   gfx1101
+registers_per_thread:   31  (VGPR)
+sgpr:                   16
+smem_per_block_bytes:   1024  (LDS)
+spill_stores_bytes:     0
+spill_loads_bytes:      0
+scratch_per_thread:     0
+has_spills:             False
+occupancy:
+  active_warps_per_sm:  32
+  max_warps_per_sm:     32
+  occupancy_pct:        100.0
+  limiter:              warps
+bottleneck:             compute
+path:                   scalar
+suggested_fixes:
+  (none)
+
+--- amd_analyze.py --kernel matmul --arch gfx1101 (json) ---
+[amd_analyze] /nix/store/jc7q7dm8y1r2317sg888mi7pxzarg7m2-clr-7.2.3/bin/hipcc --save-temps --offload-arch=gfx1101 -DPOLYKERNEL_HIP -I/home/mei/projects/polykernel/kernels/template -c /home/mei/projects/polykernel/kernels/generated/matmul.cu -o /tmp/amd_analyze_gxq_71_d/matmul.o
+{
+  "kernel": "matmul",
+  "backend": "hip",
+  "arch": "gfx1101",
+  "registers_per_thread": 31,
+  "smem_per_block_bytes": 1024,
+  "spill_stores_bytes": 0,
+  "spill_loads_bytes": 0,
+  "occupancy": {
+    "active_warps_per_sm": 32,
+    "max_warps_per_sm": 32,
+    "occupancy_pct": 100.0,
+    "limiter": "warps"
+  },
+  "traffic": {
+    "global_read_bytes": 0,
+    "global_write_bytes": 0,
+    "arithmetic_intensity_flop_per_byte": 0.0,
+    "roofline": "memory-bound"
+  },
+  "bottleneck": "compute",
+  "suggested_fixes": [],
+  "path": "scalar",
+  "amd_isa": {
+    "sgpr": 16,
+    "scratch_bytes_per_thread": 0,
+    "scratch_store_count": 0,
+    "scratch_load_count": 0,
+    "has_spills": false
+  }
+}
+
+=== END ===
