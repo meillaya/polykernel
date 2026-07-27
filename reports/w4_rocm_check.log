@@ -1,0 +1,61 @@
+##############################################################################
+# PolyKernel Todo 18 (Wave 4): LOCAL ROCm VERIFICATION GATE — QA log (HAPPY PATH)
+# Host: Linux 7.1.4-1-cachyos x86_64   Date: 2026-07-27T06:29:07Z
+# GPU:  AMD Radeon RX 7800 XT (Navi 32) = gfx1101   ROCm/clr: 7.2.3
+# Gate: scripts/check_rocm.sh   Verdict: PASS (gfx1101 enumerated natively)
+##############################################################################
+
+=== COMMAND ===
+nix develop --impure --accept-flake-config -c ./scripts/check_rocm.sh
+nix-exit: 0   (a GATE degrades to SKIPPED-local; it never aborts the shell)
+
+=== dev-shell banner (confirms rocmPackages.clr env) ===
+PolyKernel dev shell (llvmPackages_21 MLIR / cudaPackages_12_6 / rocmPackages.clr)
+  CC/CXX:      /nix/store/m59w5gavjx8db0ay3m1yzbw02l54109b-clang-wrapper-21.1.8/bin/clang / .../clang++
+  nvcc:        Cuda compilation tools, release 12.6, V12.6.85
+  hipcc:       HIP version: 7.2.53211-9999
+  cmake:       cmake version 4.1.2
+  clang:       clang version 21.1.8
+
+=== GATE OUTPUT ===
+##############################################################################
+# PolyKernel Todo 18 (Wave 4): LOCAL ROCm VERIFICATION GATE
+# Host: Linux 7.1.4-1-cachyos x86_64   Date: 2026-07-27T06:29:07Z
+# Target GPU agent: gfx1101 (AMD Radeon RX 7800 XT, Navi 32)
+##############################################################################
+
+=== CHECK 1: rocmPackages / ROCm version (require >= 7.0) ===
+[PASS] ROCm version 7.2.3 >= 7.0 (gfx1101 officially supported since ROCm 7.0)
+[INFO] rocminfo: /nix/store/jc7q7dm8y1r2317sg888mi7pxzarg7m2-clr-7.2.3/bin/rocminfo
+[INFO] hipcc:    /nix/store/jc7q7dm8y1r2317sg888mi7pxzarg7m2-clr-7.2.3/bin/hipcc
+
+=== CHECK 2: rocminfo detects a gfx1101 GPU agent ===
+[PASS] rocminfo detected gfx1101 agent (AMD Radeon RX 7800 XT)
+[INFO]     Name:                    gfx1101
+[INFO]     Marketing Name:          AMD Radeon RX 7800 XT
+[INFO]         Name:                    amdgcn-amd-amdhsa--gfx1101
+
+=== CHECK 3: user 'mei' is in the video AND render groups ===
+[WARN] user NOT in group(s): render — but gfx1101 is accessible (GPU enumerated); advisory only
+[WARN]   remedy: sudo usermod -aG render mei && re-login
+[INFO] groups: mei sys network docker nopasswdlogin rfkill users video storage lp audio wheel
+
+=== CHECK 4: amdgpu kernel driver is loaded ===
+[PASS] amdgpu driver present (/sys/module/amdgpu)
+
+=== GATE VERDICT ===
+GATE VERDICT: PASS
+  gfx1101 enumerated natively (ROCm 7.2.3); no override needed.
+  HIP-run todos (T20) may run LOCALLY.
+  checks: version=0 detect=0 groups=0 driver=0 (0=ok)
+
+[INFO] evidence: append this output to reports/w4_rocm_check.log (happy) or reports/w4_rocm_neg.log (negative)
+
+=== NOTES ===
+- render group: user `mei` is in `video` but NOT `render`. The gate downgrades this
+  to [WARN] (advisory) because /dev/kfd + /dev/dri/renderD128 are world-writable
+  (crw-rw-rw- root render) and rocminfo DID enumerate gfx1101 — the GPU is empirically
+  accessible, so the run gate is PASS. Remedy is documented for strict setups.
+- ROCm 7.2.3 >= 7.0 so the HSA_OVERRIDE_GFX_VERSION=11.0.1 fallback was NOT needed
+  (the version assert PASSed and gfx1101 enumerated natively). The fallback path is
+  exercised by the negative log (reports/w4_rocm_neg.log).
