@@ -1,0 +1,67 @@
+====================================================================
+PolyKernel T36 Wave 7: Dataflow task model + scheduler
+  3 task types: data (wavelet-triggered, bound to a color /
+  data_task_id), local (self-triggered via @activate), control.
+  Rendezvous @activate/@block/@unblock: a task runs ONLY when
+  activated AND unblocked. A compute task (a data task bound to TWO
+  input colors) fires only after BOTH input wavelets arrive (the
+  dataflow rendezvous). TaskPicker selects a runnable task. Builds
+  on the Todo 35 core (Color/Wavelet/Router/Grid wavelet arrival).
+  NOTE: a GPU-free functional/cycle SIMULATOR - does NOT compile real
+  CSL and does NOT run on Cerebras hardware. No @compute/@data
+  decorators (compute is an exported host-callable convention).
+Evidence: ctest -R scheduler (compute fires only after both wavelets
+          arrive; block/unblock gates firing; data fires on wavelet
+          arrival; local fires on activate; task picker).
+====================================================================
+
+### ctest --test-dir build -R scheduler --output-on-failure ###
+
+Test project /home/mei/projects/polykernel/build
+      Start 103: scheduler.ThreeTaskTypes
+ 1/10 Test #103: scheduler.ThreeTaskTypes ..............................   Passed    0.00 sec
+      Start 104: scheduler.ComputeTaskFiresOnlyAfterBothInputsArrive
+ 2/10 Test #104: scheduler.ComputeTaskFiresOnlyAfterBothInputsArrive ...   Passed    0.00 sec
+      Start 105: scheduler.BlockedTaskDoesNotFireUntilUnblocked
+ 3/10 Test #105: scheduler.BlockedTaskDoesNotFireUntilUnblocked ........   Passed    0.00 sec
+      Start 106: scheduler.DataTaskFiresOnWaveletArrival
+ 4/10 Test #106: scheduler.DataTaskFiresOnWaveletArrival ...............   Passed    0.00 sec
+      Start 107: scheduler.DataTaskFiresOnWaveletArrivalViaGrid
+ 5/10 Test #107: scheduler.DataTaskFiresOnWaveletArrivalViaGrid ........   Passed    0.27 sec
+      Start 108: scheduler.LocalTaskFiresOnActivate
+ 6/10 Test #108: scheduler.LocalTaskFiresOnActivate ....................   Passed    0.00 sec
+      Start 109: scheduler.ControlTaskGatedByRendezvous
+ 7/10 Test #109: scheduler.ControlTaskGatedByRendezvous ................   Passed    0.00 sec
+      Start 110: scheduler.TaskPickerSelectsActivatedAndUnblocked
+ 8/10 Test #110: scheduler.TaskPickerSelectsActivatedAndUnblocked ......   Passed    0.00 sec
+      Start 111: scheduler.ActivateBlockUnblockRendezvous
+ 9/10 Test #111: scheduler.ActivateBlockUnblockRendezvous ..............   Passed    0.00 sec
+      Start 112: scheduler.PickerSelectsLowestIdFirst
+10/10 Test #112: scheduler.PickerSelectsLowestIdFirst ..................   Passed    0.00 sec
+
+100% tests passed, 0 tests failed out of 10
+
+Total Test time (real) =   0.29 sec
+
+### standalone scheduler_test: compute rendezvous + block/unblock gating ###
+
+Running main() from /build/source/googletest/src/gtest_main.cc
+Note: Google Test filter = scheduler.ComputeTaskFiresOnlyAfterBothInputsArrive:scheduler.BlockedTaskDoesNotFireUntilUnblocked:scheduler.DataTaskFiresOnWaveletArrival*
+[==========] Running 4 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 4 tests from scheduler
+[ RUN      ] scheduler.ComputeTaskFiresOnlyAfterBothInputsArrive
+[       OK ] scheduler.ComputeTaskFiresOnlyAfterBothInputsArrive (0 ms)
+[ RUN      ] scheduler.BlockedTaskDoesNotFireUntilUnblocked
+[       OK ] scheduler.BlockedTaskDoesNotFireUntilUnblocked (0 ms)
+[ RUN      ] scheduler.DataTaskFiresOnWaveletArrival
+[       OK ] scheduler.DataTaskFiresOnWaveletArrival (0 ms)
+[ RUN      ] scheduler.DataTaskFiresOnWaveletArrivalViaGrid
+[       OK ] scheduler.DataTaskFiresOnWaveletArrivalViaGrid (259 ms)
+[----------] 4 tests from scheduler (259 ms total)
+
+[----------] Global test environment tear-down
+[==========] 4 tests from 1 test suite ran. (259 ms total)
+[  PASSED  ] 4 tests.
+
+scheduler_test (key behaviors) exit code: 0

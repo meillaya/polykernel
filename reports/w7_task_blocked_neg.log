@@ -1,0 +1,56 @@
+====================================================================
+PolyKernel T36 Wave 7: NEGATIVE evidence - blocked task does NOT fire
+  A task that is @activate-d but left @block-ed must NOT fire (no
+  premature fire) until @unblock releases it - even when its input
+  wavelet has already arrived. The rendezvous rule "a task runs only
+  when activated AND unblocked" gates firing.
+  Also negative: a compute task (data task bound to TWO input colors)
+  does NOT fire after only ONE input arrives - it waits for BOTH.
+  (GPU-free functional simulator; no Cerebras hardware involved.)
+====================================================================
+
+### [1] standalone scheduler_test, blocked-task negative ###
+
+Running main() from /build/source/googletest/src/gtest_main.cc
+Note: Google Test filter = scheduler.BlockedTaskDoesNotFireUntilUnblocked:scheduler.ControlTaskGatedByRendezvous
+[==========] Running 2 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 2 tests from scheduler
+[ RUN      ] scheduler.BlockedTaskDoesNotFireUntilUnblocked
+[       OK ] scheduler.BlockedTaskDoesNotFireUntilUnblocked (0 ms)
+[ RUN      ] scheduler.ControlTaskGatedByRendezvous
+[       OK ] scheduler.ControlTaskGatedByRendezvous (0 ms)
+[----------] 2 tests from scheduler (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 2 tests from 1 test suite ran. (0 ms total)
+[  PASSED  ] 2 tests.
+
+The test asserts, while the task is activated-but-blocked:
+  EXPECT_EQ(sched.Pick(), nullptr)        // picker rejects it
+  EXPECT_EQ(sched.Step(), -1)             // scheduler does not fire it
+  EXPECT_EQ(FireCount(), 0u)              // NO premature fire
+and only after @unblock:
+  EXPECT_EQ(sched.Step(), id)             // fires once released
+A PASS therefore proves the blocked task did not fire prematurely.
+
+### [2] compute rendezvous negative: no fire after only ONE input ###
+
+Running main() from /build/source/googletest/src/gtest_main.cc
+Note: Google Test filter = scheduler.ComputeTaskFiresOnlyAfterBothInputsArrive
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from scheduler
+[ RUN      ] scheduler.ComputeTaskFiresOnlyAfterBothInputsArrive
+[       OK ] scheduler.ComputeTaskFiresOnlyAfterBothInputsArrive (0 ms)
+[----------] 1 test from scheduler (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (0 ms total)
+[  PASSED  ] 1 test.
+
+Asserts: after only input `a` arrives, EXPECT_EQ(sched.Step(), -1) and
+FireCount()==0 (does NOT fire); it fires only once input `b` also
+arrives (FireCount()==1, compute saw both operands).
+
+scheduler_test (blocked negative) exit code: 0   (0 == no premature fire; gtest assertions held)

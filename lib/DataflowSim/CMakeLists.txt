@@ -13,11 +13,15 @@
 # T37 SUMMA mapping + golden, T38 metrics + fusion traffic, T39 HTML viz).
 #
 # Targets:
-#   - PolyKernelDataflowSim: static lib (Color + Wavelet + Router + Pe + Grid).
-#   - tests/: router_test + color_test + grid_test gtest executables, registered
-#             with CTest via gtest_discover_tests (mirrors lib/Autotune). The
-#             gtest SUITE names are `router`, `color`, `grid` so
-#             `ctest -R 'router|color|grid'` discovers them.
+#   - PolyKernelDataflowSim: static lib (Color + Wavelet + Router + Pe + Grid
+#     from Todo 35, plus the Todo 36 task model + scheduler: Task + Scheduler,
+#     where Scheduler.cpp also hosts the TaskPicker selector).
+#   - tests/: router_test + color_test + grid_test (Todo 35) and scheduler_test
+#             (Todo 36) gtest executables, registered with CTest via
+#             gtest_discover_tests (mirrors lib/Autotune). The gtest SUITE names
+#             are `router`, `color`, `grid`, `scheduler` so
+#             `ctest -R 'router|color|grid'` and `ctest -R scheduler` discover
+#             them.
 
 add_library(PolyKernelDataflowSim STATIC
   Color.cpp
@@ -25,6 +29,8 @@ add_library(PolyKernelDataflowSim STATIC
   Router.cpp
   Pe.cpp
   Grid.cpp
+  Task.cpp
+  Scheduler.cpp
 )
 # Public headers live under include/PolyKernel/Dataflow/ (project-wide include
 # path, re-added for standalone use).
