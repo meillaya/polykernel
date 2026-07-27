@@ -1,0 +1,82 @@
+##############################################################################
+# PolyKernel T32 (Wave 6): GPU-AWARE KERNEL CACHE on Modal — QA log (CACHE-MISS NEGATIVE)
+# Host: Linux 7.1.4-1-cachyos x86_64   Date: 2026-07-27T17:50:10Z
+# Verdict: PASS — a GPU arch with NO tuning entry makes /predict report the graceful
+#          "no tuned kernel for <arch>/<op>/<shape>; run the autotuner ..." error
+#          (BYTE-IDENTICAL to the C++ KernelCache::Select) — NOT a wrong result, NOT a
+#          crash. Mirrors the reused Todo 26 gtest runtime.MissReturnsClearErrorAndDoesNotServe
+#          / MissOnUntunedShape / UnvalidatedEntryIsNotServed / LoadTuningCacheRejectsMalformed.
+##############################################################################
+
+=== WHAT THIS PROVES (the pinned negative path) ===
+Deploying on a GPU arch the tuning DB has NO validated entry for must fail GRACEFULLY:
+/predict's detect->select gate (the reused Runtime design) returns a clear, actionable
+"no tuned kernel ...; run the autotuner" error (HTTP 404). It must NEVER serve a wrong
+kernel (a sibling arch's or a different shape's variant) and NEVER crash. The selection
+entry is None on a miss (the launcher / engine is never invoked) - asserted below, exactly
+as the GPU-free C++ gtest runtime.MissReturnsClearErrorAndDoesNotServe asserts launcher.calls==0.
+
+The tuning DB below holds an A10 (sm_86) VALIDATED entry for fused_matmul_bias_gelu
+M=2048,N=4096,K=11008,bf16 ONLY. Every other (arch | shape | unvalidated) request is a miss.
+
+=== GPU-free selection-logic checks: the cache-MISS paths ===
+=== [C] MISS: arch with NO tuning entry -> graceful 'no tuned kernel' ===
+    (mirrors runtime.MissReturnsClearErrorAndDoesNotServe)
+  [PASS] miss NOT ok
+  [PASS] miss entry is None (NO wrong kernel served)
+  [PASS] miss device still detected (sm_90)
+  [PASS] miss error BYTE-IDENTICAL to C++ KernelCache::Select
+  [PASS] miss error contains 'no tuned kernel'
+  [PASS] miss error contains 'run the autotuner'
+  miss error: no tuned kernel for sm_90/fused_matmul_bias_gelu/M=2048,N=4096,K=11008,bf16; run the autotuner (polykernel-bench --autotune) to populate the cache
+  /predict would raise HTTPException(404, detail=<that error>) - graceful, not a crash
+=== [D] MISS on untuned SHAPE, same arch (mirrors runtime.MissOnUntunedShape) ===
+  [PASS] untuned shape NOT ok
+  [PASS] untuned shape error names M=128,N=128,K=128
+  [PASS] untuned shape error 'no tuned kernel'
+  untuned-shape error: no tuned kernel for sm_86/fused_matmul_bias_gelu/M=128,N=128,K=128,bf16; run the autotuner (polykernel-bench --autotune) to populate the cache
+=== [E] MISS on unvalidated entry (mirrors runtime.UnvalidatedEntryIsNotServed) ===
+  [PASS] unvalidated NOT ok
+  [PASS] unvalidated error 'not validated'
+  [PASS] unvalidated error 'run the autotuner'
+  unvalidated error: cached entry for sm_86/fused_matmul_bias_gelu/M=2048,N=4096,K=11008,bf16 is not validated; run the autotuner to produce a correctness-gated variant
+=== [F] detection failure (mirrors C++ Runtime::Resolve detection-failure branch) ===
+  [PASS] detection failure NOT ok
+  [PASS] detection failure device is None
+  [PASS] detection failure error matches C++
+  detection-failure error: device detection failed; no usable GPU to serve op fused_matmul_bias_gelu
+=== [G] malformed cache rejected with field-path error ===
+    (mirrors runtime.LoadTuningCacheRejectsMalformed; parse-don't-validate)
+  [PASS] malformed rejected
+  [PASS] malformed error names scored_by
+  [PASS] malformed cache left unchanged (size 0)
+  malformed error: entries[0].scored_by: missing required string field
+
+
+=== Assertions (the negative acceptance) ===
+- arch with NO entry (sm_90/H100, cache has sm_86 only): resolve NOT ok, entry is None
+  (NO wrong kernel served); error BYTE-IDENTICAL to C++ KernelCache::Select:
+    "no tuned kernel for sm_90/fused_matmul_bias_gelu/M=2048,N=4096,K=11008,bf16; run the autotuner (polykernel-bench --autotune) to populate the cache"
+  -> /predict raises HTTPException(404, detail=<that error>): graceful, not a 500, not a crash.  PASS
+- untuned SHAPE on a tuned arch (M=128,N=128,K=128): clear miss naming the key.            PASS
+- present-but-UNVALIDATED entry: treated as a miss ("not validated; run the autotuner"),
+  never served (a bench-rejected variant is never returned).                                PASS
+- detection FAILURE (unknown GPU class): "device detection failed; no usable GPU to serve
+  op ..." (device is None) -> /predict HTTP 500, still graceful (no crash).                 PASS
+- MALFORMED tuning cache: rejected with a field-path schema error ("entries[0].scored_by:
+  missing required string field"); the cache is left UNCHANGED (parse-don't-validate).      PASS
+
+=== Reused Todo 26 gtest corroboration (ctest -R runtime) ===
+runtime.MissReturnsClearErrorAndDoesNotServe  — arch with no entry -> "no tuned kernel ...;
+    run the autotuner"; launcher NOT invoked (calls == 0); no crash.
+runtime.MissOnUntunedShape                    — same arch, untuned shape -> clear miss.
+runtime.UnvalidatedEntryIsNotServed           — present-but-unvalidated -> miss, never served.
+runtime.LoadTuningCacheRejectsMalformed       — malformed JSON -> schema error, cache unchanged.
+All 16 pass (see reports/w6_kernel_cache.log [5]).
+
+=== RESULT ===
+PASS. A GPU arch with no tuning entry yields the graceful "no tuned kernel for
+sm_90/fused_matmul_bias_gelu/M=2048,N=4096,K=11008,bf16; run the autotuner
+(polykernel-bench --autotune) to populate the cache" error (byte-identical to the C++
+Runtime) — no wrong kernel, no crash. /predict surfaces it as HTTP 404. The Python selection
+layer reproduces the reused Todo 26 gtest miss assertions exactly.

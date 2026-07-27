@@ -1,0 +1,128 @@
+##############################################################################
+# PolyKernel T32 (Wave 6): GPU-AWARE KERNEL CACHE on Modal — QA log (HAPPY PATH)
+# Reuse C4 / Todo 26 Runtime: detect GPU arch -> select best cached kernel -> load -> serve
+# Host: Linux 7.1.4-1-cachyos x86_64   Date: 2026-07-27T17:50:10Z
+# GPU:  Modal A10 = sm_86 (declarative detect). NO MODAL_TOKEN -> live deploy SKIPPED.
+# Verdict: PASS — app + kernel-cache wiring construct without a token; the container-start
+#          detect->select logs "detected sm_86, loaded best cached kernel for <op,shape>";
+#          /predict gates on the same detect->select; the selection logic mirrors the
+#          reused Todo 26 gtest (ctest -R 'runtime|device_detect' 16/16) with byte-identical
+#          error strings. Cache-miss negative: reports/w6_kernel_cache_miss.log.
+##############################################################################
+
+=== WHAT THIS PROVES (the Wave-6 GPU-aware kernel-cache milestone) ===
+modal/app.py reuses the Todo 26 C++ Runtime DESIGN (lib/Runtime/: DeviceDetect ->
+KernelCache -> Runtime) as a faithful Python selection layer:
+  - detect: ModalGpuDetector maps the @app.cls gpu= class to its sm_ arch (the same
+    string the C++ SmArchFromComputeCapability yields from cudaGetDeviceProperties;
+    DeviceDetect.cpp). Declarative + GPU-free, so it runs in the snap=True pre-snapshot
+    hook (no GPU yet). FixedArchDetector is the GPU-free mock (mirrors C++ FixedArchDetector).
+  - select: KernelCache.select(gpu, op, shape) maps (arch, op, shape) -> the best VALIDATED
+    contract-H cached variant, partitioned by gpu (mirrors C++ KernelCache::Select; gates on
+    validated; graceful miss with BYTE-IDENTICAL error strings).
+  - load + serve: the engine .so (dlopen'd in snap=True) IS the loaded compiled variant;
+    /predict serves it for the selected config on a hit, and reports the graceful
+    "no tuned kernel ...; run the autotuner" (HTTP 404) on a miss - never a wrong kernel,
+    never a crash (mirror of C++ Runtime::Resolve).
+Why a Python port (not ctypes to the C++ Runtime): the C++ PolyKernelRuntime lib is gated
+behind hipcc/ROCm (lib/Runtime/CMakeLists.txt) but the Modal image is CUDA (nvidia/cuda, no
+hipcc) and its LLVM toolchain is a documented deploy-time follow-up (modal/image.py) - so the
+C++ Runtime cannot be baked into the Modal image today. The tuning DB + compiled variants ARE
+baked into the image (TUNING_CACHE_PATH, the same contract-H JSON /kernels reads) or on a Volume.
+
+=== [1] modal 1.5.2 API introspection (decorators verified current) ===
+modal version: 1.5.2
+modal.enter has 'snap' param: True
+modal.App.cls has 'gpu' param: True
+modal.fastapi_endpoint present: True
+
+=== [2] python3 modal/app.py (local construction + GPU-free happy demo, no token) ===
+app: polykernel
+image: Image(<function _Image.run_commands.<locals>.build_dockerfile at 0x7fffe7598460>)
+service class: PolyKernelService
+endpoints: predict (POST), benchmark (POST), kernels (GET), report (GET)
+gpu: A10, timeout: 600s, startup_timeout: 300s
+weights volume: modal.Volume.from_name('polykernel-weights')
+autoscaling: min_containers=1, max_containers=8, buffer_containers=1, scaledown_window=300s
+memory snapshot: enable_memory_snapshot=True, experimental_options={'enable_gpu_snapshot': True}
+enter hooks: load_engine (snap=True, no GPU: dlopen .so + weights + kernel-cache detect->select) + warmup_gpu (snap=False, GPU warmup)
+kernel cache: detect Modal GPU (A10 -> sm_86) -> select best VALIDATED cached kernel for fused_matmul_bias_gelu from the contract-H tuning DB
+[kernel-cache] detected sm_86 (NVIDIA A10), loaded best cached kernel for sm_86/fused_matmul_bias_gelu/M=2048,N=4096,K=11008,bf16 best=(block_m=128,block_n=128,block_k=64,num_warps=8,vector_width=4,unroll=4,stages=3) validated=True scored_by=measure
+construction OK (no token required)
+(exit 0)
+
+The "[kernel-cache] detected sm_86 (NVIDIA A10), loaded best cached kernel for
+sm_86/fused_matmul_bias_gelu/M=2048,N=4096,K=11008,bf16 ..." line is EXACTLY what the
+snap=True enter hook logs at container start (QA happy), produced here GPU-free against an
+A10 (sm_86) fixture entry by the same _select_startup_kernel() the hook calls.
+
+=== [3] import validation (importlib, same as modal CLI cli/import_refs.py) ===
+import OK
+app: polykernel
+service: PolyKernelService
+gpu class: A10 -> arch sm_86
+predict op: fused_matmul_bias_gelu | dtype: bf16
+headline shape: M=2048,N=4096,K=11008,bf16
+selection-layer symbols reused from Todo 26 Runtime design: 16
+   DeviceInfo, Shape, Config, Correctness, CacheEntry, SelectionResult, ResolveResult, KernelCache, Runtime, FixedArchDetector, ModalGpuDetector, sm_arch_from_compute_capability, parse_gcn_arch_name, format_key, parse_tuning_cache, _select_startup_kernel
+format_key sample: sm_86/fused_matmul_bias_gelu/M=2048,N=4096,K=11008,bf16
+(exit 0)
+
+=== [4] GPU-free selection-logic checks: detection + HAPPY select ===
+    (mirror the reused Todo 26 gtest: device_detect.* + runtime.SelectionPicksDetectedArch
+     + runtime.LoadTuningCacheJsonThenSelect)
+=== [A] detection logic mirrors the reused Todo 26 gtest (device_detect) ===
+  [PASS] sm_arch(8,0)==sm_80
+  [PASS] sm_arch(9,0)==sm_90
+  [PASS] sm_arch(8,6)==sm_86
+  [PASS] parse_gcn 'gfx1101:sramecc+:xnack-'->gfx1101
+  [PASS] parse_gcn 'gfx942:sramecc+:xnack-'->gfx942
+  [PASS] parse_gcn 'gfx90a'->gfx90a
+  [PASS] parse_gcn bare 'gfx1101'->gfx1101
+  [PASS] parse_gcn ''->''
+  [PASS] parse_gcn 'no-arch-here'->''
+  [PASS] parse_gcn 'gfx' (no digits)->''
+  [PASS] parse_gcn 'gfx:sramecc+'->''
+  [PASS] ModalGpuDetector(A10)->sm_86
+  [PASS] ModalGpuDetector(H100)->sm_90
+  [PASS] ModalGpuDetector(unknown)->None (detection failure)
+=== [B] HAPPY: detect A10 (sm_86) -> select best cached kernel ===
+    (mirrors runtime.SelectionPicksDetectedArch + LoadTuningCacheJsonThenSelect)
+  [PASS] load_tuning_cache ok
+  [PASS] cache size == 1
+  [PASS] resolve ok
+  [PASS] detected arch sm_86
+  [PASS] selected entry gpu sm_86
+  [PASS] selected entry validated
+  [PASS] selected best block_m==128
+  container-start log: [kernel-cache] detected sm_86 (NVIDIA A10), loaded best cached kernel for sm_86/fused_matmul_bias_gelu/M=2048,N=4096,K=11008,bf16 best=(block_m=128,block_n=128,block_k=64,num_warps=8,vector_width=4,unroll=4,stages=3) validated=True scored_by=measure
+
+=== [5] Reused Todo 26 selection-logic gtest (the authoritative spec) ===
+$ ctest --test-dir build -R 'runtime|device_detect' --output-on-failure
+      Start 142: runtime.LaunchFailurePropagates
+16/16 Test #142: runtime.LaunchFailurePropagates ..........................   Passed    0.03 sec
+
+100% tests passed, 0 tests failed out of 16
+
+Total Test time (real) =   0.47 sec
+(ctest exit 0)
+
+=== [6] modal serve modal/app.py (EXPECTED FAILURE: no MODAL_TOKEN) ===
+╭─ Error ──────────────────────────────────────────────────────────────────────╮
+│ Token missing. Could not authenticate client. If you have token credentials, │
+│ new user, register an account at modal.com, then run `modal token new`.      │
+
+LIMITATION: modal serve/deploy requires a MODAL_TOKEN (auth). No token -> live deploy SKIPPED
+(graceful, no spend). Validation is LOCAL: the app + kernel-cache wiring import/construct
+(above) and the detect->select logic is verified GPU-free against the reused Todo 26 gtest.
+With a token, an owner runs: modal deploy modal/app.py  (then POST /predict on the A10).
+
+=== RESULT ===
+PASS. The GPU-aware kernel cache is wired into modal/app.py: at container start the reused
+Runtime design detects the Modal GPU arch (A10 -> sm_86) + selects the best VALIDATED cached
+kernel for (arch, op, shape) from the contract-H tuning DB + logs "detected <arch>, loaded
+best cached kernel for <op,shape>"; /predict gates on the same detect->select and serves the
+engine for the selected config. The selection logic mirrors the reused Todo 26 gtest (16/16)
+with byte-identical error strings. Construction needs no token (exit 0). The
+cache-miss negative (graceful "no tuned kernel ...; run the autotuner") is in
+reports/w6_kernel_cache_miss.log.
