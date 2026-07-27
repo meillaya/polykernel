@@ -1,0 +1,38 @@
+===================================================================
+PolyKernel T40 (Wave 8) — FlashAttention-lite QA NEGATIVE log
+Date: 2026-07-27T14:45:20-04:00
+Purpose: prove the CAUSAL MASK correctness is actually tested. A WRONG
+causal mask (leaks future tokens) MUST fail the golden; if it passed,
+the mask would be untested (a silent-correctness risk).
+===================================================================
+
+### 1. Wrong-mask divergence (CPU reference, --causal 0 leaks future tokens)
+Wrong-causal-mask demonstration (CPU reference vs causal golden).
+A CORRECT causal mask lets query row i attend only to keys j <= i (prefill).
+A WRONG mask (--causal 0) leaks FUTURE tokens j > i into every query row.
+
+shape (1, 2, 32, 32):
+  correct-causal vs golden : cosine=1.000000  -> PASS (>=0.999)
+  LEAKY-mask  vs golden    : cosine=0.511029  max_rel_err=1.009e+03  pcc=0.504245
+  assert_correct(leaky, golden): FAILED as expected -> golden assert_correct FAILED: cosine=0.511029 (need >= 0.999), max_rel_err=1.008514e+03 (need <= 1e-02), pcc=0.504245 (need >= 0.99)
+
+shape (2, 4, 16, 64):
+  correct-causal vs golden : cosine=1.000000  -> PASS (>=0.999)
+  LEAKY-mask  vs golden    : cosine=0.557863  max_rel_err=5.809e+02  pcc=0.556473
+  assert_correct(leaky, golden): FAILED as expected -> golden assert_correct FAILED: cosine=0.557863 (need >= 0.999), max_rel_err=5.809420e+02 (need <= 1e-02), pcc=0.556473 (need >= 0.99)
+
+shape (1, 2, 64, 64):
+  correct-causal vs golden : cosine=1.000000  -> PASS (>=0.999)
+  LEAKY-mask  vs golden    : cosine=0.503839  max_rel_err=5.285e+03  pcc=0.503554
+  assert_correct(leaky, golden): FAILED as expected -> golden assert_correct FAILED: cosine=0.503839 (need >= 0.999), max_rel_err=5.284884e+03 (need <= 1e-02), pcc=0.503554 (need >= 0.99)
+
+### 2. The negative pytest case (asserts the leaky output FAILS the golden)
+tests/kernels/test_attention.py::test_cpu_wrong_mask_leaks_future_fails_golden [neg] wrong-mask (leaky) vs causal golden: cosine=0.511029 max_rel_err=1.009e+03 pcc=0.504245
+PASSED
+============================== 1 passed in 8.39s ===============================
+
+===================================================================
+RESULT: the leaky (wrong) causal mask drops cosine to ~0.5 (far below the
+0.999 gate) and assert_correct RAISES — the causal mask IS exercised. The
+correct causal mask passes with cosine == 1.0. Negative QA confirmed.
+===================================================================

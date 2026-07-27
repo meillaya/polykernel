@@ -1,0 +1,74 @@
+===================================================================
+PolyKernel T40 (Wave 8) — FlashAttention-lite QA HAPPY log
+Date: 2026-07-27T14:44:16-04:00
+Host GPU: AMD Radeon RX 7800 XT              
+Toolchain: nvcc 12.6, V12.6.85, hipcc 7.2.53211-9999, clang 21.1.8
+===================================================================
+
+### 1. Deliverables (pure LOC = non-blank, non-comment)
+  kernels/generated/attention_prefill.cu (93 pure LOC)
+  kernels/generated/kv_cache_update.cu (34 pure LOC)
+  kernels/cpu/attention.cpp (130 pure LOC)
+  lib/Passes/FuseKvAppendAttention.cpp (63 pure LOC)
+  tests/kernels/test_attention.py (336 pure LOC)
+  test/fuse_kv_append_attention.mlir (38 pure LOC)
+
+### 2. CUDA compile (nvcc --ptx, project canonical nvcc_driver.py) — sm_80 AND sm_90
+--- attention_prefill ---
+  ptxas info    : Used 35 registers, used 1 barriers, 256 bytes smem, 404 bytes cmem[0]
+  [parsed] registers=35 smem=256B spill_stores=0B spill_loads=0B stack=0B cmem0=404B
+  ptxas info    : Used 35 registers, used 1 barriers, 256 bytes smem
+  [parsed] registers=35 smem=256B spill_stores=0B spill_loads=0B stack=0B cmem0=0B
+--- kv_cache_update ---
+  ptxas info    : Used 26 registers, used 0 barriers, 400 bytes cmem[0]
+  [parsed] registers=26 smem=0B spill_stores=0B spill_loads=0B stack=0B cmem0=400B
+  ptxas info    : Used 26 registers, used 0 barriers
+  [parsed] registers=26 smem=0B spill_stores=0B spill_loads=0B stack=0B cmem0=0B
+
+### 3. HIP compile + RUN on RX 7800 XT (gfx1101) — golden correctness
+(SAME generated .cu compiled UNCHANGED by hipcc -DPOLYKERNEL_HIP --offload-arch=gfx1101)
+HIP prefill (1, 2, 32, 32): cos=1.000000 rel=0.000e+00 pcc=1.000000 exact=1.0000
+HIP prefill (2, 4, 16, 64): cos=1.000000 rel=0.000e+00 pcc=1.000000 exact=1.0000
+HIP prefill (1, 1, 24, 40): cos=1.000000 rel=0.000e+00 pcc=1.000000 exact=1.0000
+HIP prefill (1, 2, 128, 64): cos=1.000000 rel=6.798e-03 pcc=1.000000 exact=0.9999
+HIP append: shape=(1, 2, 24, 32) exact=1.0000
+
+### 4. lit suite (check-polykernel) — 13 prior + 1 new fusion-pass test
+-- Testing: 14 tests, 14 workers --
+PASS: POLYKERNEL :: infer_shapes_mismatch.mlir (1 of 14)
+PASS: POLYKERNEL :: smoke.mlir (2 of 14)
+PASS: POLYKERNEL :: infer_tile_layout.mlir (3 of 14)
+PASS: POLYKERNEL :: fuse_rmsnorm_matmul.mlir (4 of 14)
+PASS: POLYKERNEL :: fuse_softmax_mask.mlir (5 of 14)
+PASS: POLYKERNEL :: op_set_closed.mlir (6 of 14)
+PASS: POLYKERNEL :: fuse_residual_rmsnorm.mlir (7 of 14)
+PASS: POLYKERNEL :: infer_shapes.mlir (8 of 14)
+PASS: POLYKERNEL :: canonicalize.mlir (9 of 14)
+PASS: POLYKERNEL :: fuse_matmul_bias_gelu.mlir (10 of 14)
+PASS: POLYKERNEL :: fuse_kv_append_attention.mlir (11 of 14)
+PASS: POLYKERNEL :: dialect_roundtrip.mlir (12 of 14)
+PASS: POLYKERNEL :: e2e_parse.mlir (13 of 14)
+PASS: POLYKERNEL :: plan_memory.mlir (14 of 14)
+  Passed: 14 (100.00%)
+
+### 5. pytest tests/kernels/test_attention.py -v (CPU-ref + HIP-run + negative)
+tests/kernels/test_attention.py::test_cpu_prefill_square PASSED          [  7%]
+tests/kernels/test_attention.py::test_cpu_prefill_multihead PASSED       [ 15%]
+tests/kernels/test_attention.py::test_cpu_prefill_odd_head_dim PASSED    [ 23%]
+tests/kernels/test_attention.py::test_cpu_prefill_non_tile_seq PASSED    [ 30%]
+tests/kernels/test_attention.py::test_cpu_append PASSED                  [ 38%]
+tests/kernels/test_attention.py::test_cpu_fused_kv_append_attention PASSED [ 46%]
+tests/kernels/test_attention.py::test_hip_prefill_square PASSED          [ 53%]
+tests/kernels/test_attention.py::test_hip_prefill_multihead PASSED       [ 61%]
+tests/kernels/test_attention.py::test_hip_prefill_odd_head_dim PASSED    [ 69%]
+tests/kernels/test_attention.py::test_hip_prefill_large_seq_reduction_order PASSED [ 76%]
+tests/kernels/test_attention.py::test_hip_append PASSED                  [ 84%]
+tests/kernels/test_attention.py::test_hip_fused_kv_append_attention PASSED [ 92%]
+tests/kernels/test_attention.py::test_cpu_wrong_mask_leaks_future_fails_golden PASSED [100%]
+============================== 13 passed in 9.15s ==============================
+
+===================================================================
+RESULT: FlashAttention-lite (QKT + masked causal softmax + PV, online softmax,
+no full attention matrix) + KV-cache append validated. CUDA compiles sm_80/sm_90;
+HIP compiles + RUNS bit-close on gfx1101; CPU ref + golden pass; lit 14/14; pytest 13/13.
+===================================================================

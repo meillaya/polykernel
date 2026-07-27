@@ -68,6 +68,19 @@ namespace mlir::polykernel {
 /// place; the CRTP base is emitted by GEN_PASS_DEF_EMITKERNELREPORT in the .cpp.)
 std::unique_ptr<::mlir::Pass> createEmitKernelReportPass();
 
+/// Create the `--fuse-kv-append-attention` pass (Todo 40 / Wave 8): fuses a
+/// single-use `kv_cache_update` + `attention` (sharing the same new K/V SSA values)
+/// into one `polykernel.fused_kv_append_attention(query, cache, new_keys,
+/// new_values)`, producing the attention output type AND the updated-cache type.
+/// The new K/V must each have exactly two uses (the attention + the update); a
+/// third use blocks the fusion (it would duplicate the appended tensor). Each fused
+/// op is tagged for the Todo 17 traffic report with
+/// `polykernel.fused_from = "kv_append_attention"` and the INDEXED
+/// `polykernel.eliminated_type_0/1` (the update + attention result types).
+/// (Declared here rather than a per-pass header, mirroring EmitKernelReport; the
+/// CRTP base is emitted by GEN_PASS_DEF_FUSEKVAPPENDATTENTION in the .cpp.)
+std::unique_ptr<::mlir::Pass> createFuseKvAppendAttentionPass();
+
 // Generated registration helpers: registerInferShapesPass() /
 // registerCanonicalizePass() (per pass) and registerPolyKernelPasses() (all
 // PolyKernel passes), from Passes.td via `-gen-pass-decls -name PolyKernel`.
@@ -80,6 +93,12 @@ std::unique_ptr<::mlir::Pass> createEmitKernelReportPass();
 // the CRTP base (impl::EmitKernelReportBase) is emitted by
 // GEN_PASS_DEF_EMITKERNELREPORT in lib/Passes/EmitKernelReport.cpp.
 #define GEN_PASS_DECL_EMITKERNELREPORT
+#include "PolyKernel/Passes/Passes.h.inc"
+
+// Generated pass declaration for `FuseKvAppendAttention` (Todo 40 / Wave 8). The
+// CRTP base (impl::FuseKvAppendAttentionBase) is emitted by
+// GEN_PASS_DEF_FUSEKVAPPENDATTENTION in lib/Passes/FuseKvAppendAttention.cpp.
+#define GEN_PASS_DECL_FUSEKVAPPENDATTENTION
 #include "PolyKernel/Passes/Passes.h.inc"
 
 #endif // POLYKERNEL_PASSES_PASSES_H

@@ -341,6 +341,52 @@ def FuseSoftmaxMask : Pass<"fuse-softmax-mask", "ModuleOp"> {
 }
 
 //===----------------------------------------------------------------------===//
+// FuseKvAppendAttention
+//===----------------------------------------------------------------------===//
+
+def FuseKvAppendAttention : Pass<"fuse-kv-append-attention", "ModuleOp"> {
+  let summary = "Fuse single-use kv_cache_update + attention into "
+                "fused_kv_append_attention";
+  let description = [{
+    PolyKernel fusion pass (Wave 8, Todo 40). Matches a `polykernel.attention`
+    whose key + value operands are the SAME new K/V a `polykernel.kv_cache_update`
+    appends into the cache, and rewrites the pair into one
+    `polykernel.fused_kv_append_attention(query, cache, new_keys, new_values)`,
+    producing the attention's output type AND the updated-cache type. Applied with
+    the greedy pattern driver (`applyPatternsGreedily`), which also folds + DCEs +
+    simplifies regions.
+
+    Pattern (on polykernel.attention):
+      %updated = polykernel.kv_cache_update %cache, %nk, %nv
+      %out     = polykernel.attention %q, %nk, %nv
+        ==>
+      %out, %updated = polykernel.fused_kv_append_attention %q, %cache, %nk, %nv
+
+    Guardrails:
+      - The attention's `key` and `value` operands must be the EXACT same SSA values
+        as a kv_cache_update's `new_keys` / `new_values` (the new tokens are both
+        appended to the cache and used as the attention key/value).
+      - SINGLE-USE CHECK (essential, per shared operand): `new_keys` and `new_values`
+        must each have EXACTLY TWO uses - the attention and the kv_cache_update. A
+        new K/V feeding any third op is NOT fused, or the appended tensor would be
+        duplicated.
+
+    Eliminated-intermediate tracking (for the Todo 17 traffic report): each fused op
+    is tagged with the discardable attributes
+    `polykernel.fused_from = "kv_append_attention"` and the INDEXED
+    `polykernel.eliminated_type_0 = <the kv_cache_update result type>`,
+    `polykernel.eliminated_type_1 = <the attention result type>` (the standalone
+    updated-cache + attention intermediates the fused op replaces). The report sums
+    numElements(type) * sizeof(element) over every eliminated intermediate.
+  }];
+
+  // Registered explicitly via the TableGen-generated
+  // registerFuseKvAppendAttentionPass() / registerPolyKernelPasses() (see Passes.h)
+  // — never registerAllPasses (nix out-of-tree constraint).
+  let constructor = "::mlir::polykernel::createFuseKvAppendAttentionPass()";
+}
+
+//===----------------------------------------------------------------------===//
 // InferTileLayout
 //===----------------------------------------------------------------------===//
 
