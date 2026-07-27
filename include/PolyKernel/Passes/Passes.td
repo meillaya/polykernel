@@ -16,6 +16,11 @@
 //   - Todo 8: `LowerToCuda` (`--lower-to-cuda`), portable CUDA/HIP source emit.
 //   - Todo 12: `FuseRmsnormMatmul` (`--fuse-rmsnorm-matmul`), first fusion pass
 //     (Wave 3): single-use rmsnorm + matmul -> fused_rmsnorm_matmul.
+//   - Todo 13: `FuseMatmulBiasGelu` (`--fuse-matmul-bias-gelu`),
+//     `FuseResidualRmsnorm` (`--fuse-residual-rmsnorm`),
+//     `FuseSoftmaxMask` (`--fuse-softmax-mask`) — the three remaining Wave 3
+//     fusion passes (single-use matmul+bias+gelu, residual-add+rmsnorm,
+//     mask-add+softmax).
 //
 // The generated registration is EXPLICIT (no registerAllPasses / MLIRRegisterAll*
 // — nixpkgs MLIR does not ship the aggregate object archives; see
@@ -181,6 +186,113 @@ def FuseRmsnormMatmul : Pass<"fuse-rmsnorm-matmul", "ModuleOp"> {
   // registerFuseRmsnormMatmulPass() / registerPolyKernelPasses() (see Passes.h)
   // — never registerAllPasses (nix out-of-tree constraint).
   let constructor = "::mlir::polykernel::createFuseRmsnormMatmulPass()";
+}
+
+//===----------------------------------------------------------------------===//
+// FuseMatmulBiasGelu
+//===----------------------------------------------------------------------===//
+
+def FuseMatmulBiasGelu : Pass<"fuse-matmul-bias-gelu", "ModuleOp"> {
+  let summary = "Fuse single-use matmul + bias + gelu into fused_matmul_bias_gelu";
+  let description = [{
+    PolyKernel fusion pass (Wave 3, Todo 13). Matches the chain
+    `matmul(a, b); bias(mm, bias); gelu(bs)` and rewrites it into
+    `fused_matmul_bias_gelu(a, b, bias)`, producing the gelu's result type.
+    Applied with the greedy pattern driver (`applyPatternsGreedily`), which also
+    folds + DCEs + simplifies regions.
+
+    Guardrails:
+      - The gelu's input must be DEFINED by a `polykernel.bias`, and that bias's
+        input must be DEFINED by a `polykernel.matmul` (the exact 3-op chain).
+      - SINGLE-USE CHECK (essential, per absorbed intermediate): the matmul result
+        must have EXACTLY ONE use (the bias) AND the bias result must have EXACTLY
+        ONE use (the gelu). A multi-use matmul OR bias is NOT fused — fusing would
+        duplicate the shared producer.
+
+    Eliminated-intermediate tracking (for the Todo 17 traffic report): this fusion
+    eliminates TWO intermediates, so each fused op is tagged with the discardable
+    attributes `polykernel.fused_from = "matmul_bias_gelu"` and the INDEXED
+    `polykernel.eliminated_type_0 = <matmul result type>`,
+    `polykernel.eliminated_type_1 = <bias result type>` (producer order). See the
+    single-vs-indexed scheme note in FuseMatmulBiasGelu.cpp; the report sums
+    numElements(type) * sizeof(element) over every eliminated intermediate.
+  }];
+
+  // Registered explicitly via the TableGen-generated
+  // registerFuseMatmulBiasGeluPass() / registerPolyKernelPasses() (see Passes.h)
+  // — never registerAllPasses (nix out-of-tree constraint).
+  let constructor = "::mlir::polykernel::createFuseMatmulBiasGeluPass()";
+}
+
+//===----------------------------------------------------------------------===//
+// FuseResidualRmsnorm
+//===----------------------------------------------------------------------===//
+
+def FuseResidualRmsnorm : Pass<"fuse-residual-rmsnorm", "ModuleOp"> {
+  let summary = "Fuse single-use residual add + rmsnorm into fused_residual_rmsnorm";
+  let description = [{
+    PolyKernel fusion pass (Wave 3, Todo 13). Matches
+    `add(residual, input); rmsnorm(sum, eps)` and rewrites it into
+    `fused_residual_rmsnorm(residual, input, eps)`, producing the rmsnorm's result
+    type and carrying the rmsnorm's optional `epsilon`. Applied with the greedy
+    pattern driver (`applyPatternsGreedily`), which also folds + DCEs + simplifies
+    regions.
+
+    Guardrails:
+      - The rmsnorm's input must be DEFINED by a `polykernel.add` (residual add).
+      - SINGLE-USE CHECK (essential): the add result must have EXACTLY ONE use (the
+        rmsnorm). A multi-use add is NOT fused — fusing would duplicate the sum.
+      - OPERAND MAPPING (positional): the add's `lhs` -> fused `residual`, `rhs` ->
+        fused `input` (add is commutative, so this is numerically equivalent either
+        way; the positional convention keeps the rewrite deterministic).
+
+    Eliminated-intermediate tracking (for the Todo 17 traffic report): each fused
+    op is tagged with the discardable attributes
+    `polykernel.fused_from = "residual_rmsnorm"` and
+    `polykernel.eliminated_type = <the eliminated add result's tensor type>`
+    (unindexed — this fusion eliminates ONE intermediate).
+  }];
+
+  // Registered explicitly via the TableGen-generated
+  // registerFuseResidualRmsnormPass() / registerPolyKernelPasses() (see Passes.h)
+  // — never registerAllPasses (nix out-of-tree constraint).
+  let constructor = "::mlir::polykernel::createFuseResidualRmsnormPass()";
+}
+
+//===----------------------------------------------------------------------===//
+// FuseSoftmaxMask
+//===----------------------------------------------------------------------===//
+
+def FuseSoftmaxMask : Pass<"fuse-softmax-mask", "ModuleOp"> {
+  let summary = "Fuse single-use mask add + softmax into fused_softmax_mask";
+  let description = [{
+    PolyKernel fusion pass (Wave 3, Todo 13). Matches
+    `add(input, mask); softmax(sum)` and rewrites it into
+    `fused_softmax_mask(input, mask)`, producing the softmax's result type.
+    Applied with the greedy pattern driver (`applyPatternsGreedily`), which also
+    folds + DCEs + simplifies regions.
+
+    Guardrails:
+      - The softmax's input must be DEFINED by a `polykernel.add` (the mask add).
+      - SINGLE-USE CHECK (essential): the add result must have EXACTLY ONE use (the
+        softmax). A multi-use add is NOT fused — fusing would duplicate the sum.
+      - OPERAND MAPPING (positional): the add's `lhs` -> fused `input`, `rhs` ->
+        fused `mask` (add is commutative, so this is numerically equivalent either
+        way; the positional convention keeps the rewrite deterministic).
+      - `fused_softmax_mask` declares NO `axis` attribute (PolyKernelOps.td), so the
+        softmax's optional `axis` is intentionally NOT carried.
+
+    Eliminated-intermediate tracking (for the Todo 17 traffic report): each fused
+    op is tagged with the discardable attributes
+    `polykernel.fused_from = "softmax_mask"` and
+    `polykernel.eliminated_type = <the eliminated add result's tensor type>`
+    (unindexed — this fusion eliminates ONE intermediate).
+  }];
+
+  // Registered explicitly via the TableGen-generated
+  // registerFuseSoftmaxMaskPass() / registerPolyKernelPasses() (see Passes.h)
+  // — never registerAllPasses (nix out-of-tree constraint).
+  let constructor = "::mlir::polykernel::createFuseSoftmaxMaskPass()";
 }
 
 #endif // POLYKERNEL_PASSES

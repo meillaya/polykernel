@@ -20,6 +20,12 @@
 //     (LowerToCuda.h).
 //   - `--fuse-rmsnorm-matmul` (Todo 12): fuse single-use rmsnorm + matmul into
 //     fused_rmsnorm_matmul (FuseRmsnormMatmul.h).
+//   - `--fuse-matmul-bias-gelu` (Todo 13): fuse single-use matmul + bias + gelu
+//     into fused_matmul_bias_gelu (FuseMatmulBiasGelu.h).
+//   - `--fuse-residual-rmsnorm` (Todo 13): fuse single-use residual add + rmsnorm
+//     into fused_residual_rmsnorm (FuseResidualRmsnorm.h).
+//   - `--fuse-softmax-mask` (Todo 13): fuse single-use mask add + softmax into
+//     fused_softmax_mask (FuseSoftmaxMask.h).
 // All are picked up by registerPolyKernelPasses() automatically.
 //
 //===----------------------------------------------------------------------===//
@@ -28,7 +34,10 @@
 #define POLYKERNEL_PASSES_PASSES_H
 
 #include "PolyKernel/Passes/Canonicalize.h"
+#include "PolyKernel/Passes/FuseMatmulBiasGelu.h"
+#include "PolyKernel/Passes/FuseResidualRmsnorm.h"
 #include "PolyKernel/Passes/FuseRmsnormMatmul.h"
+#include "PolyKernel/Passes/FuseSoftmaxMask.h"
 #include "PolyKernel/Passes/InferShapes.h"
 #include "PolyKernel/Passes/LowerToCuda.h"
 

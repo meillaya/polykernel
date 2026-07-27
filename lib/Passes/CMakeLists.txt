@@ -1,9 +1,10 @@
 # ===- MLIRPolyKernelPasses: PolyKernel transformation passes -===
 #
 # The --infer-shapes pass (Todo 4), the --canonicalize pass (Todo 5), the
-# --lower-to-cuda source-emitter pass (Todo 8), and the --fuse-rmsnorm-matmul
-# fusion pass (Todo 12). registerPolyKernelPasses() (Passes.h) picks all of them
-# up automatically.
+# --lower-to-cuda source-emitter pass (Todo 8), the --fuse-rmsnorm-matmul fusion
+# pass (Todo 12), and the three remaining Wave 3 fusion passes (Todo 13):
+# --fuse-matmul-bias-gelu, --fuse-residual-rmsnorm, --fuse-softmax-mask.
+# registerPolyKernelPasses() (Passes.h) picks all of them up automatically.
 #
 # Upstream libs (nix ships individual libs only; NO MLIRRegisterAll*):
 #   - MLIRPolyKernel:           the dialect + ops (InferTypeOpInterface impls;
@@ -19,7 +20,10 @@
 
 add_mlir_library(MLIRPolyKernelPasses
   Canonicalize.cpp
+  FuseMatmulBiasGelu.cpp
+  FuseResidualRmsnorm.cpp
   FuseRmsnormMatmul.cpp
+  FuseSoftmaxMask.cpp
   InferShapes.cpp
   LowerToCuda.cpp
 
