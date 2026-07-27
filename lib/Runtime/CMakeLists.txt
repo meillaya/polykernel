@@ -27,7 +27,15 @@ if(PK_HIPCC_EXECUTABLE)
 endif()
 
 if(PK_HIPCC_EXECUTABLE AND EXISTS ${_PK_HIP_INCLUDE}/hip/hip_runtime_api.h)
-  add_library(PolyKernelRuntime STATIC HipRuntime.cpp)
+  add_library(PolyKernelRuntime STATIC
+    HipRuntime.cpp
+    # Todo 26: the production selection/cache runtime (GPU detect -> select best
+    # cached kernel -> load -> serve). DeviceDetect (mockable arch detection) +
+    # KernelCache (contract-H tuning-DB selection) + Runtime (the top-level flow).
+    DeviceDetect.cpp
+    KernelCache.cpp
+    Runtime.cpp
+  )
   # Public headers live under include/PolyKernel/Runtime/ (project-wide include
   # path, re-added for standalone use; mirrors lib/Autotune).
   target_include_directories(PolyKernelRuntime PUBLIC
@@ -38,11 +46,20 @@ if(PK_HIPCC_EXECUTABLE AND EXISTS ${_PK_HIP_INCLUDE}/hip/hip_runtime_api.h)
   target_compile_definitions(PolyKernelRuntime PRIVATE __HIP_PLATFORM_AMD__)
   target_include_directories(PolyKernelRuntime PRIVATE ${_PK_HIP_INCLUDE})
   # Recorded for downstream linkers (a static lib does not itself link): the HIP
-  # host runtime that resolves hipMalloc / hipMemcpy / hipDeviceSynchronize.
+  # host runtime that resolves hipMalloc / hipMemcpy / hipDeviceSynchronize (the
+  # HipRuntime + DeviceDetect host calls).
   target_link_directories(PolyKernelRuntime INTERFACE ${_PK_HIP_LIBDIR})
   target_link_libraries(PolyKernelRuntime INTERFACE amdhip64)
+  # KernelCache REUSES the contract-H tuning DB (Todo 23 AmdTuningDb / Todo 24
+  # TuningCache, llvm::json) - NO new schema. PUBLIC so the gtest (which links
+  # PolyKernelRuntime) inherits the Autotune lib + LLVMSupport transitively.
+  target_link_libraries(PolyKernelRuntime PUBLIC PolyKernelAutotune)
   message(STATUS
-    "PolyKernelRuntime: HIP host launch layer enabled (hipcc=${PK_HIPCC_EXECUTABLE})")
+    "PolyKernelRuntime: HIP host launch + selection runtime enabled (hipcc=${PK_HIPCC_EXECUTABLE})")
+  # Todo 26 gtest: GPU-free device-detect + selection logic (mocked device +
+  # recording launcher). Registered with CTest; `ctest -R 'runtime|device_detect'`
+  # discovers the `runtime` + `device_detect` suites.
+  add_subdirectory(tests)
 else()
   message(STATUS
     "PolyKernelRuntime: SKIPPED - hipcc / ROCm host headers not found. Build "

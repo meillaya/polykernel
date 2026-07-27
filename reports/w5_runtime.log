@@ -1,0 +1,99 @@
+##############################################################################
+# PolyKernel Todo 26 (Wave 5): C++ RUNTIME (GPU detect -> select best cached kernel -> load -> serve) — QA log (HAPPY PATH)
+# Host: Linux 7.1.4-1-cachyos x86_64   Date: 2026-07-27T11:20:41Z
+# GPU:  AMD Radeon RX 7800 XT (Navi 32) = gfx1101   ROCm/clr: 7.2.3
+# Verdict: PASS — ctest -R 'runtime|device_detect' 16/16; on-GPU fused_matmul_bias_gelu
+#          served via the cached best variant matches golden (contract C) end-to-end.
+##############################################################################
+
+=== WHAT THIS PROVES (the Wave-5 runtime milestone) ===
+The production C++ runtime implements the full flow: detect GPU arch -> select the
+best cached kernel for a (gpu,op,shape) request -> load it -> serve (execute).
+  - DeviceDetect (include/PolyKernel/Runtime/DeviceDetect.h): mockable arch detect.
+    HipDeviceDetector calls hipGetDeviceProperties -> gcnArchName -> ParseGcnArchName
+    ("gfx1101:sramecc+:xnack-" -> "gfx1101"); FixedArchDetector injects a fake arch
+    so the gtest runs the selection logic with NO GPU.
+  - KernelCache (KernelCache.h): maps (gpu,op,shape) -> best VALIDATED variant from
+    the contract-H tuning DB (REUSES Todo 23 AmdTuningDb / Todo 24 TuningCache -
+    NO new schema). Selection gates on validated:true; a miss is a clear typed error.
+  - Runtime (Runtime.h): wires detect -> select -> load (registered launcher) ->
+    serve. On a cache miss it returns "no tuned kernel ...; run the autotuner" -
+    NEVER a wrong kernel, NEVER a crash.
+
+=== [1] QA happy: ctest -R 'runtime|device_detect' (mocked selection + miss) ===
+$ ctest -R 'runtime|device_detect' --output-on-failure
+Test project /home/mei/projects/polykernel/build
+      Start 113: device_detect.ParseGcnArchNameStripsFeatureFlags
+ 1/16 Test #113: device_detect.ParseGcnArchNameStripsFeatureFlags .........   Passed    0.02 sec
+      Start 114: device_detect.ParseGcnArchNameBareToken
+ 2/16 Test #114: device_detect.ParseGcnArchNameBareToken ..................   Passed    0.02 sec
+      Start 115: device_detect.ParseGcnArchNameAbsentIsEmpty
+ 3/16 Test #115: device_detect.ParseGcnArchNameAbsentIsEmpty ..............   Passed    0.03 sec
+      Start 116: device_detect.SmArchFromComputeCapability
+ 4/16 Test #116: device_detect.SmArchFromComputeCapability ................   Passed    0.02 sec
+      Start 117: device_detect.FixedArchDetectorReturnsInjectedArch
+ 5/16 Test #117: device_detect.FixedArchDetectorReturnsInjectedArch .......   Passed    0.03 sec
+      Start 118: device_detect.FixedArchDetectorOrdinalIndependent
+ 6/16 Test #118: device_detect.FixedArchDetectorOrdinalIndependent ........   Passed    0.02 sec
+      Start 119: device_detect.HipDeviceDetectorConstructibleWithoutGpu
+ 7/16 Test #119: device_detect.HipDeviceDetectorConstructibleWithoutGpu ...   Passed    0.03 sec
+      Start 120: runtime.SelectionPicksDetectedArch
+ 8/16 Test #120: runtime.SelectionPicksDetectedArch .......................   Passed    0.03 sec
+      Start 121: runtime.RunServesSelectedVariant
+ 9/16 Test #121: runtime.RunServesSelectedVariant .........................   Passed    0.03 sec
+      Start 122: runtime.MissReturnsClearErrorAndDoesNotServe
+10/16 Test #122: runtime.MissReturnsClearErrorAndDoesNotServe .............   Passed    0.02 sec
+      Start 123: runtime.MissOnUntunedShape
+11/16 Test #123: runtime.MissOnUntunedShape ...............................   Passed    0.03 sec
+      Start 124: runtime.UnvalidatedEntryIsNotServed
+12/16 Test #124: runtime.UnvalidatedEntryIsNotServed ......................   Passed    0.03 sec
+      Start 125: runtime.LoadTuningCacheJsonThenSelect
+13/16 Test #125: runtime.LoadTuningCacheJsonThenSelect ....................   Passed    0.02 sec
+      Start 126: runtime.LoadTuningCacheRejectsMalformed
+14/16 Test #126: runtime.LoadTuningCacheRejectsMalformed ..................   Passed    0.02 sec
+      Start 127: runtime.MissingLauncherIsClearError
+15/16 Test #127: runtime.MissingLauncherIsClearError ......................   Passed    0.02 sec
+      Start 128: runtime.LaunchFailurePropagates
+16/16 Test #128: runtime.LaunchFailurePropagates ..........................   Passed    0.03 sec
+
+100% tests passed, 0 tests failed out of 16
+
+Total Test time (real) =   0.40 sec
+
+=== [2] ACCEPTANCE: on-GPU Runtime serves fused_matmul_bias_gelu via the cached best variant ===
+The runtime loads the contract-H tuning DB (the Todo-25 bench winner for
+gfx1101/fused_matmul_bias_gelu, best=(16,32,32,4,2,2,2), validated:true), detects
+the GPU, selects the cached best variant for the requested (gpu,op,shape), loads the
+compiled kernel (registered launch_fused_matmul_bias_gelu), and serves it.
+
+Driver build (hipcc; Runtime selection logic + generated kernel + LLVMSupport parser):
+  hipcc --offload-arch=gfx1101 -std=c++20 -DPOLYKERNEL_HIP -D__HIP_PLATFORM_AMD__ -O2 \
+    -Iinclude -Ikernels/template -Ikernels/cpu \
+    lib/Runtime/DeviceDetect.cpp lib/Runtime/KernelCache.cpp lib/Runtime/Runtime.cpp \
+    lib/Runtime/HipRuntime.cpp kernels/cpu/npy_io.cpp \
+    kernels/generated/fused_matmul_bias_gelu.cu w5_runtime_main.cpp \
+    -x none build/lib/Autotune/libPolyKernelAutotune.a libLLVMSupport.a -lrt -ldl -lm libz libLLVMDemangle.a \
+    -o w5_runtime
+  -> exit 0 (clean compile + link).
+
+$ w5_runtime cache.json 128 128 128 a.npy b.npy bias.npy out.npy
+[w5-runtime] detected device: arch=gfx1101 name="AMD Radeon RX 7800 XT"
+[w5-runtime] SERVED op=fused_matmul_bias_gelu gpu=gfx1101 shape=M=128,N=128,K=128 best=(block_m=16,block_n=32,block_k=32,num_warps=4,vector_width=2,unroll=2,stages=2) validated=1 scored_by=measure
+[w5-runtime] OK: wrote /tmp/opencode/out.npy
+-> exit 0
+
+=== [3] GOLDEN CHECK (contract C: cosine>=0.999, max_rel_err<=1e-2, pcc>=0.99) ===
+shape=(128, 128) dtype=bfloat16
+cosine     = 1.000000  (need >= 0.999)
+pcc        = 1.000000  (need >= 0.99)
+max_rel_err= 0.000000e+00  (need <= 1e-2)
+bit_exact  = 1.000000
+assert_correct PASSED + >99% bit-exact
+
+=== RESULT ===
+PASS. The Runtime detected gfx1101 (RX 7800 XT) via hipGetDeviceProperties, selected
+the cached best variant for (gfx1101, fused_matmul_bias_gelu, M=128,N=128,K=128,bf16),
+loaded + served the compiled kernel, and the output matches the golden bit-exactly
+(cosine=pcc=1.0, max_rel_err=0.0, 100% bit-exact). The mocked-selection gtest
+(ctest -R 'runtime|device_detect') passes 16/16 with no GPU. The cache-miss negative
+path is in reports/w5_runtime_miss_neg.log.

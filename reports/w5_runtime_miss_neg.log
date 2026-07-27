@@ -1,0 +1,44 @@
+##############################################################################
+# PolyKernel Todo 26 (Wave 5): C++ RUNTIME cache-MISS negative — QA log (NEGATIVE PATH)
+# Host: Linux 7.1.4-1-cachyos x86_64   Date: 2026-07-27T11:20:41Z
+# GPU:  AMD Radeon RX 7800 XT (Navi 32) = gfx1101   ROCm/clr: 7.2.3
+# Verdict: PASS — a (gpu,op,shape) with NO cache entry yields a clear
+#          "no tuned kernel ...; run the autotuner" error (exit 1) — NOT a wrong
+#          kernel, NOT a crash, NO output written.
+##############################################################################
+
+=== WHAT THIS PROVES (the pinned negative path) ===
+Requesting a (gpu, op, shape) the tuning DB has NO entry for must fail GRACEFULLY:
+the Runtime returns a clear, actionable typed error and exits non-zero. It must NEVER
+serve a wrong kernel (e.g. a sibling gpu's or a different shape's variant) and must
+NEVER crash. The launcher is never invoked on a miss (asserted by the GPU-free gtest
+runtime.MissReturnsClearErrorAndDoesNotServe: launcher.calls == 0).
+
+=== [1] On-GPU miss: request an untuned shape on the detected gpu ===
+The cache holds gfx1101/fused_matmul_bias_gelu for M=128,N=128,K=128 (and the
+2048x4096x11008 bench winner) ONLY. Requesting M=999,N=999,K=999 has no entry:
+
+$ w5_runtime cache.json 999 999 999 a.npy b.npy bias.npy miss_out.npy
+[w5-runtime] detected device: arch=gfx1101 name="AMD Radeon RX 7800 XT"
+[w5-runtime] ERROR: no tuned kernel for gfx1101/fused_matmul_bias_gelu/M=999,N=999,K=999,bf16; run the autotuner (polykernel-bench --autotune) to populate the cache
+-> exit code = 1
+
+=== [2] Assertions ===
+- exit code == 1 (clean non-zero, not a signal/crash): True
+- stderr contains "no tuned kernel": True
+- stderr contains the offending key "gfx1101/fused_matmul_bias_gelu/M=999,N=999,K=999,bf16": True
+- stderr contains "run the autotuner": True
+- NO output .npy written (no wrong kernel served): True
+
+=== [3] GPU-free gtest corroboration (ctest -R runtime) ===
+runtime.MissReturnsClearErrorAndDoesNotServe  — gfx900 (no entry) -> "no tuned
+    kernel ...; run the autotuner"; launcher NOT invoked (calls == 0); no crash.
+runtime.MissOnUntunedShape                    — same arch, untuned shape -> clear miss.
+runtime.UnvalidatedEntryIsNotServed           — present-but-unvalidated entry is a
+    miss ("not validated; run the autotuner"), never served.
+All pass (see reports/w5_runtime.log [1]).
+
+=== RESULT ===
+PASS. A (gpu,op,shape) with no cache entry returns the clear "no tuned kernel for
+gfx1101/fused_matmul_bias_gelu/M=999,N=999,K=999,bf16; run the autotuner ..." error
+and exits 1 — no wrong kernel, no output written, no crash.
