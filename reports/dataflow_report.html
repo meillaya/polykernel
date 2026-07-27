@@ -1,6 +1,14 @@
 <!DOCTYPE html>
 <!--
-  PolyKernel dataflow simulator HTML visualizer (Todo 39 / Wave 7).
+  allow: SIZE_OK - single self-contained HTML template: it carries the inline CSS,
+  the seven pre-rendered sections, the embedded viz-data payload placeholder AND
+  the inline vanilla-JS (hover trace + wavelet-route animation + timeline playhead)
+  that the self-containment guardrail requires to live in this one file. Splitting
+  it would reintroduce the external references the guardrail forbids.
+
+  PolyKernel dataflow simulator HTML visualizer (Todo 39 / Wave 7; polished by
+  Todo 43 / Wave 8: per-PE hover trace + animated wavelet routes + a critical-path
+  timeline - all still inline, still fully offline).
 
   STATIC + SELF-CONTAINED: inline CSS + inline JS + an embedded viz-data JSON
   blob (a script element with id viz-data, type application/json). No external
@@ -15,8 +23,12 @@
   calculate_cycles.
 
   Rendered sections (structural QA targets): #pe-grid (PE grid + A-east/B-south
-  tile routes), #sram-heatmap (per-PE SRAM-pressure heatmap), #message-traffic,
-  #fusion-savings, #critical-path, and the #viz-data JSON payload.
+  tile routes + pre-rendered wavelet dots), #sram-heatmap (per-PE SRAM-pressure
+  heatmap), #message-traffic, #fusion-savings, #critical-path, #critical-timeline
+  (the Todo 43 Gantt), #route-controls (the animation controls), and the #viz-data
+  JSON payload. The inline script is progressive enhancement: every section above
+  renders with JS disabled; the script adds the hover trace, sweeps the wavelet
+  dots along the routes, and drives the timeline playhead.
 -->
 <html lang="en">
 <head>
@@ -76,14 +88,40 @@
   .bar-fill { height: 100%; border-radius: 6px; }
   .bar-row .num { text-align: right; font-variant-numeric: tabular-nums; font-size: 12.5px; }
   svg text { font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; }
-  .pe-cell { cursor: default; }
+  .pe-cell { cursor: default; transition: filter .12s ease; }
+  .pe-cell.pe-hot { filter: brightness(1.6); stroke: var(--accent); stroke-width: 2; }
+  .pe-cell.pe-wave { filter: brightness(1.4); }
+  .wv { filter: drop-shadow(0 0 3px rgba(255,255,255,.35)); }
   footer { padding: 16px 28px 40px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--line); }
+  .controls { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 0 0 12px; }
+  .controls button {
+    background: var(--panel2); color: var(--ink); border: 1px solid var(--line);
+    border-radius: 7px; padding: 5px 13px; font-size: 12.5px; cursor: pointer;
+  }
+  .controls button:hover { border-color: var(--accent); }
+  .controls select {
+    background: var(--panel2); color: var(--ink); border: 1px solid var(--line);
+    border-radius: 7px; padding: 4px 8px; font-size: 12.5px;
+  }
+  .controls .hint { color: var(--muted); font-size: 12px; }
+  .tl-readout { color: var(--ink); font-variant-numeric: tabular-nums; font-weight: 600; }
   #tooltip {
     position: fixed; pointer-events: none; z-index: 10; display: none;
     background: #050814; border: 1px solid var(--accent); color: var(--ink);
-    padding: 6px 9px; border-radius: 8px; font-size: 12px; max-width: 260px;
-    box-shadow: 0 6px 24px rgba(0,0,0,.5);
+    padding: 8px 10px; border-radius: 8px; font-size: 12px; max-width: 360px;
+    max-height: 72vh; overflow-y: auto; box-shadow: 0 6px 24px rgba(0,0,0,.5);
   }
+  #tooltip .tt-h { font-weight: 650; color: #93c5fd; margin-bottom: 3px; }
+  #tooltip .tt-sub { color: var(--muted); font-size: 11.5px; }
+  #tooltip .tt-trace { margin-top: 5px; font-family: ui-monospace, Menlo, monospace; font-size: 11px; }
+  #tooltip .tt-step { color: #fde047; margin-top: 4px; }
+  #tooltip .tt-cyc { color: var(--muted); }
+  #tooltip .tt-ev { white-space: nowrap; }
+  #tooltip .tt-ev.rx { color: #93c5fd; }
+  #tooltip .tt-ev.tx { color: #fdba74; }
+  #tooltip .tt-ev.rz { color: #fca5a5; }
+  #tooltip .tt-ev.cp { color: #86efac; }
+  #tooltip code { color: var(--ink); background: rgba(91,140,255,.14); padding: 0 3px; border-radius: 3px; }
 </style>
 </head>
 <body>
@@ -106,7 +144,20 @@
 
   <section id="grid-panel">
     <h2>PE Grid &amp; Tile Routes (A &rarr; east, B &rarr; south)</h2>
-    <div id="pe-grid" class="panel"><svg viewBox="0 0 434 434" width="434" height="434" role="img" aria-label="PE grid and SUMMA tile routes"><defs><marker id="ah-a" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,7 Z" fill="#3b82f6"/></marker><marker id="ah-b" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,7 Z" fill="#f97316"/></marker></defs><rect class="pe-cell" data-pe="PE(0,0)" x="58" y="58" width="60" height="60" rx="7" fill="#0f1526" stroke="#26304d"/><text x="88.0" y="92.0" text-anchor="middle" font-size="11" fill="#93a1c4">(0,0)</text><rect class="pe-cell" data-pe="PE(1,0)" x="144" y="58" width="60" height="60" rx="7" fill="#0f1526" stroke="#26304d"/><text x="174.0" y="92.0" text-anchor="middle" font-size="11" fill="#93a1c4">(1,0)</text><rect class="pe-cell" data-pe="PE(2,0)" x="230" y="58" width="60" height="60" rx="7" fill="#0f1526" stroke="#26304d"/><text x="260.0" y="92.0" text-anchor="middle" font-size="11" fill="#93a1c4">(2,0)</text><rect class="pe-cell" data-pe="PE(3,0)" x="316" y="58" width="60" height="60" rx="7" fill="#0f1526" stroke="#26304d"/><text x="346.0" y="92.0" text-anchor="middle" font-size="11" fill="#93a1c4">(3,0)</text><rect class="pe-cell" data-pe="PE(0,1)" x="58" y="144" width="60" height="60" rx="7" fill="#0f1526" stroke="#26304d"/><text x="88.0" y="178.0" text-anchor="middle" font-size="11" fill="#93a1c4">(0,1)</text><rect class="pe-cell" data-pe="PE(1,1)" x="144" y="144" width="60" height="60" rx="7" fill="#0f1526" stroke="#26304d"/><text x="174.0" y="178.0" text-anchor="middle" font-size="11" fill="#93a1c4">(1,1)</text><rect class="pe-cell" data-pe="PE(2,1)" x="230" y="144" width="60" height="60" rx="7" fill="#0f1526" stroke="#26304d"/><text x="260.0" y="178.0" text-anchor="middle" font-size="11" fill="#93a1c4">(2,1)</text><rect class="pe-cell" data-pe="PE(3,1)" x="316" y="144" width="60" height="60" rx="7" fill="#0f1526" stroke="#26304d"/><text x="346.0" y="178.0" text-anchor="middle" font-size="11" fill="#93a1c4">(3,1)</text><rect class="pe-cell" data-pe="PE(0,2)" x="58" y="230" width="60" height="60" rx="7" fill="#0f1526" stroke="#26304d"/><text x="88.0" y="264.0" text-anchor="middle" font-size="11" fill="#93a1c4">(0,2)</text><rect class="pe-cell" data-pe="PE(1,2)" x="144" y="230" width="60" height="60" rx="7" fill="#0f1526" stroke="#26304d"/><text x="174.0" y="264.0" text-anchor="middle" font-size="11" fill="#93a1c4">(1,2)</text><rect class="pe-cell" data-pe="PE(2,2)" x="230" y="230" width="60" height="60" rx="7" fill="#0f1526" stroke="#26304d"/><text x="260.0" y="264.0" text-anchor="middle" font-size="11" fill="#93a1c4">(2,2)</text><rect class="pe-cell" data-pe="PE(3,2)" x="316" y="230" width="60" height="60" rx="7" fill="#0f1526" stroke="#26304d"/><text x="346.0" y="264.0" text-anchor="middle" font-size="11" fill="#93a1c4">(3,2)</text><rect class="pe-cell" data-pe="PE(0,3)" x="58" y="316" width="60" height="60" rx="7" fill="#0f1526" stroke="#26304d"/><text x="88.0" y="350.0" text-anchor="middle" font-size="11" fill="#93a1c4">(0,3)</text><rect class="pe-cell" data-pe="PE(1,3)" x="144" y="316" width="60" height="60" rx="7" fill="#0f1526" stroke="#26304d"/><text x="174.0" y="350.0" text-anchor="middle" font-size="11" fill="#93a1c4">(1,3)</text><rect class="pe-cell" data-pe="PE(2,3)" x="230" y="316" width="60" height="60" rx="7" fill="#0f1526" stroke="#26304d"/><text x="260.0" y="350.0" text-anchor="middle" font-size="11" fill="#93a1c4">(2,3)</text><rect class="pe-cell" data-pe="PE(3,3)" x="316" y="316" width="60" height="60" rx="7" fill="#0f1526" stroke="#26304d"/><text x="346.0" y="350.0" text-anchor="middle" font-size="11" fill="#93a1c4">(3,3)</text><line x1="10" y1="88.0" x2="50" y2="88.0" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#ah-a)"/><line x1="121" y1="88.0" x2="141" y2="88.0" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#ah-a)"/><line x1="207" y1="88.0" x2="227" y2="88.0" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#ah-a)"/><line x1="293" y1="88.0" x2="313" y2="88.0" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#ah-a)"/><line x1="10" y1="174.0" x2="50" y2="174.0" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#ah-a)"/><line x1="121" y1="174.0" x2="141" y2="174.0" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#ah-a)"/><line x1="207" y1="174.0" x2="227" y2="174.0" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#ah-a)"/><line x1="293" y1="174.0" x2="313" y2="174.0" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#ah-a)"/><line x1="10" y1="260.0" x2="50" y2="260.0" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#ah-a)"/><line x1="121" y1="260.0" x2="141" y2="260.0" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#ah-a)"/><line x1="207" y1="260.0" x2="227" y2="260.0" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#ah-a)"/><line x1="293" y1="260.0" x2="313" y2="260.0" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#ah-a)"/><line x1="10" y1="346.0" x2="50" y2="346.0" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#ah-a)"/><line x1="121" y1="346.0" x2="141" y2="346.0" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#ah-a)"/><line x1="207" y1="346.0" x2="227" y2="346.0" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#ah-a)"/><line x1="293" y1="346.0" x2="313" y2="346.0" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#ah-a)"/><line x1="88.0" y1="10" x2="88.0" y2="50" stroke="#f97316" stroke-width="2.5" marker-end="url(#ah-b)"/><line x1="88.0" y1="121" x2="88.0" y2="141" stroke="#f97316" stroke-width="2.5" marker-end="url(#ah-b)"/><line x1="88.0" y1="207" x2="88.0" y2="227" stroke="#f97316" stroke-width="2.5" marker-end="url(#ah-b)"/><line x1="88.0" y1="293" x2="88.0" y2="313" stroke="#f97316" stroke-width="2.5" marker-end="url(#ah-b)"/><line x1="174.0" y1="10" x2="174.0" y2="50" stroke="#f97316" stroke-width="2.5" marker-end="url(#ah-b)"/><line x1="174.0" y1="121" x2="174.0" y2="141" stroke="#f97316" stroke-width="2.5" marker-end="url(#ah-b)"/><line x1="174.0" y1="207" x2="174.0" y2="227" stroke="#f97316" stroke-width="2.5" marker-end="url(#ah-b)"/><line x1="174.0" y1="293" x2="174.0" y2="313" stroke="#f97316" stroke-width="2.5" marker-end="url(#ah-b)"/><line x1="260.0" y1="10" x2="260.0" y2="50" stroke="#f97316" stroke-width="2.5" marker-end="url(#ah-b)"/><line x1="260.0" y1="121" x2="260.0" y2="141" stroke="#f97316" stroke-width="2.5" marker-end="url(#ah-b)"/><line x1="260.0" y1="207" x2="260.0" y2="227" stroke="#f97316" stroke-width="2.5" marker-end="url(#ah-b)"/><line x1="260.0" y1="293" x2="260.0" y2="313" stroke="#f97316" stroke-width="2.5" marker-end="url(#ah-b)"/><line x1="346.0" y1="10" x2="346.0" y2="50" stroke="#f97316" stroke-width="2.5" marker-end="url(#ah-b)"/><line x1="346.0" y1="121" x2="346.0" y2="141" stroke="#f97316" stroke-width="2.5" marker-end="url(#ah-b)"/><line x1="346.0" y1="207" x2="346.0" y2="227" stroke="#f97316" stroke-width="2.5" marker-end="url(#ah-b)"/><line x1="346.0" y1="293" x2="346.0" y2="313" stroke="#f97316" stroke-width="2.5" marker-end="url(#ah-b)"/><text x="10" y="44" font-size="12" fill="#93c5fd">A &#8594; EAST</text><text x="144" y="22" font-size="12" fill="#fdba74">B &#8595; SOUTH</text></svg></div>
+    <div id="route-controls" class="controls">
+      <button id="anim-toggle" type="button">&#10074;&#10074; Pause</button>
+      <label class="hint" for="anim-speed">speed</label>
+      <select id="anim-speed">
+        <option value="0.5">0.5&times;</option>
+        <option value="1" selected>1&times;</option>
+        <option value="2">2&times;</option>
+        <option value="4">4&times;</option>
+      </select>
+      <span class="hint">animated wavelets <span class="pill a">A&rarr;east</span>
+        <span class="pill b">B&rarr;south</span> &middot; hover a PE for its
+        instruction/wavelet trace</span>
+    </div>
+    <div id="pe-grid" class="panel"><svg viewBox="0 0 434 434" width="434" height="434" role="img" aria-label="PE grid and SUMMA tile routes"><defs><marker id="ah-a" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,7 Z" fill="#3b82f6"/></marker><marker id="ah-b" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,7 Z" fill="#f97316"/></marker></defs><rect class="pe-cell" data-pe="PE(0,0)" x="58" y="58" width="60" height="60" rx="7" fill="#0f1526" stroke="#26304d"/><text x="88.0" y="92.0" text-anchor="middle" font-size="11" fill="#93a1c4">(0,0)</text><rect class="pe-cell" data-pe="PE(1,0)" x="144" y="58" width="60" height="60" rx="7" fill="#0f1526" stroke="#26304d"/><text x="174.0" y="92.0" text-anchor="middle" font-size="11" fill="#93a1c4">(1,0)</text><rect class="pe-cell" data-pe="PE(2,0)" x="230" y="58" width="60" height="60" rx="7" fill="#0f1526" stroke="#26304d"/><text x="260.0" y="92.0" text-anchor="middle" font-size="11" fill="#93a1c4">(2,0)</text><rect class="pe-cell" data-pe="PE(3,0)" x="316" y="58" width="60" height="60" rx="7" fill="#0f1526" stroke="#26304d"/><text x="346.0" y="92.0" text-anchor="middle" font-size="11" fill="#93a1c4">(3,0)</text><rect class="pe-cell" data-pe="PE(0,1)" x="58" y="144" width="60" height="60" rx="7" fill="#0f1526" stroke="#26304d"/><text x="88.0" y="178.0" text-anchor="middle" font-size="11" fill="#93a1c4">(0,1)</text><rect class="pe-cell" data-pe="PE(1,1)" x="144" y="144" width="60" height="60" rx="7" fill="#0f1526" stroke="#26304d"/><text x="174.0" y="178.0" text-anchor="middle" font-size="11" fill="#93a1c4">(1,1)</text><rect class="pe-cell" data-pe="PE(2,1)" x="230" y="144" width="60" height="60" rx="7" fill="#0f1526" stroke="#26304d"/><text x="260.0" y="178.0" text-anchor="middle" font-size="11" fill="#93a1c4">(2,1)</text><rect class="pe-cell" data-pe="PE(3,1)" x="316" y="144" width="60" height="60" rx="7" fill="#0f1526" stroke="#26304d"/><text x="346.0" y="178.0" text-anchor="middle" font-size="11" fill="#93a1c4">(3,1)</text><rect class="pe-cell" data-pe="PE(0,2)" x="58" y="230" width="60" height="60" rx="7" fill="#0f1526" stroke="#26304d"/><text x="88.0" y="264.0" text-anchor="middle" font-size="11" fill="#93a1c4">(0,2)</text><rect class="pe-cell" data-pe="PE(1,2)" x="144" y="230" width="60" height="60" rx="7" fill="#0f1526" stroke="#26304d"/><text x="174.0" y="264.0" text-anchor="middle" font-size="11" fill="#93a1c4">(1,2)</text><rect class="pe-cell" data-pe="PE(2,2)" x="230" y="230" width="60" height="60" rx="7" fill="#0f1526" stroke="#26304d"/><text x="260.0" y="264.0" text-anchor="middle" font-size="11" fill="#93a1c4">(2,2)</text><rect class="pe-cell" data-pe="PE(3,2)" x="316" y="230" width="60" height="60" rx="7" fill="#0f1526" stroke="#26304d"/><text x="346.0" y="264.0" text-anchor="middle" font-size="11" fill="#93a1c4">(3,2)</text><rect class="pe-cell" data-pe="PE(0,3)" x="58" y="316" width="60" height="60" rx="7" fill="#0f1526" stroke="#26304d"/><text x="88.0" y="350.0" text-anchor="middle" font-size="11" fill="#93a1c4">(0,3)</text><rect class="pe-cell" data-pe="PE(1,3)" x="144" y="316" width="60" height="60" rx="7" fill="#0f1526" stroke="#26304d"/><text x="174.0" y="350.0" text-anchor="middle" font-size="11" fill="#93a1c4">(1,3)</text><rect class="pe-cell" data-pe="PE(2,3)" x="230" y="316" width="60" height="60" rx="7" fill="#0f1526" stroke="#26304d"/><text x="260.0" y="350.0" text-anchor="middle" font-size="11" fill="#93a1c4">(2,3)</text><rect class="pe-cell" data-pe="PE(3,3)" x="316" y="316" width="60" height="60" rx="7" fill="#0f1526" stroke="#26304d"/><text x="346.0" y="350.0" text-anchor="middle" font-size="11" fill="#93a1c4">(3,3)</text><line x1="10" y1="88.0" x2="50" y2="88.0" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#ah-a)"/><line x1="121" y1="88.0" x2="141" y2="88.0" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#ah-a)"/><line x1="207" y1="88.0" x2="227" y2="88.0" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#ah-a)"/><line x1="293" y1="88.0" x2="313" y2="88.0" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#ah-a)"/><line x1="10" y1="174.0" x2="50" y2="174.0" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#ah-a)"/><line x1="121" y1="174.0" x2="141" y2="174.0" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#ah-a)"/><line x1="207" y1="174.0" x2="227" y2="174.0" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#ah-a)"/><line x1="293" y1="174.0" x2="313" y2="174.0" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#ah-a)"/><line x1="10" y1="260.0" x2="50" y2="260.0" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#ah-a)"/><line x1="121" y1="260.0" x2="141" y2="260.0" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#ah-a)"/><line x1="207" y1="260.0" x2="227" y2="260.0" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#ah-a)"/><line x1="293" y1="260.0" x2="313" y2="260.0" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#ah-a)"/><line x1="10" y1="346.0" x2="50" y2="346.0" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#ah-a)"/><line x1="121" y1="346.0" x2="141" y2="346.0" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#ah-a)"/><line x1="207" y1="346.0" x2="227" y2="346.0" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#ah-a)"/><line x1="293" y1="346.0" x2="313" y2="346.0" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#ah-a)"/><line x1="88.0" y1="10" x2="88.0" y2="50" stroke="#f97316" stroke-width="2.5" marker-end="url(#ah-b)"/><line x1="88.0" y1="121" x2="88.0" y2="141" stroke="#f97316" stroke-width="2.5" marker-end="url(#ah-b)"/><line x1="88.0" y1="207" x2="88.0" y2="227" stroke="#f97316" stroke-width="2.5" marker-end="url(#ah-b)"/><line x1="88.0" y1="293" x2="88.0" y2="313" stroke="#f97316" stroke-width="2.5" marker-end="url(#ah-b)"/><line x1="174.0" y1="10" x2="174.0" y2="50" stroke="#f97316" stroke-width="2.5" marker-end="url(#ah-b)"/><line x1="174.0" y1="121" x2="174.0" y2="141" stroke="#f97316" stroke-width="2.5" marker-end="url(#ah-b)"/><line x1="174.0" y1="207" x2="174.0" y2="227" stroke="#f97316" stroke-width="2.5" marker-end="url(#ah-b)"/><line x1="174.0" y1="293" x2="174.0" y2="313" stroke="#f97316" stroke-width="2.5" marker-end="url(#ah-b)"/><line x1="260.0" y1="10" x2="260.0" y2="50" stroke="#f97316" stroke-width="2.5" marker-end="url(#ah-b)"/><line x1="260.0" y1="121" x2="260.0" y2="141" stroke="#f97316" stroke-width="2.5" marker-end="url(#ah-b)"/><line x1="260.0" y1="207" x2="260.0" y2="227" stroke="#f97316" stroke-width="2.5" marker-end="url(#ah-b)"/><line x1="260.0" y1="293" x2="260.0" y2="313" stroke="#f97316" stroke-width="2.5" marker-end="url(#ah-b)"/><line x1="346.0" y1="10" x2="346.0" y2="50" stroke="#f97316" stroke-width="2.5" marker-end="url(#ah-b)"/><line x1="346.0" y1="121" x2="346.0" y2="141" stroke="#f97316" stroke-width="2.5" marker-end="url(#ah-b)"/><line x1="346.0" y1="207" x2="346.0" y2="227" stroke="#f97316" stroke-width="2.5" marker-end="url(#ah-b)"/><line x1="346.0" y1="293" x2="346.0" y2="313" stroke="#f97316" stroke-width="2.5" marker-end="url(#ah-b)"/><text x="10" y="44" font-size="12" fill="#93c5fd">A &#8594; EAST</text><text x="144" y="22" font-size="12" fill="#fdba74">B &#8595; SOUTH</text><circle class="wv wv-a" data-line="0" cx="10" cy="88.0" r="5" fill="#3b82f6" stroke="#0b1020" stroke-width="1" opacity="0"/><circle class="wv wv-a" data-line="1" cx="10" cy="174.0" r="5" fill="#3b82f6" stroke="#0b1020" stroke-width="1" opacity="0"/><circle class="wv wv-a" data-line="2" cx="10" cy="260.0" r="5" fill="#3b82f6" stroke="#0b1020" stroke-width="1" opacity="0"/><circle class="wv wv-a" data-line="3" cx="10" cy="346.0" r="5" fill="#3b82f6" stroke="#0b1020" stroke-width="1" opacity="0"/><circle class="wv wv-b" data-line="0" cx="88.0" cy="10" r="5" fill="#f97316" stroke="#0b1020" stroke-width="1" opacity="0"/></svg><circle class="wv wv-b" data-line="1" cx="174.0" cy="10" r="5" fill="#f97316" stroke="#0b1020" stroke-width="1" opacity="0"/></svg><circle class="wv wv-b" data-line="2" cx="260.0" cy="10" r="5" fill="#f97316" stroke="#0b1020" stroke-width="1" opacity="0"/></svg><circle class="wv wv-b" data-line="3" cx="346.0" cy="10" r="5" fill="#f97316" stroke="#0b1020" stroke-width="1" opacity="0"/></svg></div>
     <p id="tile-routes" class="legend">SUMMA mapping on a 4&times;4 grid. <span class="pill a">A</span> panels broadcast <strong>east</strong> along each row (injected at the west edge, re-emitted east by each PE); <span class="pill b">B</span> panels broadcast <strong>south</strong> along each column (injected at the north edge); C accumulates <em>output-stationary</em> in each PE&rsquo;s local SRAM. Ping-pong colours double-buffer A/B. Average broadcast span = P&#8722;1 = 3 hops.</p>
   </section>
 
@@ -130,21 +181,43 @@
     <h2>Critical Path</h2>
     <div id="critical-path" class="panel"><div class="bar-row"><span class="lbl">Broadcast fill (P&#8722;1 hops)</span><span class="bar-track"><span class="bar-fill" style="width:42.9%;background:#3b82f6"></span></span><span class="num">3</span></div><div class="bar-row"><span class="lbl">Pipelined compute (steps)</span><span class="bar-track"><span class="bar-fill" style="width:57.1%;background:#f97316"></span></span><span class="num">4</span></div><table class="kv"><tr><td>Critical-path cycles</td><td>7</td></tr><tr><td>Breakdown</td><td>broadcast fill (P&#8722;1 = 3 hops) + pipelined compute (4 steps) = 7</td></tr><tr><td>Panel computes</td><td>64</td></tr><tr><td>Bottleneck</td><td>active (cause: none)</td></tr></table></div>
   </section>
+
+  <section id="timeline-panel">
+    <h2>Critical-Path Timeline</h2>
+    <div class="controls">
+      <span class="hint">cycle <span id="tl-readout" class="tl-readout">&mdash;</span></span>
+      <span class="hint">broadcast fill (P&minus;1 single-cycle hops) then pipelined
+        FMAC compute (one panel accumulate per cycle)</span>
+    </div>
+    <div id="critical-timeline" class="panel"><svg viewBox="0 0 610 172" width="610" height="172" role="img" aria-label="critical-path timeline"><text x="178" y="12" font-size="11" fill="#93a1c4">cycle &#8594;</text><rect x="178" y="18" width="174" height="26" rx="4" fill="#1d4ed8"/><rect x="352" y="18" width="232" height="26" rx="4" fill="#3b82f6" opacity="0.4"/><rect x="178" y="58" width="174" height="26" rx="4" fill="#c2410c"/><rect x="352" y="58" width="232" height="26" rx="4" fill="#f97316" opacity="0.4"/><rect x="354" y="98" width="54" height="26" rx="4" fill="#22c55e"/><text x="381.0" y="115.0" text-anchor="middle" font-size="11" fill="#06220f">s0</text><rect x="412" y="98" width="54" height="26" rx="4" fill="#22c55e"/><text x="439.0" y="115.0" text-anchor="middle" font-size="11" fill="#06220f">s1</text><rect x="470" y="98" width="54" height="26" rx="4" fill="#22c55e"/><text x="497.0" y="115.0" text-anchor="middle" font-size="11" fill="#06220f">s2</text><rect x="528" y="98" width="54" height="26" rx="4" fill="#22c55e"/><text x="555.0" y="115.0" text-anchor="middle" font-size="11" fill="#06220f">s3</text><text x="168" y="35.0" text-anchor="end" font-size="12" fill="#93a1c4">A &#8594; east broadcast</text><text x="168" y="75.0" text-anchor="end" font-size="12" fill="#93a1c4">B &#8594; south broadcast</text><text x="168" y="115.0" text-anchor="end" font-size="12" fill="#93a1c4">FMAC compute (per step)</text><line x1="352" y1="14" x2="352" y2="150" stroke="#5b8cff" stroke-width="1" stroke-dasharray="4 3"/><text x="356" y="20" font-size="10" fill="#93c5fd">first compute</text><line x1="178" y1="150" x2="178" y2="155" stroke="#26304d"/><text x="207.0" y="166" text-anchor="middle" font-size="10" fill="#93a1c4">0</text><line x1="236" y1="150" x2="236" y2="155" stroke="#26304d"/><text x="265.0" y="166" text-anchor="middle" font-size="10" fill="#93a1c4">1</text><line x1="294" y1="150" x2="294" y2="155" stroke="#26304d"/><text x="323.0" y="166" text-anchor="middle" font-size="10" fill="#93a1c4">2</text><line x1="352" y1="150" x2="352" y2="155" stroke="#26304d"/><text x="381.0" y="166" text-anchor="middle" font-size="10" fill="#93a1c4">3</text><line x1="410" y1="150" x2="410" y2="155" stroke="#26304d"/><text x="439.0" y="166" text-anchor="middle" font-size="10" fill="#93a1c4">4</text><line x1="468" y1="150" x2="468" y2="155" stroke="#26304d"/><text x="497.0" y="166" text-anchor="middle" font-size="10" fill="#93a1c4">5</text><line x1="526" y1="150" x2="526" y2="155" stroke="#26304d"/><text x="555.0" y="166" text-anchor="middle" font-size="10" fill="#93a1c4">6</text><line x1="178" y1="150" x2="584" y2="150" stroke="#26304d"/><line id="tl-playhead" x1="178" y1="12" x2="178" y2="150" stroke="#e6ecff" stroke-width="2" opacity="0"/></svg></div>
+    <p class="legend">The critical path is <strong>broadcast fill</strong> &mdash; the
+      first A/B panels cross the P&times;P grid in P&minus;1 single-cycle hops
+      (solid bars) &mdash; followed by <strong>pipelined compute</strong>: one FMAC
+      panel accumulate per cycle (green, s0&hellip;s<em>steps&minus;1</em>), with the
+      ping-pong colours A0/A1 &amp; B0/B1 double-buffering so the next broadcast
+      overlaps the current compute (pale bars). The playhead is swept by the inline
+      script using the analytic cycle count; no network, no framework.</p>
+  </section>
 </main>
 
 <footer>
   Self-contained static report &mdash; opens offline, no external dependencies.
   Data embedded inline below (<code>#viz-data</code>). Generated by
-  <code>tools/polykernel-report/dataflow_viz.py</code> (Todo&nbsp;39 / Wave&nbsp;7).
+  <code>tools/polykernel-report/dataflow_viz.py</code> (Todo&nbsp;39 / Wave&nbsp;7,
+  polished by Todo&nbsp;43 / Wave&nbsp;8).
   <span id="viz-provenance"></span>
 </footer>
 
 <!-- Embedded metrics payload (machine-readable; the single source of truth). -->
-<script id="viz-data" type="application/json">{"generated_by": "tools/polykernel-report/dataflow_viz.py (Todo 39 / Wave 7)", "simulator": "PolyKernel dataflow simulator (functional/cycle model; NOT real CSL, NOT Cerebras hardware)", "sdk_analogs": ["cslc --out-routes", "calculate_cycles"], "input": "examples/mlp_block.mlir", "grid": {"p": 4, "active_pes": 16, "total_pes": 16, "utilization_pct": 100.0}, "tiles": {"m": 8, "n": 8, "k": 8, "steps": 4, "representative_shape": [32, 32, 32]}, "routes": {"a": "EAST", "b": "SOUTH", "scheme": "SUMMA: A broadcast east along rows, B broadcast south along columns, output-stationary C in local SRAM"}, "sram": {"bytes": 49152, "resident_bytes": 1280, "pressure_pct": 2.6041666666666665, "per_pe_pressure_pct": [2.6041666666666665, 2.6041666666666665, 2.6041666666666665, 2.6041666666666665, 2.6041666666666665, 2.6041666666666665, 2.6041666666666665, 2.6041666666666665, 2.6041666666666665, 2.6041666666666665, 2.6041666666666665, 2.6041666666666665, 2.6041666666666665, 2.6041666666666665, 2.6041666666666665, 2.6041666666666665]}, "traffic": {"a_wavelets": 1024, "b_wavelets": 1024, "messages_sent": 2048, "avg_hop_distance": 3.0, "panel_computes": 64}, "critical_path": {"cycles": 7, "broadcast_fill_hops": 3, "pipelined_steps": 4}, "bottleneck": {"state": "active", "cause": "none"}, "fusion": {"fused_op": "fused_rmsnorm_matmul", "fused_from": "rmsnorm_matmul", "eliminated_intermediate": "tensor<1x2048x4096xbf16>", "eliminated_round_trip_bytes": 33554432, "eliminated_wavelets": 16777216, "unfused_wavelets": 16779264, "fused_wavelets": 2048, "traffic_reduction_pct": 99.98779445868425}}</script>
+<script id="viz-data" type="application/json">{"generated_by": "tools/polykernel-report/dataflow_viz.py (Todo 39 / Wave 7, polished by Todo 43 / Wave 8)", "simulator": "PolyKernel dataflow simulator (functional/cycle model; NOT real CSL, NOT Cerebras hardware)", "sdk_analogs": ["cslc --out-routes", "calculate_cycles"], "input": "examples/mlp_block.mlir", "grid": {"p": 4, "active_pes": 16, "total_pes": 16, "utilization_pct": 100.0}, "geometry": {"cell": 60, "gap": 26, "margin": 58}, "tl_geo": {"left": 178, "unit": 58, "y0": 12, "y1": 150, "cp": 7}, "tiles": {"m": 8, "n": 8, "k": 8, "steps": 4, "representative_shape": [32, 32, 32]}, "routes": {"a": "EAST", "b": "SOUTH", "scheme": "SUMMA: A broadcast east along rows, B broadcast south along columns, output-stationary C in local SRAM"}, "sram": {"bytes": 49152, "resident_bytes": 1280, "pressure_pct": 2.6041666666666665, "per_pe_pressure_pct": [2.6041666666666665, 2.6041666666666665, 2.6041666666666665, 2.6041666666666665, 2.6041666666666665, 2.6041666666666665, 2.6041666666666665, 2.6041666666666665, 2.6041666666666665, 2.6041666666666665, 2.6041666666666665, 2.6041666666666665, 2.6041666666666665, 2.6041666666666665, 2.6041666666666665, 2.6041666666666665]}, "traffic": {"a_wavelets": 1024, "b_wavelets": 1024, "messages_sent": 2048, "avg_hop_distance": 3.0, "panel_computes": 64}, "critical_path": {"cycles": 7, "broadcast_fill_hops": 3, "pipelined_steps": 4}, "bottleneck": {"state": "active", "cause": "none"}, "fusion": {"fused_op": "fused_rmsnorm_matmul", "fused_from": "rmsnorm_matmul", "eliminated_intermediate": "tensor<1x2048x4096xbf16>", "eliminated_round_trip_bytes": 33554432, "eliminated_wavelets": 16777216, "unfused_wavelets": 16779264, "fused_wavelets": 2048, "traffic_reduction_pct": 99.98779445868425}}</script>
 
 <!-- Inline JS: progressive enhancement only. The static SVG/HTML above already
-     renders every section with JS disabled; this adds per-PE hover tooltips and
-     a client-side provenance check that the embedded payload parses. -->
+     renders every section with JS disabled; this adds the per-PE instruction /
+     wavelet trace on hover, sweeps the pre-rendered wavelet dots along the
+     A-east / B-south routes, drives the critical-path timeline playhead, and
+     checks the embedded payload parses. No framework, no network: it only moves
+     elements that dataflow_viz.py already rendered (so it never needs an SVG
+     namespace URI, keeping the file free of external references). -->
 <script>
 "use strict";
 (function () {
@@ -163,26 +236,178 @@
     " (grid " + DATA.grid.p + "x" + DATA.grid.p + ", " +
     DATA.traffic.messages_sent + " wavelets).";
 
-  // Per-PE hover tooltips: each PE cell carries data-pe / data-info attrs.
+  var P = DATA.grid.p;
+  var STEPS = DATA.tiles.steps;
+  var GEO = DATA.geometry;                       // {cell, gap, margin}
+  var STRIDE = GEO.cell + GEO.gap;
+  var GRIDW = 2 * GEO.margin + P * GEO.cell + (P - 1) * GEO.gap;
+
+  // ---- tooltip (follows the cursor, clamped to the viewport) ----
   var tip = document.createElement("div");
   tip.id = "tooltip";
   document.body.appendChild(tip);
+
+  function moveTip(ev) {
+    var pad = 14, w = tip.offsetWidth, h = tip.offsetHeight;
+    var x = ev.clientX + pad, y = ev.clientY + pad;
+    if (x + w > window.innerWidth - 8) { x = ev.clientX - w - pad; }
+    if (y + h > window.innerHeight - 8) { y = Math.max(8, window.innerHeight - h - 8); }
+    tip.style.left = x + "px";
+    tip.style.top = y + "px";
+  }
+
+  // Per-PE instruction / wavelet trace, generated from the SUMMA schedule model
+  // (faithful to the simulator: fabin_dsd / fabout_dsd, the x_done -> @activate /
+  // y_done -> @unblock rendezvous, CE FMAC outer-product accumulate, ping-pong
+  // colours A0/A1 + B0/B1, output-stationary C in local SRAM).
+  function peTrace(x, y) {
+    var r = [];
+    r.push('<div class="tt-h">PE(' + x + ',' + y + ') &middot; row ' + y + ' &middot; col ' + x + '</div>');
+    r.push('<div class="tt-sub">A panel broadcast <b>east</b> along row ' + y + ' &mdash; arrives after ' + x + ' hop(s) from the west edge.</div>');
+    r.push('<div class="tt-sub">B panel broadcast <b>south</b> along col ' + x + ' &mdash; arrives after ' + y + ' hop(s) from the north edge.</div>');
+    r.push('<div class="tt-sub">C tile output-stationary in local SRAM; accumulates over ' + STEPS + ' step(s).</div>');
+    r.push('<div class="tt-trace">');
+    for (var s = 0; s < STEPS; s++) {
+      var pp = s & 1;                            // ping-pong colour index
+      r.push('<div class="tt-step">step ' + s + ' <span class="tt-cyc">colours A' + pp + '/B' + pp + ' &middot; compute &#8776; cycle ' + ((P - 1) + s) + '</span></div>');
+      r.push('<div class="tt-ev rx">&nbsp;rx A panel &middot; colour A' + pp + ' &middot; <code>fabin_dsd</code> (from W)</div>');
+      r.push('<div class="tt-ev rx">&nbsp;rx B panel &middot; colour B' + pp + ' &middot; <code>fabin_dsd</code> (from N)</div>');
+      r.push('<div class="tt-ev rz">&nbsp;rendezvous: x_done&#8594;@activate, y_done&#8594;@unblock (fire after BOTH)</div>');
+      r.push('<div class="tt-ev cp">&nbsp;CE FMAC: C += A_panel &#215; B_panel (4-lane outer product)</div>');
+      r.push('<div class="tt-ev tx">&nbsp;tx A &middot; <code>fabout_dsd</code> &#8594; ' + (x < P - 1 ? 'east (re-emit onward)' : 'east edge: tap only') + '</div>');
+      r.push('<div class="tt-ev tx">&nbsp;tx B &middot; <code>fabout_dsd</code> &#8594; ' + (y < P - 1 ? 'south (re-emit onward)' : 'south edge: tap only') + '</div>');
+    }
+    r.push('</div>');
+    return r.join("");
+  }
+
+  // ---- hover wiring: grid cells -> rich trace; heatmap cells -> SRAM info ----
   var cells = document.querySelectorAll(".pe-cell");
   for (var i = 0; i < cells.length; i++) {
     (function (cell) {
+      var inGrid = cell.closest("#pe-grid") !== null;
       cell.addEventListener("mouseenter", function (ev) {
-        tip.textContent = cell.getAttribute("data-info") || cell.getAttribute("data-pe") || "";
+        var m = /PE\((\d+),(\d+)\)/.exec(cell.getAttribute("data-pe") || "");
+        if (inGrid && m) {
+          tip.innerHTML = peTrace(parseInt(m[1], 10), parseInt(m[2], 10));
+        } else {
+          tip.textContent = cell.getAttribute("data-info") || cell.getAttribute("data-pe") || "";
+        }
         tip.style.display = "block";
+        cell.classList.add("pe-hot");
+        moveTip(ev);
       });
-      cell.addEventListener("mousemove", function (ev) {
-        tip.style.left = (ev.clientX + 14) + "px";
-        tip.style.top = (ev.clientY + 14) + "px";
-      });
+      cell.addEventListener("mousemove", moveTip);
       cell.addEventListener("mouseleave", function () {
         tip.style.display = "none";
+        cell.classList.remove("pe-hot");
       });
     })(cells[i]);
   }
+
+  // ---- wavelet route animation (A east / B south), single-cycle hop + dwell ----
+  // Grid cells keyed "x,y" so a passing wavelet can light up the PE it is over.
+  var gridCells = {};
+  var gc = document.querySelectorAll("#pe-grid .pe-cell");
+  for (var j = 0; j < gc.length; j++) {
+    var cm = /PE\((\d+),(\d+)\)/.exec(gc[j].getAttribute("data-pe") || "");
+    if (cm) { gridCells[cm[1] + "," + cm[2]] = gc[j]; }
+  }
+
+  // Waypoints for one broadcast line: edge -> each cell centre -> far edge.
+  var linePts = [10];
+  for (var k = 0; k < P; k++) { linePts.push(GEO.margin + k * STRIDE + GEO.cell / 2); }
+  linePts.push(GRIDW - 10);
+
+  function hopPos(t) {                           // t in [0,1] -> px, dwell at each hop
+    var n = linePts.length - 1;
+    var seg = Math.min(Math.floor(t * n), n - 1);
+    var lt = t * n - seg;
+    var dwell = 0.3, e = lt < dwell ? 0 : (lt - dwell) / (1 - dwell);
+    e = e * e * (3 - 2 * e);                     // smoothstep
+    return linePts[seg] + (linePts[seg + 1] - linePts[seg]) * e;
+  }
+  function hopCell(t) {                          // cell index a wavelet is entering
+    var n = linePts.length - 1;
+    return Math.min(Math.min(Math.floor(t * n), n - 1), P - 1);
+  }
+
+  var wvA = document.querySelectorAll("#pe-grid .wv-a");
+  var wvB = document.querySelectorAll("#pe-grid .wv-b");
+  for (var a = 0; a < wvA.length; a++) { wvA[a].setAttribute("opacity", "0.95"); }
+  for (var b = 0; b < wvB.length; b++) { wvB[b].setAttribute("opacity", "0.95"); }
+
+  // ---- critical-path timeline playhead + cycle readout ----
+  var playhead = document.getElementById("tl-playhead");
+  var readout = document.getElementById("tl-readout");
+  var TL = DATA.tl_geo;                          // {left, unit, y0, y1, cp}
+  var FILL = P - 1;
+
+  // ---- controls: play/pause + speed (honour prefers-reduced-motion) ----
+  var reduce = window.matchMedia &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var playing = !reduce;
+  var speed = 1;
+  var clock = 0;                                 // accumulated anim time (seconds)
+  var last = null;
+
+  var toggle = document.getElementById("anim-toggle");
+  function syncToggle() {
+    toggle.textContent = playing ? "\u275A\u275A Pause" : "\u25B6 Play";
+  }
+  toggle.addEventListener("click", function () { playing = !playing; syncToggle(); });
+  document.getElementById("anim-speed").addEventListener("change", function (ev) {
+    speed = parseFloat(ev.target.value) || 1;
+  });
+  syncToggle();
+
+  function frame(ts) {
+    if (last === null) { last = ts; }
+    var dt = (ts - last) / 1000;
+    last = ts;
+    if (playing) { clock += dt * speed; }
+
+    var key;
+    for (key in gridCells) { gridCells[key].classList.remove("pe-wave"); }
+
+    // A wavelets: one per row, staggered, swept west -> east (cx moves).
+    for (var i = 0; i < wvA.length; i++) {
+      var row = parseInt(wvA[i].getAttribute("data-line"), 10);
+      var t = (clock * 0.35 + row * 0.12) % 1;
+      wvA[i].setAttribute("cx", hopPos(t).toFixed(1));
+      var cA = gridCells[hopCell(t) + "," + row];
+      if (cA) { cA.classList.add("pe-wave"); }
+    }
+    // B wavelets: one per column, staggered, swept north -> south (cy moves).
+    for (var q = 0; q < wvB.length; q++) {
+      var col = parseInt(wvB[q].getAttribute("data-line"), 10);
+      var tb = (clock * 0.35 + 0.5 + col * 0.12) % 1;
+      wvB[q].setAttribute("cy", hopPos(tb).toFixed(1));
+      var cB = gridCells[col + "," + hopCell(tb)];
+      if (cB) { cB.classList.add("pe-wave"); }
+    }
+
+    // Timeline playhead + cycle/phase readout.
+    if (playhead && TL) {
+      var cyc = (clock * 0.7) % TL.cp;
+      var px = TL.left + cyc * TL.unit;
+      playhead.setAttribute("x1", px.toFixed(1));
+      playhead.setAttribute("x2", px.toFixed(1));
+      playhead.setAttribute("opacity", "0.9");
+      if (readout) {
+        if (!playing) {
+          readout.textContent = "paused";
+        } else {
+          var c = Math.floor(cyc);
+          var phase = c < FILL ? "broadcast fill (A\u2192east, B\u2192south)"
+                               : "pipelined FMAC compute (step " + (c - FILL) + ")";
+          readout.textContent = c + " / " + (TL.cp - 1) + " \u2014 " + phase;
+        }
+      }
+    }
+    window.requestAnimationFrame(frame);
+  }
+  window.requestAnimationFrame(frame);
 })();
 </script>
 </body>

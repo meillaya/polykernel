@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PolyKernel dataflow HTML visualizer (Todo 39 / Wave 7).
+"""PolyKernel dataflow HTML visualizer (Todo 39 / Wave 7, polished by Todo 43 / W8).
 
 The `--backend=dataflow --viz` report: REUSES the Todo 38 dataflow metrics
 (dataflow_report.py: lower_matmul_to_summa + build_report, the same analytic/cycle
@@ -8,12 +8,19 @@ SELF-CONTAINED HTML visualization (reports/dataflow_report.html) of the PE grid,
 the SUMMA tile routes (A broadcast EAST / B broadcast SOUTH), the per-PE
 SRAM-pressure heatmap, message traffic, fusion savings, and the critical path.
 
+Todo 43 (Wave 8) POLISH - still static + self-contained, now interactive:
+  * per-PE instruction/wavelet trace on hover (fabin_dsd/fabout_dsd rx/tx, the
+    x_done->@activate / y_done->@unblock rendezvous, CE FMAC accumulate);
+  * animated wavelet routes (A east / B south dots swept by the inline script);
+  * a critical-path timeline (broadcast fill + pipelined FMAC compute Gantt with
+    a JS-swept playhead).
+
 SCOPE GUARDRAIL (enforced by assert_self_contained): the HTML is a SINGLE
 self-contained file - inline CSS + inline JS + an embedded #viz-data JSON blob.
 NO external dependencies, NO network fetch, NO framework, NO build step; it
 renders fully OFFLINE. The static SVG/HTML is pre-rendered here so the page works
-with JS disabled; the inline JS adds per-PE hover tooltips + a payload check
-(extended by Todo 43).
+with JS disabled; the inline JS adds the hover trace + route animation + timeline
+playhead as progressive enhancement.
 
 THIS IS A SIMULATOR (a functional/cycle model, not real CSL and not Cerebras
 hardware). CE + FMAC; fabin_dsd/fabout_dsd; @set_color_config rx/tx.
@@ -24,9 +31,10 @@ Usage:
         examples/mlp_block.mlir
 """
 
-# allow: SIZE_OK - single-file static renderer: it pre-renders six SVG/HTML
-# sections + the embedded JSON payload + the CLI. The deliverable scope forbids
-# splitting into helper modules, and it mirrors the sibling dataflow_report.py.
+# allow: SIZE_OK - single-file static renderer: it pre-renders seven SVG/HTML
+# sections (incl. the Todo 43 critical-path timeline) + the embedded JSON payload
+# + the self-containment gate + the CLI. The deliverable scope forbids splitting
+# into helper modules, and it mirrors the sibling dataflow_report.py.
 
 # pyright: reportImplicitRelativeImport=false
 # Executable SCRIPT (the `polykernel-report` wrapper puts this directory on
@@ -54,13 +62,26 @@ _DEFAULT_OUT = _PROJECT_ROOT / "reports" / "dataflow_report.html"
 _CELL, _GAP, _MARGIN = 60, 26, 58
 _A, _B = "#3b82f6", "#f97316"  # route colours: A east (blue), B south (orange).
 
+# Critical-path timeline geometry (px): a left label column, then one fixed-width
+# column per cycle. Shared by render_timeline_svg (the static Gantt) and the
+# embedded tl_geo payload (the inline JS sweeps the playhead with the same map).
+_TL_LABEL_W, _TL_UNIT, _TL_TOP = 178, 58, 18
+_TL_ROW_H, _TL_ROW_GAP, _TL_RULER_PAD, _TL_RIGHT_PAD = 26, 14, 26, 26
+
 # Self-containment gate: tokens that would break offline rendering. Internal
 # `url(#fragment)` SVG references are offline-safe and intentionally NOT listed.
 _FORBIDDEN = ("http://", "https://", "cdn", "<script src", "<link ",
               "xlink", "xmlns", "@import", "url(http", "url(//")
-# Structural QA targets (spec J): the embedded payload + the rendered sections.
+# Structural QA targets (spec J): the embedded payload + the rendered sections
+# (+ the Todo 43 interactive additions: the timeline + the route-animation controls).
 _REQUIRED_IDS = ("viz-data", "pe-grid", "tile-routes", "sram-heatmap",
-                 "message-traffic", "fusion-savings", "critical-path")
+                 "message-traffic", "fusion-savings", "critical-path",
+                 "critical-timeline", "route-controls")
+# Todo 43 interactivity lint: tokens that prove the hover trace (fabin_dsd /
+# fabout_dsd), the animated wavelet dots (wv-a / wv-b), the JS animation loop and
+# the timeline playhead all survived into the generated HTML.
+_INTERACTIVE = ("fabin_dsd", "fabout_dsd", "wv-a", "wv-b",
+                "requestAnimationFrame", "tl-playhead")
 
 
 #===----------------------------------------------------------------------===#
@@ -131,7 +152,18 @@ def render_grid_svg(p: int) -> str:
     s.append(f'<text x="10" y="{_MARGIN - 14}" font-size="12" fill="#93c5fd">'
              f'A &#8594; EAST</text>')
     s.append(f'<text x="{_MARGIN + _CELL + _GAP}" y="22" font-size="12" '
-             f'fill="#fdba74">B &#8595; SOUTH</text></svg>')
+             f'fill="#fdba74">B &#8595; SOUTH</text>')
+    # Wavelet dots the inline JS animates along the routes (one per row A-east /
+    # per column B-south). Pre-rendered hidden (opacity 0): the static arrows above
+    # already show the routes with JS off; the JS reveals + sweeps these dots.
+    for y in range(p):
+        s.append(f'<circle class="wv wv-a" data-line="{y}" cx="10" '
+                 f'cy="{_xy(0, y)[1] + _CELL / 2}" r="5" fill="{_A}" '
+                 f'stroke="#0b1020" stroke-width="1" opacity="0"/>')
+    for x in range(p):
+        s.append(f'<circle class="wv wv-b" data-line="{x}" '
+                 f'cx="{_xy(x, 0)[0] + _CELL / 2}" cy="10" r="5" fill="{_B}" '
+                 f'stroke="#0b1020" stroke-width="1" opacity="0"/></svg>')
     return "".join(s)
 
 
@@ -248,6 +280,66 @@ def render_critical(m: dict, p: int) -> str:
         ("Bottleneck", f'{m["bottleneck"]} (cause: {m["bottleneck_cause"]})')])
 
 
+def _tl_layout(cp: int) -> dict:
+    """Cycle->px map for the critical-path timeline (static Gantt + JS playhead)."""
+    row_y = [_TL_TOP + i * (_TL_ROW_H + _TL_ROW_GAP) for i in range(3)]
+    ruler_y = row_y[2] + _TL_ROW_H + _TL_RULER_PAD
+    return {"left": _TL_LABEL_W, "unit": _TL_UNIT, "top": _TL_TOP, "row_y": row_y,
+            "ruler_y": ruler_y, "cp": cp,
+            "w": _TL_LABEL_W + cp * _TL_UNIT + _TL_RIGHT_PAD, "h": ruler_y + 22}
+
+
+def render_timeline_svg(m: dict, p: int) -> str:
+    """Critical-path timeline Gantt: broadcast fill + pipelined FMAC compute.
+
+    Pre-rendered static so it reads with JS disabled; the inline JS sweeps the
+    #tl-playhead across the cycle ruler using the same cycle->px map (tl_geo)."""
+    cp = max(m["critical_path_cycles"], 1)
+    fill, steps = p - 1, m["steps"]
+    L = _tl_layout(cp)
+    left, unit, row_y, ruler_y = L["left"], L["unit"], L["row_y"], L["ruler_y"]
+
+    def x(c: int) -> float:
+        return left + c * unit
+
+    s = [_svg_open(L["w"], L["h"], "critical-path timeline"),
+         f'<text x="{left}" y="12" font-size="11" fill="#93a1c4">cycle &#8594;</text>']
+    # A / B broadcast rows: the broadcast spans the whole critical path; the first
+    # P-1 cycles are the fill (solid), the rest the pipelined re-broadcast (pale).
+    for yy, col, dark in ((row_y[0], _A, "#1d4ed8"), (row_y[1], _B, "#c2410c")):
+        s.append(f'<rect x="{x(0)}" y="{yy}" width="{x(fill) - x(0)}" '
+                 f'height="{_TL_ROW_H}" rx="4" fill="{dark}"/>')
+        s.append(f'<rect x="{x(fill)}" y="{yy}" width="{x(cp) - x(fill)}" '
+                 f'height="{_TL_ROW_H}" rx="4" fill="{col}" opacity="0.4"/>')
+    # Compute row: one FMAC panel accumulate per pipelined step (cycle fill+s).
+    for st in range(steps):
+        c0 = fill + st
+        s.append(f'<rect x="{x(c0) + 2}" y="{row_y[2]}" width="{unit - 4}" '
+                 f'height="{_TL_ROW_H}" rx="4" fill="#22c55e"/>')
+        s.append(f'<text x="{x(c0) + unit / 2}" y="{row_y[2] + _TL_ROW_H / 2 + 4}" '
+                 f'text-anchor="middle" font-size="11" fill="#06220f">s{st}</text>')
+    for yy, lbl in zip(row_y, ("A &#8594; east broadcast", "B &#8594; south broadcast",
+                               "FMAC compute (per step)")):
+        s.append(f'<text x="{left - 10}" y="{yy + _TL_ROW_H / 2 + 4}" text-anchor="end" '
+                 f'font-size="12" fill="#93a1c4">{lbl}</text>')
+    if fill > 0:  # fill/compute boundary marker.
+        s.append(f'<line x1="{x(fill)}" y1="{_TL_TOP - 4}" x2="{x(fill)}" y2="{ruler_y}" '
+                 f'stroke="#5b8cff" stroke-width="1" stroke-dasharray="4 3"/>')
+        s.append(f'<text x="{x(fill) + 4}" y="{_TL_TOP + 2}" font-size="10" '
+                 f'fill="#93c5fd">first compute</text>')
+    for c in range(cp):  # cycle ruler: ticks + cycle numbers at each column centre.
+        s.append(f'<line x1="{x(c)}" y1="{ruler_y}" x2="{x(c)}" y2="{ruler_y + 5}" '
+                 f'stroke="#26304d"/>')
+        s.append(f'<text x="{x(c) + unit / 2}" y="{ruler_y + 16}" text-anchor="middle" '
+                 f'font-size="10" fill="#93a1c4">{c}</text>')
+    s.append(f'<line x1="{x(0)}" y1="{ruler_y}" x2="{x(cp)}" y2="{ruler_y}" '
+             f'stroke="#26304d"/>')
+    # JS-swept playhead (hidden until the inline animation reveals + moves it).
+    s.append(f'<line id="tl-playhead" x1="{x(0)}" y1="{_TL_TOP - 6}" x2="{x(0)}" '
+             f'y2="{ruler_y}" stroke="#e6ecff" stroke-width="2" opacity="0"/></svg>')
+    return "".join(s)
+
+
 def route_legend(p: int) -> str:
     return (f'SUMMA mapping on a {p}&times;{p} grid. {_pill("A", "a")} panels broadcast '
             f'<strong>east</strong> along each row (injected at the west edge, '
@@ -282,12 +374,19 @@ def generated_meta(report: dict) -> str:
 def build_payload(report: dict, per_pe: list[float]) -> dict:
     """The embedded #viz-data JSON (single source of truth for the inline JS)."""
     m, f = report["dataflow_metrics"], report["fusion"]
+    tl = _tl_layout(max(m["critical_path_cycles"], 1))
     return {
-        "generated_by": "tools/polykernel-report/dataflow_viz.py (Todo 39 / Wave 7)",
+        "generated_by": "tools/polykernel-report/dataflow_viz.py "
+                        "(Todo 39 / Wave 7, polished by Todo 43 / Wave 8)",
         "simulator": report["simulator"], "sdk_analogs": report["sdk_analogs"],
         "input": report["input"],
         "grid": {"p": m["grid_p"], "active_pes": m["active_pes"],
                  "total_pes": m["total_pes"], "utilization_pct": m["utilization_pct"]},
+        # Grid px geometry (the inline JS re-derives cell centres to sweep the
+        # wavelet dots) + the timeline cycle->px map (the JS-swept playhead).
+        "geometry": {"cell": _CELL, "gap": _GAP, "margin": _MARGIN},
+        "tl_geo": {"left": tl["left"], "unit": tl["unit"], "y0": tl["top"] - 6,
+                   "y1": tl["ruler_y"], "cp": tl["cp"]},
         "tiles": {"m": m["tile_m"], "n": m["tile_n"], "k": m["tile_k"],
                   "steps": m["steps"], "representative_shape": m["representative_shape"]},
         "routes": {"a": "EAST", "b": "SOUTH",
@@ -326,6 +425,7 @@ def render_html(report: dict) -> str:
         "__TRAFFIC_HTML__": render_traffic(m),
         "__FUSION_HTML__": render_fusion(report["fusion"]),
         "__CRITICAL_HTML__": render_critical(m, p),
+        "__TIMELINE_SVG__": render_timeline_svg(m, p),
         "__VIZ_DATA__": json.dumps(build_payload(report, per_pe)),
     }
     html = _TEMPLATE.read_text()
@@ -335,7 +435,8 @@ def render_html(report: dict) -> str:
 
 
 def assert_self_contained(html: str) -> None:
-    """QA gate: no external refs (offline-safe) + all structural sections present."""
+    """QA gate: no external refs (offline-safe) + all structural sections present
+    + the Todo 43 interactive/animated/timeline markers survived into the HTML."""
     low = html.lower()
     hits = [t for t in _FORBIDDEN if t in low]
     if hits:
@@ -343,6 +444,9 @@ def assert_self_contained(html: str) -> None:
     missing = [i for i in _REQUIRED_IDS if f'id="{i}"' not in html]
     if missing:
         raise SystemExit(f"error: HTML missing required sections: {missing}")
+    missing_i = [t for t in _INTERACTIVE if t not in html]
+    if missing_i:
+        raise SystemExit(f"error: HTML missing interactive markers: {missing_i}")
     if "<svg" not in html:
         raise SystemExit("error: HTML has no rendered <svg> sections")
 

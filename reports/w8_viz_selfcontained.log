@@ -1,0 +1,64 @@
+===================================================================
+ T43 (Wave 8) dataflow HTML viz polish - SELF-CONTAINMENT proof
+ (interactive per-PE trace + animated wavelet routes + timeline)
+===================================================================
+target:   reports/dataflow_report.html
+command:  python3 tools/polykernel-report/dataflow_viz.py --backend=dataflow --viz examples/mlp_block.mlir
+date:     2026-07-27T18:30:01Z
+size:     41440 bytes
+
+--- [1] external-reference grep (MUST be zero matches) ---
+  grep -F 'http://' : 0 match(es)
+  grep -F 'https://' : 0 match(es)
+  grep -F '<script src' : 0 match(es)
+  grep -F '<link ' : 0 match(es)
+  grep -F 'xmlns' : 0 match(es)
+  grep -F 'xlink' : 0 match(es)
+  grep -F '@import' : 0 match(es)
+  grep -F 'url(http' : 0 match(es)
+  grep -F 'url(//' : 0 match(es)
+  grep -F 'cdn' : 0 match(es)
+  grep -F 'createElementNS' : 0 match(es)
+
+--- [2] inline-only asset inventory ---
+  inline <style> / <script> / viz-data JSON / <svg>: 1 / 1 / 1 / 3
+  external <script src=> / <link>: 0 / 0
+
+--- [3] interactive / animated / timeline markers (QA happy; MUST be >=1) ---
+  fabin_dsd              : 4
+  fabout_dsd             : 4
+  @activate              : 2
+  @unblock               : 2
+  CE FMAC                : 2
+  output-stationary      : 5
+  rendezvous             : 2
+  wv-a                   : 2
+  wv-b                   : 2
+  requestAnimationFrame  : 2
+  tl-playhead            : 2
+  peTrace                : 2
+  anim-toggle            : 2
+  anim-speed             : 3
+
+--- [4] structural sections (MUST each be 1) ---
+  id="viz-data": 1
+  id="pe-grid": 1
+  id="tile-routes": 1
+  id="sram-heatmap": 1
+  id="message-traffic": 1
+  id="fusion-savings": 1
+  id="critical-path": 1
+  id="critical-timeline": 1
+  id="route-controls": 1
+
+--- [5] offline render check ---
+  html.parser: parsed OK (331 start tags, 3 <svg>); no fetch required
+  embedded payload: parses OK (grid 4x4, tl_geo.cp=7 == critical_path.cycles=7)
+
+--- [6] gate negative-sanity (assert_self_contained rejects violations) ---
+  final HTML passes assert_self_contained
+  external <script src>: correctly rejected
+  missing interactive marker: correctly rejected
+
+RESULT: PASS - zero external references; interactive trace + animated routes +
+        critical-path timeline all present; fully self-contained, renders OFFLINE.
