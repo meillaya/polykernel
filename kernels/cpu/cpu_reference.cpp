@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <vector>
 
 namespace polykernel::cpu {
 
@@ -74,6 +75,33 @@ void launch_matmul_cpu(const uint16_t *a, const uint16_t *b, uint16_t *c,
       crow[j] = float_to_bf16(acc);
     }
   }
+}
+
+void launch_fused_rmsnorm_matmul_cpu(const uint16_t *input, const uint16_t *weight,
+                                     uint16_t *output, int64_t M, int64_t N,
+                                     int64_t K, float epsilon) {
+  // Compose the primitives exactly as golden fused_rmsnorm_matmul: rmsnorm over the
+  // last axis (K) -> bf16, then matmul with `weight`. The intermediate normalized
+  // tensor is bf16 (the golden rounds rmsnorm output before the matmul reads it), so
+  // this is bit-identical to running the two primitive refs in sequence.
+  std::vector<uint16_t> normed(static_cast<size_t>(M) * static_cast<size_t>(K));
+  launch_rmsnorm_cpu(input, nullptr, normed.data(), M, K, epsilon);
+  launch_matmul_cpu(normed.data(), weight, output, M, N, K);
+}
+
+void launch_fused_matmul_bias_gelu_cpu(const uint16_t *a, const uint16_t *b,
+                                       const uint16_t *bias, uint16_t *output,
+                                       int64_t M, int64_t N, int64_t K) {
+  // Compose the primitives exactly as golden fused_matmul_bias_gelu: matmul -> bf16,
+  // bias (per-column add) -> bf16, gelu -> bf16. matmul + gelu reuse the primitive
+  // refs; the bias step matches golden.bias (_bf(_f32(_bf(x)) + _f32(_bf(b)))).
+  std::vector<uint16_t> mm(static_cast<size_t>(M) * static_cast<size_t>(N));
+  launch_matmul_cpu(a, b, mm.data(), M, N, K);
+  for (int64_t i = 0; i < M; ++i)
+    for (int64_t j = 0; j < N; ++j)
+      mm[i * N + j] =
+          float_to_bf16(bf16_to_float(mm[i * N + j]) + bf16_to_float(bias[j]));
+  launch_gelu_cpu(mm.data(), output, M * N);
 }
 
 void launch_softmax_cpu(const uint16_t *input, uint16_t *output, int64_t rows,

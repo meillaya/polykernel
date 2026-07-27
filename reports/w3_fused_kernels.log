@@ -1,0 +1,197 @@
+##############################################################################
+# PolyKernel Todo 14 (Wave 3): two flagship FUSED CUDA kernels + CPU refs +
+# --lower-to-cuda emitters + golden validation — QA log (HAPPY PATH)
+# Host: Linux 7.1.4-1-cachyos x86_64  Date: 2026-07-27T05:27:04Z
+# nvcc: Cuda compilation tools, release 12.6, V12.6.85
+##############################################################################
+
+=== STEP 0: reconfigure (CMakeLists + LowerToCuda changed) + build ===
+configure exit: 0   (Configuring done / Generating done / Build files written)
+build exit: 0       (19/19 targets: +cpu_ref_fused_rmsnorm_matmul,
+                     +cpu_ref_fused_matmul_bias_gelu, LowerToCuda.cpp recompiled,
+                     polykernel-opt relinked)
+
+=== STEP 1: polykernel-opt --lower-to-cuda emits both fused .cu (byte-identical) ===
+--- input IR (both fused ops) ---
+polykernel.func @fused_both(%x: tensor<128x128xbf16>, %w: tensor<128x128xbf16>,
+                            %a: tensor<128x128xbf16>, %b: tensor<128x128xbf16>,
+                            %bias: tensor<128xbf16>) -> tensor<128x128xbf16> {
+  %0 = polykernel.fused_rmsnorm_matmul %x, %w {epsilon = 1.0e-05 : f32}
+      : tensor<128x128xbf16>, tensor<128x128xbf16> -> tensor<128x128xbf16>
+  %1 = polykernel.fused_matmul_bias_gelu %a, %b, %bias
+      : tensor<128x128xbf16>, tensor<128x128xbf16>, tensor<128xbf16> -> tensor<128x128xbf16>
+  %2 = polykernel.add %0, %1 : tensor<128x128xbf16>
+  polykernel.return %2 : tensor<128x128xbf16>
+}
+--- run: --lower-to-cuda=output-dir=/tmp/opencode/emitted ---
+polykernel-opt exit: 0
+-rw-r--r-- 1 mei mei 5434 Jul 27 01:27 fused_matmul_bias_gelu.cu
+-rw-r--r-- 1 mei mei 5939 Jul 27 01:27 fused_rmsnorm_matmul.cu
+--- emitter output is byte-identical to the standalone deliverable .cu ---
+fused_rmsnorm_matmul.cu: emitter == standalone (IDENTICAL)
+fused_matmul_bias_gelu.cu: emitter == standalone (IDENTICAL)
+
+=== STEP 2: nvcc_driver.py --kernel fused_rmsnorm_matmul --arch sm_80,sm_90 --ptx ===
+kernel: kernels/generated/fused_rmsnorm_matmul.cu
+archs:  sm_80, sm_90
+nvcc:   /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/nvcc
+ptxas:  /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/ptxas
+========================================================================
+[nvcc] /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/nvcc -arch=sm_80 -DPOLYKERNEL_CUDA -Ikernels/template --ptx kernels/generated/fused_rmsnorm_matmul.cu -o build/nvcc/fused_rmsnorm_matmul_sm_80.ptx
+[ptxas] /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/ptxas -v -arch=sm_80 build/nvcc/fused_rmsnorm_matmul_sm_80.ptx -o build/nvcc/fused_rmsnorm_matmul_sm_80.cubin
+--- ptxas -v (sm_80) ---
+  ptxas info    : 0 bytes gmem
+  ptxas info    : Compiling entry function '_ZN56_GLOBAL__N__dbbf92a5_23_fused_rmsnorm_matmul_cu_0d22ae8827fused_rmsnorm_matmul_kernelEPK13__nv_bfloat16S2_PS0_iiif' for 'sm_80'
+  ptxas info    : Function properties for _ZN56_GLOBAL__N__dbbf92a5_23_fused_rmsnorm_matmul_cu_0d22ae8827fused_rmsnorm_matmul_kernelEPK13__nv_bfloat16S2_PS0_iiif
+  ptxas info    : Used 31 registers, used 1 barriers, 1024 bytes smem, 392 bytes cmem[0]
+  [parsed] registers=31 smem=1024B spill_stores=0B spill_loads=0B stack=0B cmem0=392B
+  PTX: build/nvcc/fused_rmsnorm_matmul_sm_80.ptx
+========================================================================
+[nvcc] /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/nvcc -arch=sm_90 -DPOLYKERNEL_CUDA -Ikernels/template --ptx kernels/generated/fused_rmsnorm_matmul.cu -o build/nvcc/fused_rmsnorm_matmul_sm_90.ptx
+[ptxas] /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/ptxas -v -arch=sm_90 build/nvcc/fused_rmsnorm_matmul_sm_90.ptx -o build/nvcc/fused_rmsnorm_matmul_sm_90.cubin
+--- ptxas -v (sm_90) ---
+  ptxas info    : 0 bytes gmem
+  ptxas info    : Compiling entry function '_ZN56_GLOBAL__N__dbbf92a5_23_fused_rmsnorm_matmul_cu_0d22ae8827fused_rmsnorm_matmul_kernelEPK13__nv_bfloat16S2_PS0_iiif' for 'sm_90'
+  ptxas info    : Function properties for _ZN56_GLOBAL__N__dbbf92a5_23_fused_rmsnorm_matmul_cu_0d22ae8827fused_rmsnorm_matmul_kernelEPK13__nv_bfloat16S2_PS0_iiif
+  ptxas info    : Used 31 registers, used 1 barriers, 1024 bytes smem
+  [parsed] registers=31 smem=1024B spill_stores=0B spill_loads=0B stack=0B cmem0=0B
+  PTX: build/nvcc/fused_rmsnorm_matmul_sm_90.ptx
+========================================================================
+OK: compiled fused_rmsnorm_matmul for sm_80, sm_90; PTX emitted.
+fused_rmsnorm_matmul nvcc_driver exit: 0
+
+=== STEP 3: nvcc_driver.py --kernel fused_matmul_bias_gelu --arch sm_80,sm_90 --ptx ===
+kernel: kernels/generated/fused_matmul_bias_gelu.cu
+archs:  sm_80, sm_90
+nvcc:   /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/nvcc
+ptxas:  /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/ptxas
+========================================================================
+[nvcc] /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/nvcc -arch=sm_80 -DPOLYKERNEL_CUDA -Ikernels/template --ptx kernels/generated/fused_matmul_bias_gelu.cu -o build/nvcc/fused_matmul_bias_gelu_sm_80.ptx
+[ptxas] /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/ptxas -v -arch=sm_80 build/nvcc/fused_matmul_bias_gelu_sm_80.ptx -o build/nvcc/fused_matmul_bias_gelu_sm_80.cubin
+--- ptxas -v (sm_80) ---
+  ptxas info    : 0 bytes gmem
+  ptxas info    : Compiling entry function '_ZN58_GLOBAL__N__37386240_25_fused_matmul_bias_gelu_cu_dcdf3e6329fused_matmul_bias_gelu_kernelEPK13__nv_bfloat16S2_S2_PS0_iii' for 'sm_80'
+  ptxas info    : Function properties for _ZN58_GLOBAL__N__37386240_25_fused_matmul_bias_gelu_cu_dcdf3e6329fused_matmul_bias_gelu_kernelEPK13__nv_bfloat16S2_S2_PS0_iii
+  ptxas info    : Used 31 registers, used 1 barriers, 1024 bytes smem, 396 bytes cmem[0]
+  [parsed] registers=31 smem=1024B spill_stores=0B spill_loads=0B stack=0B cmem0=396B
+  PTX: build/nvcc/fused_matmul_bias_gelu_sm_80.ptx
+========================================================================
+[nvcc] /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/nvcc -arch=sm_90 -DPOLYKERNEL_CUDA -Ikernels/template --ptx kernels/generated/fused_matmul_bias_gelu.cu -o build/nvcc/fused_matmul_bias_gelu_sm_90.ptx
+[ptxas] /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/ptxas -v -arch=sm_90 build/nvcc/fused_matmul_bias_gelu_sm_90.ptx -o build/nvcc/fused_matmul_bias_gelu_sm_90.cubin
+--- ptxas -v (sm_90) ---
+  ptxas info    : 0 bytes gmem
+  ptxas info    : Compiling entry function '_ZN58_GLOBAL__N__37386240_25_fused_matmul_bias_gelu_cu_dcdf3e6329fused_matmul_bias_gelu_kernelEPK13__nv_bfloat16S2_S2_PS0_iii' for 'sm_90'
+  ptxas info    : Function properties for _ZN58_GLOBAL__N__37386240_25_fused_matmul_bias_gelu_cu_dcdf3e6329fused_matmul_bias_gelu_kernelEPK13__nv_bfloat16S2_S2_PS0_iii
+  ptxas info    : Used 32 registers, used 1 barriers, 1024 bytes smem
+  [parsed] registers=32 smem=1024B spill_stores=0B spill_loads=0B stack=0B cmem0=0B
+  PTX: build/nvcc/fused_matmul_bias_gelu_sm_90.ptx
+========================================================================
+OK: compiled fused_matmul_bias_gelu for sm_80, sm_90; PTX emitted.
+fused_matmul_bias_gelu nvcc_driver exit: 0
+
+=== STEP 4: pytest tests/kernels/ -v (RUN 1 — fused + all prior) ===
+============================= test session starts ==============================
+platform linux -- Python 3.14.6, pytest-9.0.3, pluggy-1.6.0 -- /nix/store/jxyrvv4gbpnp3ap5iy7wxwl1sg4x2x88-python3-3.14.6/bin/python
+cachedir: .pytest_cache
+rootdir: /home/mei/projects/polykernel
+collecting ... collected 26 items
+
+tests/kernels/test_cpu_ref.py::test_rmsnorm_no_weight_small PASSED       [  3%]
+tests/kernels/test_cpu_ref.py::test_rmsnorm_with_weight PASSED           [  7%]
+tests/kernels/test_cpu_ref.py::test_rmsnorm_odd_cols PASSED              [ 11%]
+tests/kernels/test_cpu_ref.py::test_rmsnorm_3d_flattens_leading_dims PASSED [ 15%]
+tests/kernels/test_cpu_ref.py::test_rmsnorm_custom_epsilon PASSED        [ 19%]
+tests/kernels/test_cpu_ref.py::test_rmsnorm_large_canonical_shape PASSED [ 23%]
+tests/kernels/test_cpu_ref_activations.py::test_gelu_small PASSED        [ 26%]
+tests/kernels/test_cpu_ref_activations.py::test_gelu_odd_length PASSED   [ 30%]
+tests/kernels/test_cpu_ref_activations.py::test_gelu_canonical_shape PASSED [ 34%]
+tests/kernels/test_cpu_ref_activations.py::test_silu_small PASSED        [ 38%]
+tests/kernels/test_cpu_ref_activations.py::test_silu_odd_length PASSED   [ 42%]
+tests/kernels/test_cpu_ref_activations.py::test_silu_canonical_shape PASSED [ 46%]
+tests/kernels/test_cpu_ref_fused.py::test_fused_rmsnorm_matmul_square PASSED [ 50%]
+tests/kernels/test_cpu_ref_fused.py::test_fused_rmsnorm_matmul_non_tile_multiple PASSED [ 53%]
+tests/kernels/test_cpu_ref_fused.py::test_fused_rmsnorm_matmul_custom_epsilon PASSED [ 57%]
+tests/kernels/test_cpu_ref_fused.py::test_fused_rmsnorm_matmul_batched PASSED [ 61%]
+tests/kernels/test_cpu_ref_fused.py::test_fused_matmul_bias_gelu_square PASSED [ 65%]
+tests/kernels/test_cpu_ref_fused.py::test_fused_matmul_bias_gelu_non_tile_multiple PASSED [ 69%]
+tests/kernels/test_cpu_ref_fused.py::test_fused_matmul_bias_gelu_batched PASSED [ 73%]
+tests/kernels/test_cpu_ref_matmul_softmax.py::test_matmul_square PASSED  [ 76%]
+tests/kernels/test_cpu_ref_matmul_softmax.py::test_matmul_rectangular PASSED [ 80%]
+tests/kernels/test_cpu_ref_matmul_softmax.py::test_matmul_non_tile_multiple PASSED [ 84%]
+tests/kernels/test_cpu_ref_matmul_softmax.py::test_matmul_batched_flattens_leading_dims PASSED [ 88%]
+tests/kernels/test_cpu_ref_matmul_softmax.py::test_softmax_tokens_vocab PASSED [ 92%]
+tests/kernels/test_cpu_ref_matmul_softmax.py::test_softmax_odd_last_dim PASSED [ 96%]
+tests/kernels/test_cpu_ref_matmul_softmax.py::test_softmax_3d_flattens_leading_dims PASSED [100%]
+
+============================== 26 passed in 2.63s ==============================
+run1 exit: 0
+
+=== STEP 4b: pytest tests/kernels/ -v (RUN 2 — determinism / flaky-tests class) ===
+============================= test session starts ==============================
+platform linux -- Python 3.14.6, pytest-9.0.3, pluggy-1.6.0 -- /nix/store/jxyrvv4gbpnp3ap5iy7wxwl1sg4x2x88-python3-3.14.6/bin/python
+cachedir: .pytest_cache
+rootdir: /home/mei/projects/polykernel
+collecting ... collected 26 items
+
+tests/kernels/test_cpu_ref.py::test_rmsnorm_no_weight_small PASSED       [  3%]
+tests/kernels/test_cpu_ref.py::test_rmsnorm_with_weight PASSED           [  7%]
+tests/kernels/test_cpu_ref.py::test_rmsnorm_odd_cols PASSED              [ 11%]
+tests/kernels/test_cpu_ref.py::test_rmsnorm_3d_flattens_leading_dims PASSED [ 15%]
+tests/kernels/test_cpu_ref.py::test_rmsnorm_custom_epsilon PASSED        [ 19%]
+tests/kernels/test_cpu_ref.py::test_rmsnorm_large_canonical_shape PASSED [ 23%]
+tests/kernels/test_cpu_ref_activations.py::test_gelu_small PASSED        [ 26%]
+tests/kernels/test_cpu_ref_activations.py::test_gelu_odd_length PASSED   [ 30%]
+tests/kernels/test_cpu_ref_activations.py::test_gelu_canonical_shape PASSED [ 34%]
+tests/kernels/test_cpu_ref_activations.py::test_silu_small PASSED        [ 38%]
+tests/kernels/test_cpu_ref_activations.py::test_silu_odd_length PASSED   [ 42%]
+tests/kernels/test_cpu_ref_activations.py::test_silu_canonical_shape PASSED [ 46%]
+tests/kernels/test_cpu_ref_fused.py::test_fused_rmsnorm_matmul_square PASSED [ 50%]
+tests/kernels/test_cpu_ref_fused.py::test_fused_rmsnorm_matmul_non_tile_multiple PASSED [ 53%]
+tests/kernels/test_cpu_ref_fused.py::test_fused_rmsnorm_matmul_custom_epsilon PASSED [ 57%]
+tests/kernels/test_cpu_ref_fused.py::test_fused_rmsnorm_matmul_batched PASSED [ 61%]
+tests/kernels/test_cpu_ref_fused.py::test_fused_matmul_bias_gelu_square PASSED [ 65%]
+tests/kernels/test_cpu_ref_fused.py::test_fused_matmul_bias_gelu_non_tile_multiple PASSED [ 69%]
+tests/kernels/test_cpu_ref_fused.py::test_fused_matmul_bias_gelu_batched PASSED [ 73%]
+tests/kernels/test_cpu_ref_matmul_softmax.py::test_matmul_square PASSED  [ 76%]
+tests/kernels/test_cpu_ref_matmul_softmax.py::test_matmul_rectangular PASSED [ 80%]
+tests/kernels/test_cpu_ref_matmul_softmax.py::test_matmul_non_tile_multiple PASSED [ 84%]
+tests/kernels/test_cpu_ref_matmul_softmax.py::test_matmul_batched_flattens_leading_dims PASSED [ 88%]
+tests/kernels/test_cpu_ref_matmul_softmax.py::test_softmax_tokens_vocab PASSED [ 92%]
+tests/kernels/test_cpu_ref_matmul_softmax.py::test_softmax_odd_last_dim PASSED [ 96%]
+tests/kernels/test_cpu_ref_matmul_softmax.py::test_softmax_3d_flattens_leading_dims PASSED [100%]
+
+============================== 26 passed in 2.60s ==============================
+run2 exit: 0
+
+=== STEP 5: bit-exact / max_rel_err calibration (measured, fixed seed) ===
+fused_rmsnorm_matmul (composes rmsnorm+matmul reductions):
+  square  [128,128]@[128,128]      bit-exact=0.99921 cos=1.0 pcc=1.0 maxrel=1.70e-2 (1/16384 elem)
+  non_tile[130,65]@[65,127]        bit-exact=1.00000 cos=1.0 pcc=1.0 maxrel=0
+  cust_eps[64,128]@[128,64] e=1e-6 bit-exact=1.00000 cos=1.0 pcc=1.0 maxrel=0
+  batched [2,64,128]@[128,64]      bit-exact=0.99902 cos=1.0 pcc=1.0 maxrel=2.27e-2 (1/8192 elem)
+  -> test floor: bit-exact>0.99, cos>=0.999, pcc>=0.99, maxrel<=5e-2 (fused ceiling; see test docstring)
+fused_matmul_bias_gelu (matmul ikj + fp64 erf match golden exactly):
+  square / non_tile / batched      bit-exact=1.00000 cos=1.0 pcc=1.0 maxrel=0  -> passes FULL assert_correct
+
+=== STEP 6: composition correctness proof ===
+  golden fused == golden(matmul(rmsnorm(x),w))            : True
+  fused CPU-ref driver == cpu_ref_rmsnorm -> cpu_ref_matmul: True (bit-for-bit)
+  (fused_matmul_bias_gelu driver == cpu_ref_matmul -> bias -> cpu_ref_gelu; bit-exact vs golden)
+
+=== STEP 7: FAILURE PATH (see reports/w3_fused_kernels_fail.log) ===
+  Deliberate bug: gelu BEFORE bias (wrong epilogue order) in launch_fused_matmul_bias_gelu_cpu.
+  Result: 3 fused_matmul_bias_gelu tests FAIL assert_correct,
+          cosine=0.987 (<0.999), max_rel_err=9.96e+05 (>>1e-2), pcc=0.982 (<0.99).
+  Bug reverted; correct CPU ref restored; 7/7 fused tests green again (verified).
+
+=== ADVERSARIAL CLASSES ===
+  misleading_success_output: REAL nvcc exit 0 + ptxas -v pasted (STEP 2/3); REAL pytest
+                             26 passed (STEP 4); CPU-ref-matches-golden proven by passing
+                             tests + STEP 6 composition proof, not asserted blindly.
+  stale_state:               reconfigured (configure exit 0) after CMakeLists + LowerToCuda
+                             change; full rebuild 19/19 (STEP 0).
+  hung_or_long:              nvcc under driver 180s/tool timeout; CPU-ref matmul shapes kept
+                             <= [2,64,128]@[128,64]; whole suite 2.6s.
+  flaky_tests:               fixed seed 0xC0FFEE; suite run TWICE, both 26 passed (STEP 4/4b).
+  dirty_worktree:            only deliverable .cu/.cpp/.h/.td-wire/test/report files touched
+                             (git status below); .codegraph/.omo untouched.

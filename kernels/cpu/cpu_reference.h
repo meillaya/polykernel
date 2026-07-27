@@ -110,6 +110,37 @@ void launch_matmul_cpu(const uint16_t *a, const uint16_t *b, uint16_t *c,
                        int64_t M, int64_t N, int64_t K);
 
 //===----------------------------------------------------------------------===//
+// Fused RMSNorm + MatMul CPU reference.
+//===----------------------------------------------------------------------===//
+//
+// Fused PROLOGUE: out[M,N] = matmul(rmsnorm(input, eps), weight). Composes the
+// primitive references EXACTLY as the golden (fused_rmsnorm_matmul = matmul(
+// rmsnorm(x, None, eps), w)): rmsnorm over the last axis of `input` (the matmul
+// contraction K), then matmul with `weight` [K,N]. `input` is [M,K] row-major bf16
+// (leading batch dims flattened into M by the caller), `weight` is [K,N], `output`
+// is [M,N]. The rmsnorm has no per-feature scale (golden weight=None). Each stage
+// rounds to bf16 as the golden does, so this is bit-identical to running the two
+// primitive refs in sequence.
+void launch_fused_rmsnorm_matmul_cpu(const uint16_t *input, const uint16_t *weight,
+                                     uint16_t *output, int64_t M, int64_t N,
+                                     int64_t K, float epsilon);
+
+//===----------------------------------------------------------------------===//
+// Fused MatMul + Bias + GELU CPU reference.
+//===----------------------------------------------------------------------===//
+//
+// Fused EPILOGUE: out[M,N] = gelu(bias(matmul(a, b), bias)). Composes the primitive
+// references EXACTLY as the golden (fused_matmul_bias_gelu = gelu(bias(matmul(x,w),
+// b))): matmul a[M,K] @ b[K,N], add the per-column bias[N], then exact erf GELU.
+// `a`/`b`/`bias`/`output` are bf16 (raw uint16 bits); `a` is [M,K] (leading batch
+// dims flattened into M), `b` is [K,N], `bias` is [N], `output` is [M,N]. Each stage
+// rounds to bf16 as the golden does, so this is bit-identical to running matmul ->
+// bias -> gelu in sequence.
+void launch_fused_matmul_bias_gelu_cpu(const uint16_t *a, const uint16_t *b,
+                                       const uint16_t *bias, uint16_t *output,
+                                       int64_t M, int64_t N, int64_t K);
+
+//===----------------------------------------------------------------------===//
 // Softmax CPU reference.
 //===----------------------------------------------------------------------===//
 //

@@ -16,6 +16,10 @@
 #   - cpu_ref_silu:     driver exe (reads input.npy, writes SiLU output.npy).
 #   - cpu_ref_matmul:   driver exe (reads A.npy + B.npy, writes C = A @ B).
 #   - cpu_ref_softmax:  driver exe (reads input.npy, writes stable softmax).
+#   - cpu_ref_fused_rmsnorm_matmul:  driver exe (reads INPUT.npy + WEIGHT.npy,
+#                       writes matmul(rmsnorm(x, eps), w); Todo 14 / Wave 3).
+#   - cpu_ref_fused_matmul_bias_gelu: driver exe (reads A.npy + B.npy + BIAS.npy,
+#                       writes gelu(matmul(a, b) + bias); Todo 14 / Wave 3).
 
 add_library(cpu_reference STATIC
   cpu/cpu_reference.cpp
@@ -38,3 +42,9 @@ target_link_libraries(cpu_ref_matmul PRIVATE cpu_reference)
 
 add_executable(cpu_ref_softmax cpu/cpu_ref_softmax.cpp)
 target_link_libraries(cpu_ref_softmax PRIVATE cpu_reference)
+
+add_executable(cpu_ref_fused_rmsnorm_matmul cpu/cpu_ref_fused_rmsnorm_matmul.cpp)
+target_link_libraries(cpu_ref_fused_rmsnorm_matmul PRIVATE cpu_reference)
+
+add_executable(cpu_ref_fused_matmul_bias_gelu cpu/cpu_ref_fused_matmul_bias_gelu.cpp)
+target_link_libraries(cpu_ref_fused_matmul_bias_gelu PRIVATE cpu_reference)

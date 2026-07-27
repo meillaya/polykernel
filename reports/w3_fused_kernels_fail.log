@@ -1,0 +1,177 @@
+##############################################################################
+# PolyKernel Todo 14 (Wave 3): fused CPU-ref FAILURE PATH
+# Proves the fused tests are NOT a tautology: a deliberately broken fused CPU
+# ref (WRONG epilogue order — gelu BEFORE bias; golden is gelu(bias(matmul)))
+# fails the golden comparison. Date: 2026-07-27T05:35:19Z
+##############################################################################
+
+=== Deliberate bug injected into launch_fused_matmul_bias_gelu_cpu ===
+--- diff (correct -> broken) ---
+99a100,102
+>   // BROKEN (deliberate, for QA failure path): gelu BEFORE bias (wrong epilogue
+>   // order; golden is gelu(bias(matmul))).
+>   launch_gelu_cpu(mm.data(), output, M * N);
+102,104c105,106
+<       mm[i * N + j] =
+<           float_to_bf16(bf16_to_float(mm[i * N + j]) + bf16_to_float(bias[j]));
+<   launch_gelu_cpu(mm.data(), output, M * N);
+---
+>       output[i * N + j] =
+>           float_to_bf16(bf16_to_float(output[i * N + j]) + bf16_to_float(bias[j]));
+
+=== pytest test_fused_matmul_bias_gelu (expect FAIL: assert_correct mismatch) ===
+============================= test session starts ==============================
+platform linux -- Python 3.14.6, pytest-9.0.3, pluggy-1.6.0 -- /nix/store/jxyrvv4gbpnp3ap5iy7wxwl1sg4x2x88-python3-3.14.6/bin/python
+cachedir: .pytest_cache
+rootdir: /home/mei/projects/polykernel
+collecting ... collected 7 items / 4 deselected / 3 selected
+
+tests/kernels/test_cpu_ref_fused.py::test_fused_matmul_bias_gelu_square FAILED [ 33%]
+tests/kernels/test_cpu_ref_fused.py::test_fused_matmul_bias_gelu_non_tile_multiple FAILED [ 66%]
+tests/kernels/test_cpu_ref_fused.py::test_fused_matmul_bias_gelu_batched FAILED [100%]
+
+=================================== FAILURES ===================================
+______________________ test_fused_matmul_bias_gelu_square ______________________
+
+run_fused_matmul_bias_gelu = <function run_fused_matmul_bias_gelu.<locals>._run at 0x7fff64004d50>
+rand_bf16 = <function rand_bf16.<locals>._make at 0x7fff64005170>
+
+    def test_fused_matmul_bias_gelu_square(run_fused_matmul_bias_gelu, rand_bf16):
+        # [M,N,K] = [128,128,128]: clean tile-multiple square; bias[N=128] + GELU.
+        a = rand_bf16((128, 128))
+        b = rand_bf16((128, 128))
+        bias = rand_bf16((128,))
+        out = run_fused_matmul_bias_gelu(a, b, bias)
+        ref = G.fused_matmul_bias_gelu(a, b, bias)
+>       assert_correct(out, ref)  # full single-op contract (bit-exact -> passes)
+        ^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/kernels/test_cpu_ref_fused.py:140: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = array([[3.90625, 4.75, 4, ..., 1.04688, -0.183594, 0.200195],
+       [1.53125, -0.898438, 3.375, ..., 2.89062, -0.1679...0195],
+       [0.949219, -0.84375, 0.617188, ..., 0.816406, 0.5625, -0.34375]],
+      shape=(128, 128), dtype=bfloat16)
+ref = array([[3.90625, 4.75, 4, ..., 0.960938, -0.0356445, 0.233398],
+       [1.625, -0, 3.39062, ..., 2.9375, -0.0844727, -...
+       [0.851562, -0.169922, -0.164062, ..., -0.020752, 0.5625,
+        -0.166992]], shape=(128, 128), dtype=bfloat16)
+
+    def assert_correct(actual: np.ndarray, ref: np.ndarray) -> None:
+        """Assert `actual` matches `ref` within ALL pinned thresholds.
+    
+        Raises AssertionError printing cosine / max_rel_err / pcc on failure.
+        """
+        c = cosine(actual, ref)
+        r = max_rel_err(actual, ref)
+        p = pcc(actual, ref)
+        ok = (c >= COSINE_THRESHOLD) and (r <= MAX_REL_ERR_THRESHOLD) and (p >= PCC_THRESHOLD)
+        if not ok:
+>           raise AssertionError(
+                "golden assert_correct FAILED: "
+                f"cosine={c:.6f} (need >= {COSINE_THRESHOLD}), "
+                f"max_rel_err={r:.6e} (need <= {MAX_REL_ERR_THRESHOLD:.0e}), "
+                f"pcc={p:.6f} (need >= {PCC_THRESHOLD})"
+            )
+E           AssertionError: golden assert_correct FAILED: cosine=0.987498 (need >= 0.999), max_rel_err=9.960938e+05 (need <= 1e-02), pcc=0.982793 (need >= 0.99)
+
+tests/golden/metrics.py:72: AssertionError
+________________ test_fused_matmul_bias_gelu_non_tile_multiple _________________
+
+run_fused_matmul_bias_gelu = <function run_fused_matmul_bias_gelu.<locals>._run at 0x7fff641c0d50>
+rand_bf16 = <function rand_bf16.<locals>._make at 0x7fff641c3d70>
+
+    def test_fused_matmul_bias_gelu_non_tile_multiple(run_fused_matmul_bias_gelu, rand_bf16):
+        # [M,N,K] = [130,127,65]: non-tile-multiple M/N/K -> exercises the CUDA
+        # kernel's matmul bounds checks + the per-column bias on an odd N (=127).
+        a = rand_bf16((130, 65))
+        b = rand_bf16((65, 127))
+        bias = rand_bf16((127,))
+        out = run_fused_matmul_bias_gelu(a, b, bias)
+        ref = G.fused_matmul_bias_gelu(a, b, bias)
+>       assert_correct(out, ref)
+
+tests/kernels/test_cpu_ref_fused.py:152: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = array([[-0.163086, 6.1875, 3.65625, ..., 3.04688, 0.496094, 6.65625],
+       [3.01562, 0.789062, 0.050293, ..., -0.742...02344],
+       [-0.269531, 4.0625, -0.0791016, ..., 3.21875, 6.125, 0.496094]],
+      shape=(130, 127), dtype=bfloat16)
+ref = array([[-0.0284424, 6.1875, 3.65625, ..., 3.04688, -0.000858307, 6.65625],
+       [3.01562, 0.6875, -0.000232697, ...,....129883],
+       [-0.12793, 4.0625, -0.135742, ..., 3.21875, 6.125, 0.492188]],
+      shape=(130, 127), dtype=bfloat16)
+
+    def assert_correct(actual: np.ndarray, ref: np.ndarray) -> None:
+        """Assert `actual` matches `ref` within ALL pinned thresholds.
+    
+        Raises AssertionError printing cosine / max_rel_err / pcc on failure.
+        """
+        c = cosine(actual, ref)
+        r = max_rel_err(actual, ref)
+        p = pcc(actual, ref)
+        ok = (c >= COSINE_THRESHOLD) and (r <= MAX_REL_ERR_THRESHOLD) and (p >= PCC_THRESHOLD)
+        if not ok:
+>           raise AssertionError(
+                "golden assert_correct FAILED: "
+                f"cosine={c:.6f} (need >= {COSINE_THRESHOLD}), "
+                f"max_rel_err={r:.6e} (need <= {MAX_REL_ERR_THRESHOLD:.0e}), "
+                f"pcc={p:.6f} (need >= {PCC_THRESHOLD})"
+            )
+E           AssertionError: golden assert_correct FAILED: cosine=0.978297 (need >= 0.999), max_rel_err=9.960938e+05 (need <= 1e-02), pcc=0.971170 (need >= 0.99)
+
+tests/golden/metrics.py:72: AssertionError
+_____________________ test_fused_matmul_bias_gelu_batched ______________________
+
+run_fused_matmul_bias_gelu = <function run_fused_matmul_bias_gelu.<locals>._run at 0x7fff641c3cc0>
+rand_bf16 = <function rand_bf16.<locals>._make at 0x7fff641c3950>
+
+    def test_fused_matmul_bias_gelu_batched(run_fused_matmul_bias_gelu, rand_bf16):
+        # Batched [2,64,128] @ [128,64] + bias[64] -> [2,64,64]: leading batch flattens
+        # into M; bias broadcasts over the output columns, matching the golden.
+        a = rand_bf16((2, 64, 128))
+        b = rand_bf16((128, 64))
+        bias = rand_bf16((64,))
+        out = run_fused_matmul_bias_gelu(a, b, bias)
+        ref = G.fused_matmul_bias_gelu(a, b, bias)
+>       assert_correct(out, ref)
+
+tests/kernels/test_cpu_ref_fused.py:164: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+actual = array([[[4.71875, 6.15625, 8.125, ..., 0.671875, 0.335938, -0.875],
+        [0.402344, -0.458984, 0.484375, ..., 2.031...],
+        [0.349609, -0.273438, 5.34375, ..., 3.85938, -0.208008, 2.03125]]],
+      shape=(2, 64, 64), dtype=bfloat16)
+ref = array([[[4.71875, 6.15625, 8.125, ..., 0.0139771, 0.349609,
+         -1.90735e-06],
+        [0.298828, -0, -0.0524902,...  [-0.00753784, -0.0693359, 5.34375, ..., 3.85938, -3.1665e-07,
+         1.99219]]], shape=(2, 64, 64), dtype=bfloat16)
+
+    def assert_correct(actual: np.ndarray, ref: np.ndarray) -> None:
+        """Assert `actual` matches `ref` within ALL pinned thresholds.
+    
+        Raises AssertionError printing cosine / max_rel_err / pcc on failure.
+        """
+        c = cosine(actual, ref)
+        r = max_rel_err(actual, ref)
+        p = pcc(actual, ref)
+        ok = (c >= COSINE_THRESHOLD) and (r <= MAX_REL_ERR_THRESHOLD) and (p >= PCC_THRESHOLD)
+        if not ok:
+>           raise AssertionError(
+                "golden assert_correct FAILED: "
+                f"cosine={c:.6f} (need >= {COSINE_THRESHOLD}), "
+                f"max_rel_err={r:.6e} (need <= {MAX_REL_ERR_THRESHOLD:.0e}), "
+                f"pcc={p:.6f} (need >= {PCC_THRESHOLD})"
+            )
+E           AssertionError: golden assert_correct FAILED: cosine=0.988979 (need >= 0.999), max_rel_err=9.960938e+05 (need <= 1e-02), pcc=0.985102 (need >= 0.99)
+
+tests/golden/metrics.py:72: AssertionError
+=========================== short test summary info ============================
+FAILED tests/kernels/test_cpu_ref_fused.py::test_fused_matmul_bias_gelu_square
+FAILED tests/kernels/test_cpu_ref_fused.py::test_fused_matmul_bias_gelu_non_tile_multiple
+FAILED tests/kernels/test_cpu_ref_fused.py::test_fused_matmul_bias_gelu_batched
+======================= 3 failed, 4 deselected in 0.08s ========================
+broken-test exit: 1

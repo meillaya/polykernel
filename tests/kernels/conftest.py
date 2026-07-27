@@ -185,3 +185,69 @@ def run_softmax(tmp_path: Path):
         return np.load(out_path).view(ml_dtypes.bfloat16)
 
     return _run
+
+
+# Fused CPU-ref drivers (Todo 14 / Wave 3): compose the primitive refs exactly as
+# the golden's fused functions do.
+CPU_REF_FUSED_RMSNORM_MATMUL_EXE = (
+    _PROJECT_ROOT / "build" / "kernels" / "cpu_ref_fused_rmsnorm_matmul"
+)
+CPU_REF_FUSED_MATMUL_BIAS_GELU_EXE = (
+    _PROJECT_ROOT / "build" / "kernels" / "cpu_ref_fused_matmul_bias_gelu"
+)
+
+
+@pytest.fixture
+def run_fused_rmsnorm_matmul(tmp_path: Path):
+    """Drive the CPU-ref fused RMSNorm+MatMul; return bf16 matmul(rmsnorm(x), w)."""
+    exe = _require_exe(CPU_REF_FUSED_RMSNORM_MATMUL_EXE)
+
+    def _run(x: np.ndarray, w: np.ndarray, eps: float = 1e-5) -> np.ndarray:
+        x_path = tmp_path / "x.npy"
+        w_path = tmp_path / "w.npy"
+        out_path = tmp_path / "out.npy"
+        np.save(x_path, x)
+        np.save(w_path, w)
+        proc = subprocess.run(
+            [str(exe), str(x_path), str(w_path), str(out_path), "--epsilon", repr(eps)],
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+        if proc.returncode != 0:
+            raise RuntimeError(
+                f"cpu_ref_fused_rmsnorm_matmul failed (exit {proc.returncode}):"
+                f"\n{proc.stderr}"
+            )
+        return np.load(out_path).view(ml_dtypes.bfloat16)
+
+    return _run
+
+
+@pytest.fixture
+def run_fused_matmul_bias_gelu(tmp_path: Path):
+    """Drive the CPU-ref fused MatMul+Bias+GELU; return bf16 gelu(matmul(a,b)+bias)."""
+    exe = _require_exe(CPU_REF_FUSED_MATMUL_BIAS_GELU_EXE)
+
+    def _run(a: np.ndarray, b: np.ndarray, bias: np.ndarray) -> np.ndarray:
+        a_path = tmp_path / "a.npy"
+        b_path = tmp_path / "b.npy"
+        bias_path = tmp_path / "bias.npy"
+        out_path = tmp_path / "out.npy"
+        np.save(a_path, a)
+        np.save(b_path, b)
+        np.save(bias_path, bias)
+        proc = subprocess.run(
+            [str(exe), str(a_path), str(b_path), str(bias_path), str(out_path)],
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+        if proc.returncode != 0:
+            raise RuntimeError(
+                f"cpu_ref_fused_matmul_bias_gelu failed (exit {proc.returncode}):"
+                f"\n{proc.stderr}"
+            )
+        return np.load(out_path).view(ml_dtypes.bfloat16)
+
+    return _run
