@@ -105,13 +105,23 @@ PK_DEVICE_INLINE void pk_store_bf16x2(pk_bf16 *p, pk_bf16x2 v) {
 }
 
 //===----------------------------------------------------------------------===//
-// Warp + block synchronization primitives. The *_sync warp shuffles and
-// __syncthreads have identical signatures on CUDA and HIP (warpSize == 32 on
-// sm_80/sm_90 and gfx1101), so they map directly.
+// Warp + block synchronization primitives. __syncthreads and the *_sync warp
+// shuffles map directly across backends (warpSize == 32 on sm_80/sm_90 and
+// gfx1101), with ONE exception: the shuffle MASK WIDTH differs. CUDA's
+// __shfl_*_sync take a 32-bit mask (one bit per lane, warpSize == 32); HIP's
+// __shfl_*_sync are templates that static_assert sizeof(mask) == 8 — HIP supports
+// wave32 AND wave64, so the mask is a 64-bit integer. PK_FULL_MASK is therefore
+// backend-guarded (Todo 19 portability fix): 32-bit on CUDA, 64-bit on HIP. This
+// is a lane-participation mask only (all lanes enabled either way), so the
+// reduction numerics are identical across backends.
 //===----------------------------------------------------------------------===//
 
 #define PK_WARP_SIZE 32
-#define PK_FULL_MASK 0xffffffffu
+#if defined(POLYKERNEL_CUDA)
+#define PK_FULL_MASK 0xffffffffu // CUDA: 32-bit mask (warpSize == 32).
+#else // POLYKERNEL_HIP
+#define PK_FULL_MASK 0xffffffffffffffffull // HIP: 64-bit mask (sizeof == 8).
+#endif
 
 PK_DEVICE_INLINE float pk_shfl_xor_sync(float v, int laneMask) {
   return __shfl_xor_sync(PK_FULL_MASK, v, laneMask);

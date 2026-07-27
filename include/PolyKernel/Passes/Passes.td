@@ -14,6 +14,9 @@
 //     (identity residual-add elimination, elementwise constant folding,
 //     softmax-of-splat no-op fold) + DCE via the greedy pattern driver.
 //   - Todo 8: `LowerToCuda` (`--lower-to-cuda`), portable CUDA/HIP source emit.
+//   - Todo 19: `LowerToHip` (`--lower-to-hip`), HIP sibling of --lower-to-cuda:
+//     emits the SAME portable kernel source (shared kernel_common.h template);
+//     the POLYKERNEL_HIP define is applied by the hipcc driver, not the emitter.
 //   - Todo 12: `FuseRmsnormMatmul` (`--fuse-rmsnorm-matmul`), first fusion pass
 //     (Wave 3): single-use rmsnorm + matmul -> fused_rmsnorm_matmul.
 //   - Todo 13: `FuseMatmulBiasGelu` (`--fuse-matmul-bias-gelu`),
@@ -156,6 +159,43 @@ def LowerToCuda : Pass<"lower-to-cuda", "ModuleOp"> {
   // / registerPolyKernelPasses() (see Passes.h) — never registerAllPasses (nix
   // out-of-tree constraint).
   let constructor = "::mlir::polykernel::createLowerToCudaPass()";
+}
+
+//===----------------------------------------------------------------------===//
+// LowerToHip
+//===----------------------------------------------------------------------===//
+
+def LowerToHip : Pass<"lower-to-hip", "ModuleOp"> {
+  let summary = "Emit portable HIP kernel source (.cu) for PolyKernel ops";
+  let description = [{
+    The HIP sibling of `--lower-to-cuda` (Todo 19 / Wave 4). A CUSTOM SOURCE
+    EMITTER (Pinned contract F): walks the PolyKernel IR and, for each recognized
+    compute op kind, string-emits a portable CUDA/HIP kernel source file (.cu)
+    into `--output-dir`. It SHARES the codegen template with `--lower-to-cuda`:
+    the emitted .cu is written against kernels/template/kernel_common.h and is
+    byte-identical portable compute — the two passes differ ONLY in that the HIP
+    variant is compiled by the hipcc driver with `-DPOLYKERNEL_HIP`
+    (tools/polykernel-bench/hipcc_driver.py), while the CUDA variant is compiled
+    by the nvcc driver with `-DPOLYKERNEL_CUDA`. The POLYKERNEL_HIP define is a
+    DRIVER concern, not an emitter concern; the emitter never sees it. It does NOT
+    use gpu-to-llvm / convert-to-llvm; the IR itself is left unchanged.
+
+    Emits the same seven kernels as --lower-to-cuda: rmsnorm, gelu, silu, matmul,
+    softmax, fused_rmsnorm_matmul, fused_matmul_bias_gelu. hipcc compiles every
+    one for gfx1101 UNCHANGED (the portability proof; see
+    reports/w4_hipcc_compile.log).
+  }];
+
+  let options = [
+    Option<"outputDir", "output-dir", "std::string",
+           /*default=*/"\"kernels/generated\"",
+           "Directory to write the generated .cu kernel sources">
+  ];
+
+  // Registered explicitly via the TableGen-generated registerLowerToHipPass()
+  // / registerPolyKernelPasses() (see Passes.h) — never registerAllPasses (nix
+  // out-of-tree constraint).
+  let constructor = "::mlir::polykernel::createLowerToHipPass()";
 }
 
 //===----------------------------------------------------------------------===//

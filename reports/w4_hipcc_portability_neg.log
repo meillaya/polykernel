@@ -1,0 +1,74 @@
+##############################################################################
+# PolyKernel Todo 19 (Wave 4): HIPCC PORTABILITY NEGATIVE TEST — QA log (FAILURE PATH)
+# Host: Linux 7.1.4-1-cachyos x86_64   Date: 2026-07-27T07:27:36Z
+# GPU:  AMD Radeon RX 7800 XT (Navi 32) = gfx1101   ROCm/clr: 7.2.3
+# Verdict: PASS (hipcc REJECTS unguarded CUDA-only constructs -> #ifdef discipline enforced)
+##############################################################################
+
+PURPOSE: prove the portable template's #ifdef discipline is what makes the kernels
+compile under hipcc. Inject an UNGUARDED CUDA-only construct into a SCRATCH copy
+of a kernel and show hipcc errors. (Scratch only — the committed tree stays clean;
+the scratch dir /tmp/pk_hip_neg is deleted after capture.)
+
+Two demonstrations:
+  (A) a bare, unguarded cudaMemcpyAsync (CUDA runtime API; absent under HIP);
+  (B) the REAL Todo 19 bug reproduced: an unguarded 32-bit warp-shuffle mask
+      (the pre-fix PK_FULL_MASK), which HIP rejects (mask must be 64-bit).
+
+==============================================================================
+(A) SCRATCH COPY of gelu.cu with an injected UNGUARDED cudaMemcpyAsync
+==============================================================================
+Injected host function (NO #ifndef POLYKERNEL_HIP guard):
+    void injected_portability_bug(const pk_bf16 *src, pk_bf16 *dst) {
+      cudaMemcpyAsync(dst, src, 256, cudaMemcpyDeviceToDevice, 0);
+    }
+
+COMMAND:
+  hipcc --offload-arch=gfx1101 -DPOLYKERNEL_HIP -Ikernels/template \
+        -c /tmp/pk_hip_neg/gelu_neg.cu -o /tmp/pk_hip_neg/gelu_neg.o
+  exit code: 1 (FAILED, as required)
+
+HIPCC ERROR OUTPUT:
+  /tmp/pk_hip_neg/gelu_neg.cu:71:34: error: use of undeclared identifier 'cudaMemcpyDeviceToDevice'; did you mean 'hipMemcpyDeviceToDevice'?
+     71 |   cudaMemcpyAsync(dst, src, 256, cudaMemcpyDeviceToDevice, 0);
+  /tmp/pk_hip_neg/gelu_neg.cu:71:3: error: use of undeclared identifier 'cudaMemcpyAsync'; did you mean 'hipMemcpyAsync'?
+     71 |   cudaMemcpyAsync(dst, src, 256, cudaMemcpyDeviceToDevice, 0);
+     71 |   cudaMemcpyAsync(dst, src, 256, cudaMemcpyDeviceToDevice, 0);
+  1 warning and 2 errors generated when compiling for gfx1101.
+
+==============================================================================
+(B) REAL BUG REPRO: unguarded 32-bit warp-shuffle mask (pre-fix PK_FULL_MASK)
+==============================================================================
+Scratch kernel calls __shfl_xor_sync with an UNGUARDED 32-bit mask 0xffffffffu
+(exactly what kernel_common.h's PK_FULL_MASK was before the Todo 19 fix):
+    PK_DEVICE_INLINE float repro_unguarded_32bit_mask(float v) {
+      return __shfl_xor_sync(0xffffffffu, v, 1); // 32-bit mask
+    }
+
+COMMAND:
+  hipcc --offload-arch=gfx1101 -DPOLYKERNEL_HIP -Ikernels/template \
+        -c /tmp/pk_hip_neg/mask_neg.cu -o /tmp/pk_hip_neg/mask_neg.o
+  exit code: 1 (FAILED, as required)
+
+HIPCC ERROR OUTPUT:
+  In file included from /tmp/pk_hip_neg/mask_neg.cu:1:
+  In file included from kernels/template/kernel_common.h:52:
+  /nix/store/jc7q7dm8y1r2317sg888mi7pxzarg7m2-clr-7.2.3/include/hip/amd_detail/amd_warp_sync_functions.h:307:62: error: static assertion failed due to requirement 'sizeof(unsigned int) == 8': The mask must be a 64-bit integer. Implicitly promoting a smaller integer is almost always an error.
+  /tmp/pk_hip_neg/mask_neg.cu:6:10: note: in instantiation of function template specialization '__shfl_xor_sync<unsigned int, float>' requested here
+      6 |   return __shfl_xor_sync(0xffffffffu, v, 1); // UNGUARDED 32-bit mask -> HIP error
+  failed to execute:/nix/store/pr6n8zlqczbgsgzjrr1an1zzlp0hd7g7-hipClang/bin/clang++  --offload-arch=gfx1101 -O3  -DPOLYKERNEL_HIP -Ikernels/template -c -x hip /tmp/pk_hip_neg/mask_neg.cu -o "/tmp/pk_hip_neg/mask_neg.o"
+
+==============================================================================
+VERDICT
+==============================================================================
+Both unguarded constructs make hipcc FAIL (exit 1):
+  (A) cudaMemcpyAsync is undeclared under -DPOLYKERNEL_HIP (hipcc even suggests
+      hipMemcpyAsync) -> a CUDA-only API call cannot appear unguarded.
+  (B) a 32-bit shuffle mask trips HIP's static_assert(sizeof(mask)==8) -> the
+      genuine bug that the Todo 19 PK_FULL_MASK guard fixes.
+This proves the #ifdef discipline (every backend-specific construct behind a
+guard in kernel_common.h) is ENFORCED by hipcc: remove the discipline and the
+compile breaks. With the discipline in place, all 7 kernels compile clean
+(see reports/w4_hipcc_compile.log).
+
+Scratch dir /tmp/pk_hip_neg deleted after capture; committed tree unchanged.

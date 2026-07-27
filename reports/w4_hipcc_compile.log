@@ -1,0 +1,86 @@
+##############################################################################
+# PolyKernel Todo 19 (Wave 4): HIPCC COMPILE OF THE PORTABLE TEMPLATE — QA log (HAPPY PATH)
+# Host: Linux 7.1.4-1-cachyos x86_64   Date: 2026-07-27T07:24:13Z
+# GPU:  AMD Radeon RX 7800 XT (Navi 32) = gfx1101   ROCm/clr: 7.2.3
+# Driver: tools/polykernel-bench/hipcc_driver.py   Verdict: PASS (all 7 kernels compile clean)
+##############################################################################
+
+=== PORTABILITY PROOF ===
+The committed kernels/generated/*.cu (emitted by --lower-to-cuda, T8/T14) are
+compiled UNCHANGED by hipcc with -DPOLYKERNEL_HIP --offload-arch=gfx1101. The
+SAME .cu that nvcc builds with -DPOLYKERNEL_CUDA compiles under hipcc, because
+every kernel targets kernels/template/kernel_common.h and uses only the portable
+pk_* / PK_* names (the backend is selected by the -D define, never by a source edit).
+
+=== ONE GENUINE PORTABILITY GUARD ADDED (documented, no numerics change) ===
+kernel_common.h defined PK_FULL_MASK as 0xffffffffu (32-bit). CUDA __shfl_*_sync
+take a 32-bit mask, but HIP __shfl_*_sync are templates that static_assert
+sizeof(mask)==8 (HIP supports wave32 AND wave64 -> 64-bit mask). Without a guard,
+hipcc errors: "The mask must be a 64-bit integer" (reproduced in scratch in
+reports/w4_hipcc_portability_neg.log). Fix: PK_FULL_MASK is now backend-guarded —
+0xffffffffu on CUDA (UNCHANGED), 0xffffffffffffffffull on HIP. This is a
+lane-participation mask only (all lanes enabled either way); reduction numerics
+are identical. After this one guard, ALL 7 kernels compile clean.
+
+=== COMMAND ===
+nix develop --impure --accept-flake-config -c \
+  python3 tools/polykernel-bench/hipcc_driver.py --arch gfx1101 --all
+
+=== DRIVER OUTPUT (stdout+stderr) ===
+warning: Nix search path entry '/home/mei/.nix-defexpr/channels' does not exist, ignoring
+Running tasks     devenv:enterShell
+
+Running           devenv:files:cleanup
+Succeeded         devenv:files:cleanup (5.37ms)
+Running           devenv:enterShell
+Succeeded         devenv:enterShell (5.51ms)
+Running           devenv:enterTest
+No command        devenv:enterTest
+1 Skipped, 2 Succeeded
+PolyKernel dev shell (llvmPackages_21 MLIR / cudaPackages_12_6 / rocmPackages.clr)
+  CC/CXX:      /nix/store/m59w5gavjx8db0ay3m1yzbw02l54109b-clang-wrapper-21.1.8/bin/clang / /nix/store/m59w5gavjx8db0ay3m1yzbw02l54109b-clang-wrapper-21.1.8/bin/clang++
+  mlir-tblgen: LLVM (http://llvm.org/):
+  nvcc:        Cuda compilation tools, release 12.6, V12.6.85
+  hipcc:       HIP version: 7.2.53211-9999
+  cmake:       cmake version 4.1.2
+  clang:       clang version 21.1.8
+kernels: rmsnorm, gelu, silu, matmul, softmax, fused_rmsnorm_matmul, fused_matmul_bias_gelu
+archs:   gfx1101
+hipcc:   /nix/store/jc7q7dm8y1r2317sg888mi7pxzarg7m2-clr-7.2.3/bin/hipcc
+========================================================================
+[hipcc] /nix/store/jc7q7dm8y1r2317sg888mi7pxzarg7m2-clr-7.2.3/bin/hipcc --offload-arch=gfx1101 -DPOLYKERNEL_HIP -Ikernels/template -c kernels/generated/rmsnorm.cu -o build/hipcc/rmsnorm_gfx1101.o
+  [PASS] rmsnorm (gfx1101) -> build/hipcc/rmsnorm_gfx1101.o
+========================================================================
+[hipcc] /nix/store/jc7q7dm8y1r2317sg888mi7pxzarg7m2-clr-7.2.3/bin/hipcc --offload-arch=gfx1101 -DPOLYKERNEL_HIP -Ikernels/template -c kernels/generated/gelu.cu -o build/hipcc/gelu_gfx1101.o
+  [PASS] gelu (gfx1101) -> build/hipcc/gelu_gfx1101.o
+========================================================================
+[hipcc] /nix/store/jc7q7dm8y1r2317sg888mi7pxzarg7m2-clr-7.2.3/bin/hipcc --offload-arch=gfx1101 -DPOLYKERNEL_HIP -Ikernels/template -c kernels/generated/silu.cu -o build/hipcc/silu_gfx1101.o
+  [PASS] silu (gfx1101) -> build/hipcc/silu_gfx1101.o
+========================================================================
+[hipcc] /nix/store/jc7q7dm8y1r2317sg888mi7pxzarg7m2-clr-7.2.3/bin/hipcc --offload-arch=gfx1101 -DPOLYKERNEL_HIP -Ikernels/template -c kernels/generated/matmul.cu -o build/hipcc/matmul_gfx1101.o
+  [PASS] matmul (gfx1101) -> build/hipcc/matmul_gfx1101.o
+========================================================================
+[hipcc] /nix/store/jc7q7dm8y1r2317sg888mi7pxzarg7m2-clr-7.2.3/bin/hipcc --offload-arch=gfx1101 -DPOLYKERNEL_HIP -Ikernels/template -c kernels/generated/softmax.cu -o build/hipcc/softmax_gfx1101.o
+  [PASS] softmax (gfx1101) -> build/hipcc/softmax_gfx1101.o
+========================================================================
+[hipcc] /nix/store/jc7q7dm8y1r2317sg888mi7pxzarg7m2-clr-7.2.3/bin/hipcc --offload-arch=gfx1101 -DPOLYKERNEL_HIP -Ikernels/template -c kernels/generated/fused_rmsnorm_matmul.cu -o build/hipcc/fused_rmsnorm_matmul_gfx1101.o
+  [PASS] fused_rmsnorm_matmul (gfx1101) -> build/hipcc/fused_rmsnorm_matmul_gfx1101.o
+========================================================================
+[hipcc] /nix/store/jc7q7dm8y1r2317sg888mi7pxzarg7m2-clr-7.2.3/bin/hipcc --offload-arch=gfx1101 -DPOLYKERNEL_HIP -Ikernels/template -c kernels/generated/fused_matmul_bias_gelu.cu -o build/hipcc/fused_matmul_bias_gelu_gfx1101.o
+  [PASS] fused_matmul_bias_gelu (gfx1101) -> build/hipcc/fused_matmul_bias_gelu_gfx1101.o
+========================================================================
+OK: compiled 7 kernel x arch target(s) for gfx1101 clean.
+
+=== RESULT ===
+driver exit code: 0
+kernels compiled clean: 7/7 (rmsnorm, gelu, silu, matmul, softmax, fused_rmsnorm_matmul, fused_matmul_bias_gelu)
+objects produced:
+  build/hipcc/fused_matmul_bias_gelu_gfx1101.o
+  build/hipcc/fused_rmsnorm_matmul_gfx1101.o
+  build/hipcc/gelu_gfx1101.o
+  build/hipcc/matmul_gfx1101.o
+  build/hipcc/rmsnorm_gfx1101.o
+  build/hipcc/silu_gfx1101.o
+  build/hipcc/softmax_gfx1101.o
+
+VERDICT: PASS — the portable template compiles for gfx1101 under hipcc -DPOLYKERNEL_HIP.

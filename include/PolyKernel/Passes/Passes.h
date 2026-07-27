@@ -18,6 +18,9 @@
 //     (Canonicalize.h).
 //   - `--lower-to-cuda`  (Todo 8): emit portable CUDA/HIP kernel source
 //     (LowerToCuda.h).
+//   - `--lower-to-hip`   (Todo 19): HIP sibling of --lower-to-cuda; emits the
+//     SAME portable kernel source (shared kernel_common.h template), compiled by
+//     the hipcc driver with -DPOLYKERNEL_HIP (LowerToHip.h).
 //   - `--fuse-rmsnorm-matmul` (Todo 12): fuse single-use rmsnorm + matmul into
 //     fused_rmsnorm_matmul (FuseRmsnormMatmul.h).
 //   - `--fuse-matmul-bias-gelu` (Todo 13): fuse single-use matmul + bias + gelu
@@ -45,6 +48,7 @@
 #include "PolyKernel/Passes/InferShapes.h"
 #include "PolyKernel/Passes/InferTileLayout.h"
 #include "PolyKernel/Passes/LowerToCuda.h"
+#include "PolyKernel/Passes/LowerToHip.h"
 #include "PolyKernel/Passes/PlanMemory.h"
 
 namespace mlir::polykernel {
