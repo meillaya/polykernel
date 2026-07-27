@@ -1,0 +1,43 @@
+=== T30 (Wave 6): GPU endpoints /predict /benchmark /kernels /report ===
+=== HAPPY EVIDENCE: app + endpoints constructible without token ===
+date: 2026-07-27T16:04:48Z
+
+--- modal 1.5.2 API introspection (decorators verified current) ---
+modal version: 1.5.2
+App.cls sig (gpu/timeout/startup_timeout/volumes): True
+modal.enter sig: (_warn_parentheses_missing=None, *, snap: bool = False) -> collections.abc.Callable[[modal._partial_function._PartialFunction | collections.abc.Callable[[typing.Any], typing.Any]], modal._partial_function._PartialFunction]
+modal.fastapi_endpoint sig: (_warn_parentheses_missing=None, *, method: str = 'GET', label: str | None = None, custom_domains: collections.abc.Iterable[str] | None = None, docs: bool = False, requires_proxy_auth: bool = False) -> collections.abc.Callable[[modal._partial_function._PartialFunction[~P, +ReturnType, +ReturnType] | collections.abc.Callable[~P, +ReturnType]], modal._partial_function._PartialFunction[~P, +ReturnType, +ReturnType]]
+
+--- python3 modal/app.py (local construction, no token) ---
+app: polykernel
+image: Image(<function _Image.run_commands.<locals>.build_dockerfile at 0x7fffe753eda0>)
+service class: PolyKernelService
+endpoints: predict (POST), benchmark (POST), kernels (GET), report (GET)
+gpu: A10, timeout: 600s, startup_timeout: 300s
+weights volume: modal.Volume.from_name('polykernel-weights')
+construction OK (no token required)
+
+--- import validation (importlib, same as modal CLI) ---
+import OK
+app: polykernel
+service: PolyKernelService
+PredictRequest fields: ['input_data', 'shape_m', 'shape_n', 'shape_k']
+BenchmarkRequest fields: ['op', 'shape', 'arch', 'variants']
+endpoints: predict (POST), benchmark (POST), kernels (GET), report (GET)
+@app.cls(gpu=A10, timeout=600, startup_timeout=300, volumes={/weights: Volume})
+@modal.enter() -> ctypes.CDLL engine .so + Volume weights
+@modal.fastapi_endpoint(method=POST) for /predict /benchmark
+@modal.fastapi_endpoint(method=GET) for /kernels /report
+
+--- modal serve modal/app.py (EXPECTED FAILURE: no MODAL_TOKEN) ---
+╭─ Error ──────────────────────────────────────────────────────────────────────╮
+│ Token missing. Could not authenticate client. If you have token credentials, │
+│ see modal.com/docs/sdk/py/latest/modal.config for setup help. If you are a   │
+│ new user, register an account at modal.com, then run `modal token new`.      │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+LIMITATION: modal serve requires a MODAL_TOKEN (auth). No token -> SKIPPED.
+Validation is LOCAL: the app + endpoints are importable/constructible (above).
+Cloud deploy (modal deploy) is Todo 33 (owner-gated, behind MODAL_TOKEN).
+
+RESULT: PASS - app + 4 endpoints construct without error (no token required)
