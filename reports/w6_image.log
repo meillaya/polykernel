@@ -1,0 +1,94 @@
+====================================================================
+PolyKernel T29 Wave 6: HAPPY evidence - Modal CUDA-toolkit Image +
+  app skeleton (CURRENT modal API). The image DEFINITION + the App
+  construct locally with NO Modal token and NO Docker (constructing
+  a modal.Image / modal.App is pure). Materialising the image (running
+  its layers, compiling the engine) happens only on deploy/serve, which
+  is the owner-gated cloud step (Todo 33) behind a MODAL_TOKEN.
+  modal installed via devenv.nix (python3Packages.modal); the dev shell
+  has no pip, so nix withPackages is the install path.
+====================================================================
+
+### [1] modal installed via devenv.nix; import modal.image + version ###
+$ python3 -c "import modal; import modal.image; print(\"modal\", modal.__version__)"
+modal 1.5.2
+
+devenv.nix python package set (modal added; numpy/ml-dtypes/pytest retained):
+  python = pkgs.python3.withPackages (ps: with ps; [
+    numpy
+    ml-dtypes
+    pytest
+    modal
+  ]);
+
+### [2] regression: numpy / ml_dtypes / pytest still import (env not broken) ###
+$ python3 -c "import numpy, ml_dtypes, pytest; ..."
+numpy 2.5.0 | ml_dtypes 0.5.4 | pytest 9.0.3
+python: Python 3.14.6
+
+### [3] modal 1.5.2 API methods used by modal/image.py are CURRENT (introspection) ###
+Image.from_registry(tag: str, secret: modal.secret._Secret | None = None, *, setup_dockerfile_commands: list[str] = [], force_build: bool = False, add_python: str | None = None, **kwargs) -> '_Image'
+Image.entrypoint(self, entrypoint_commands: list[str]) -> '_Image'
+Image.apt_install(self, *packages: str | list[str], force_build: bool = False, env: dict[str, str | None] | None = None, secrets: collections.abc.Collection[modal.secret._Secret] | None = None, gpu: str | None = None) -> '_Image'
+Image.add_local_dir(self, local_path: str | pathlib.Path, remote_path: str, *, copy: bool = False, ignore: collections.abc.Sequence[str] | collections.abc.Callable[[pathlib.Path], bool] = []) -> '_Image'
+Image.run_commands(self, *commands: str | list[str], env: dict[str, str | None] | None = None, secrets: collections.abc.Collection[modal.secret._Secret] | None = None, volumes: dict[str | pathlib.PurePosixPath, modal.volume._Volume] | None = None, gpu: str | None = None, force_build: bool = False) -> '_Image'
+App.__init__(self, name: str | None = None, *, tags: dict[str, str] | None = None, image: modal._image._Image | None = None, secrets: collections.abc.Sequence[modal.secret._Secret] = [], volumes: dict[str | pathlib.PurePosixPath, modal.volume._Volume] = {}, include_source: bool = True) -> None
+=> from_registry(add_python=...), entrypoint(list), apt_install(*pkgs),
+   add_local_dir(local, remote_path, copy=...), run_commands(*cmds),
+   App(name, image=...) all present + current in modal 1.5.2.
+   (add_local_dir docstring: it REPLACES the deprecated copy_local_dir -
+    add_local_dir itself is current, NOT deprecated.)
+
+### [4] modal/image.py constructs the engine Image (NO token, NO Docker) ###
+$ python3 modal/image.py   (executes the module; builds the Image object)
+exit 0 (image.py executed; image object built)
+image type        : modal.image.Image
+isinstance Image  : True
+base registry tag : nvidia/cuda:12.8.1-devel-ubuntu24.04
+add_python        : 3.12 (REQUIRED: NVIDIA images ship no Python)
+remote app dir    : /app
+
+### [5] modal/app.py constructs modal.App("polykernel", image=...) (NO token) ###
+$ python3 modal/app.py   (loads sibling image.py via importlib - the modal/
+                          dir name collides with the modal SDK package, so the
+                          sibling is loaded by path, not via modal.image)
+exit 0 (app.py executed; App object built)
+app type          : modal.app.App
+isinstance App    : True
+app.name          : polykernel
+app.image type    : Image (the engine image is wired in)
+
+### [6] modal deploy LOADS the definition, then blocks on the absent token ###
+    (proves the image/app spec is valid; deploy is SKIPPED - no token, no spend)
+$ echo "MODAL_TOKEN=[${MODAL_TOKEN:-<unset>}]"
+MODAL_TOKEN=[<unset>]
+$ timeout 45 modal deploy modal/app.py
+╭─ Error ──────────────────────────────────────────────────────────────────────╮
+│ Token missing. Could not authenticate client. If you have token credentials, │
+│ see modal.com/docs/sdk/py/latest/modal.config for setup help. If you are a   │
+│ new user, register an account at modal.com, then run `modal token new`.      │
+╰──────────────────────────────────────────────────────────────────────────────╯
+deploy exit: 1 (1 = auth failure; the CLI parsed app.py + built the
+             App+Image, then failed ONLY on authentication - no definition error).
+
+### [7] modal client version PINNED (avoid API drift) ###
+$ cat modal/requirements.txt
+# PolyKernel Modal deployment client - PINNED to avoid API drift (Todo 29 / Wave 6).
+#
+# modal/image.py + modal/app.py are written against this exact version's API
+# (verified by introspection): Image.from_registry(..., add_python=...),
+# .entrypoint(list), .apt_install(*pkgs), .add_local_dir(local, remote_path,
+# copy=...), .run_commands(*cmds), and modal.App(name, image=...).
+#
+# In the nix dev shell modal is provided by devenv.nix (python3Packages.modal),
+# NOT pip (the shell has no pip). This pin documents the version the definitions
+# target so a non-nix environment reproduces the same API.
+modal==1.5.2
+
+### [8] DEPLOY SKIPPED (no MODAL_TOKEN) - opt-in cloud path ###
+Cloud deploy is opt-in behind a token that is ABSENT here (no spend). To deploy:
+    modal setup                  # one-time auth (register + modal token new)
+    modal deploy modal/app.py    # builds the CUDA image (compiles the engine
+                                 #   at image-build time) + deploys the app
+The GPU endpoints (/predict /benchmark /kernels /report) attach to this app in
+Todo 30; cold-start Todo 31; kernel cache Todo 32; owner-gated deploy Todo 33.

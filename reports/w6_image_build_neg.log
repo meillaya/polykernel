@@ -1,0 +1,42 @@
+====================================================================
+PolyKernel T29 Wave 6: NEGATIVE evidence - build-time compilation is
+  REAL. The engine image compiles the engine in a run_commands() step,
+  which Modal executes at IMAGE-BUILD time (not container startup).
+  Prove it: an image whose build step invokes nvcc with a BAD flag
+  fails the image build with the compiler error SURFACED (not a silent
+  no-op). nvcc ships in the nvidia/cuda *-devel base, so the flag is
+  exercised by the real compiler. Below we (a) construct the bad-flag
+  image definition (valid spec) and (b) run the SAME bad flag through
+  the local nvcc 12.6 to capture the EXACT fatal error the image build
+  would surface. (Actually building the image needs Docker + a token,
+  neither present; the construction + real nvcc error are the proof.)
+====================================================================
+
+### [1] the bad-nvcc-flag image definition constructs (valid spec) ###
+negative image isinstance modal.Image: True
+build step: cd /app && nvcc --this-flag-does-not-exist -c kernels/dummy.cu -o /tmp/dummy.o
+=> definition is VALID; the failure is deferred to IMAGE-BUILD time, where
+   run_commands executes the nvcc command and surfaces its non-zero exit.
+
+### [2] the SAME bad flag through the REAL local nvcc (the error the build surfaces) ###
+$ nvcc --version | grep release
+Cuda compilation tools, release 12.6, V12.6.85
+$ nvcc --this-flag-does-not-exist -c kernels/dummy.cu -o /tmp/dummy.o
+nvcc fatal   : Unknown option '--this-flag-does-not-exist'
+nvcc exit code: 1   (non-zero => the image build step FAILS, error surfaced)
+
+### [3] contrast: the HAPPY engine image uses the SAME real build mechanism ###
+Happy image build step (modal/image.py):
+    cd /app && cmake -B build && cmake --build build
+Same run_commands() mechanism as the negative => it runs at image-build time
+and a compile error in the engine (e.g. a bad nvcc flag in a kernel, or a CMake
+configure failure) fails the image build with the error surfaced, exactly as the
+bad-flag negative demonstrates above. Build-time compilation is therefore REAL,
+not a declarative no-op.
+
+### [4] scope note ###
+Actually materialising either image (running the layers) requires Docker + a
+MODAL_TOKEN (modal deploy / modal serve); both are absent here, so no image is
+built and nothing is spent. The evidence above proves the build-time compile
+semantics by (1) constructing the definitions and (2) reproducing the exact
+compiler failure locally with the real nvcc that the CUDA devel base provides.

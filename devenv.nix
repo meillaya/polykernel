@@ -17,10 +17,15 @@ let
   rocmPackages = pkgs.rocmPackages;
 
   # Python golden harness: NumPy + ml_dtypes.bfloat16 (bf16 round / fp32 accum).
+  # `modal` (Todo 29 / Wave 6) is the Modal GPU-deployment client; withPackages
+  # pulls it in WITH its deps (protobuf, grpcio, ...) as one unified Python env.
+  # Used ONLY to validate the modal/image.py + modal/app.py definitions locally
+  # (image-definition construction); cloud deploy is opt-in behind a MODAL_TOKEN.
   python = pkgs.python3.withPackages (ps: with ps; [
     numpy
     ml-dtypes
     pytest
+    modal
   ]);
 in
 {

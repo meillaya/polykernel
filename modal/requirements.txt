@@ -1,0 +1,11 @@
+# PolyKernel Modal deployment client - PINNED to avoid API drift (Todo 29 / Wave 6).
+#
+# modal/image.py + modal/app.py are written against this exact version's API
+# (verified by introspection): Image.from_registry(..., add_python=...),
+# .entrypoint(list), .apt_install(*pkgs), .add_local_dir(local, remote_path,
+# copy=...), .run_commands(*cmds), and modal.App(name, image=...).
+#
+# In the nix dev shell modal is provided by devenv.nix (python3Packages.modal),
+# NOT pip (the shell has no pip). This pin documents the version the definitions
+# target so a non-nix environment reproduces the same API.
+modal==1.5.2
