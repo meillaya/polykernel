@@ -13,6 +13,9 @@
 //   - Todo 5: `Canonicalize` (`--canonicalize`), canonicalization patterns
 //     (identity residual-add elimination, elementwise constant folding,
 //     softmax-of-splat no-op fold) + DCE via the greedy pattern driver.
+//   - Todo 8: `LowerToCuda` (`--lower-to-cuda`), portable CUDA/HIP source emit.
+//   - Todo 12: `FuseRmsnormMatmul` (`--fuse-rmsnorm-matmul`), first fusion pass
+//     (Wave 3): single-use rmsnorm + matmul -> fused_rmsnorm_matmul.
 //
 // The generated registration is EXPLICIT (no registerAllPasses / MLIRRegisterAll*
 // — nixpkgs MLIR does not ship the aggregate object archives; see
@@ -21,6 +24,7 @@
 //                               CANONICALIZE)
 //   - GEN_PASS_REGISTRATION     registerInferShapesPass() /
 //                               registerCanonicalizePass() /
+//                               registerFuseRmsnormMatmulPass() /
 //                               registerPolyKernelPasses()
 //
 //===----------------------------------------------------------------------===//
@@ -142,6 +146,41 @@ def LowerToCuda : Pass<"lower-to-cuda", "ModuleOp"> {
   // / registerPolyKernelPasses() (see Passes.h) — never registerAllPasses (nix
   // out-of-tree constraint).
   let constructor = "::mlir::polykernel::createLowerToCudaPass()";
+}
+
+//===----------------------------------------------------------------------===//
+// FuseRmsnormMatmul
+//===----------------------------------------------------------------------===//
+
+def FuseRmsnormMatmul : Pass<"fuse-rmsnorm-matmul", "ModuleOp"> {
+  let summary = "Fuse single-use rmsnorm + matmul into fused_rmsnorm_matmul";
+  let description = [{
+    First PolyKernel fusion pass (Wave 3). Matches a `polykernel.matmul` whose
+    input (A) operand is produced by a `polykernel.rmsnorm` and rewrites
+    `rmsnorm(x, eps); matmul(rms, w)` into `fused_rmsnorm_matmul(x, w, eps)`,
+    producing the matmul's (MxN) result type and carrying the rmsnorm's optional
+    `epsilon` attribute. Applied with the greedy pattern driver
+    (`applyPatternsGreedily`), which also folds + DCEs + simplifies regions.
+
+    Guardrails:
+      - The matmul's A (input) operand must be DEFINED by a `polykernel.rmsnorm`
+        (a rmsnorm feeding the matmul's B operand is NOT fused).
+      - SINGLE-USE CHECK (essential): the rmsnorm result must have EXACTLY ONE
+        use (the matmul). A rmsnorm feeding two or more ops (e.g. the matmul AND
+        a residual add) is NOT fused — fusing would duplicate the normalization.
+
+    Eliminated-intermediate tracking (for the Todo 17 traffic report): each fused
+    op is tagged with the discardable attributes
+    `polykernel.fused_from = "rmsnorm_matmul"` and
+    `polykernel.eliminated_type = <the eliminated rmsnorm result's tensor type>`,
+    so the report can identify the fusion and compute the saved global-memory
+    round-trip as numElements(type) * sizeof(element).
+  }];
+
+  // Registered explicitly via the TableGen-generated
+  // registerFuseRmsnormMatmulPass() / registerPolyKernelPasses() (see Passes.h)
+  // — never registerAllPasses (nix out-of-tree constraint).
+  let constructor = "::mlir::polykernel::createFuseRmsnormMatmulPass()";
 }
 
 #endif // POLYKERNEL_PASSES

@@ -1,0 +1,273 @@
+================================================================================
+PolyKernel — Todo 12 (Wave 3): --fuse-rmsnorm-matmul fusion pass
+================================================================================
+Date:        2026-07-27
+Worker:      Sisyphus-Junior (qwen3.8-max-preview)
+Status:      DONE — build green, lit green (8/8), FileCheck deterministic x2.
+Artifact:    reports/w3_fuse_rmsnorm_matmul.log (this file)
+Commit:      NONE (Atlas commits after independent verification).
+
+--------------------------------------------------------------------------------
+0. CHANGED / CREATED FILES
+--------------------------------------------------------------------------------
+CREATED:
+  include/PolyKernel/Passes/FuseRmsnormMatmul.h   (pass decl header; 3 pure LOC)
+  lib/Passes/FuseRmsnormMatmul.cpp                (pass impl; 47 pure LOC)
+  test/fuse_rmsnorm_matmul.mlir                   (lit/FileCheck; 33 pure LOC)
+WIRED (necessary wiring only):
+  include/PolyKernel/Passes/Passes.td             (+ def FuseRmsnormMatmul, header note)
+  include/PolyKernel/Passes/Passes.h              (+ #include FuseRmsnormMatmul.h, note)
+  lib/Passes/CMakeLists.txt                       (+ FuseRmsnormMatmul.cpp source)
+ARTIFACT:
+  reports/w3_fuse_rmsnorm_matmul.log
+No files outside these paths were touched. .codegraph/ and .omo/ untouched.
+
+--------------------------------------------------------------------------------
+1. BUILD / CONFIGURE (stale_state: reconfigured because Passes.td/CMakeLists
+   changed) — REAL output
+--------------------------------------------------------------------------------
+Command (inside `nix develop --impure --accept-flake-config`):
+  cmake -B build -G Ninja \
+    -DMLIR_DIR=/nix/store/2lzr6hy0s5cikj7lxwpl0qhh2idmqfc1-mlir-21.1.8-dev/lib/cmake/mlir \
+    -DLLVM_DIR=/nix/store/4768r0pa7fswbi0mdjalqc9pm56fh2vm-llvm-21.1.8-dev/lib/cmake/llvm \
+    -DMLIR_TABLEGEN_EXE=$(which mlir-tblgen) \
+    -DLLVM_EXTERNAL_LIT=/nix/store/mnrhk9ghglznss3ds1mhd9pz4vlnk0d7-python3.14-lit-18.1.8/bin/.lit-wrapped
+  cmake --build build
+
+Configure result:
+  -- Using MLIRConfig.cmake in: /nix/store/2lzr6hy0s5cikj7lxwpl0qhh2idmqfc1-mlir-21.1.8-dev/lib/cmake/mlir
+  -- Using LLVMConfig.cmake in: /nix/store/4768r0pa7fswbi0mdjalqc9pm56fh2vm-llvm-21.1.8-dev/lib/cmake/llvm
+  -- Using mlir-tblgen: /nix/store/a8lgffyjfxbjvj7bpdmhvbvl4zjhnckk-llvm-tblgen-21.1.8/bin/mlir-tblgen
+  -- Configuring done (0.1s)
+  -- Generating done (0.0s)
+  === CONFIGURE EXIT: 0 ===
+
+Build result (Passes.h.inc regenerated; new .cpp compiled; tool relinked):
+  [1/8] Building Passes.h.inc...
+  [2/8] Building CXX object lib/Passes/CMakeFiles/obj.MLIRPolyKernelPasses.dir/InferShapes.cpp.o
+  [3/8] Building CXX object lib/Passes/CMakeFiles/obj.MLIRPolyKernelPasses.dir/FuseRmsnormMatmul.cpp.o
+  [4/8] Building CXX object tools/polykernel-opt/CMakeFiles/polykernel-opt.dir/polykernel-opt.cpp.o
+  [5/8] Building CXX object lib/Passes/CMakeFiles/obj.MLIRPolyKernelPasses.dir/LowerToCuda.cpp.o
+  [6/8] Building CXX object lib/Passes/CMakeFiles/obj.MLIRPolyKernelPasses.dir/Canonicalize.cpp.o
+  [7/8] Linking CXX static library lib/libMLIRPolyKernelPasses.a
+  [8/8] Linking CXX executable tools/polykernel-opt/polykernel-opt
+  === BUILD EXIT: 0 ===
+
+--------------------------------------------------------------------------------
+2. POSITIVE FUSION — REAL before/after IR (misleading_success_output guard)
+--------------------------------------------------------------------------------
+Command:
+  build/tools/polykernel-opt/polykernel-opt test/fuse_rmsnorm_matmul.mlir --fuse-rmsnorm-matmul
+
+2a. Single-use rmsnorm + matmul WITH epsilon -> fused (epsilon carried).
+BEFORE (input IR):
+  polykernel.func @fuse_single_use_eps(%x: tensor<2x4x8xf32>, %w: tensor<8x16xf32>)
+      -> tensor<2x4x16xf32> {
+    %rms = polykernel.rmsnorm %x {epsilon = 1.0e-5 : f32} : tensor<2x4x8xf32>
+    %out = polykernel.matmul %rms, %w
+        : tensor<2x4x8xf32>, tensor<8x16xf32> -> tensor<2x4x16xf32>
+    polykernel.return %out : tensor<2x4x16xf32>
+  }
+AFTER (real pass output):
+  polykernel.func @fuse_single_use_eps(%arg0: tensor<2x4x8xf32>, %arg1: tensor<8x16xf32>) -> tensor<2x4x16xf32> {
+    %0 = polykernel.fused_rmsnorm_matmul %arg0, %arg1 {epsilon = 9.99999974E-6 : f32, polykernel.eliminated_type = tensor<2x4x8xf32>, polykernel.fused_from = "rmsnorm_matmul"} : tensor<2x4x8xf32>, tensor<8x16xf32> -> tensor<2x4x16xf32>
+    polykernel.return %0 : tensor<2x4x16xf32>
+  }
+OBSERVABLE: standalone `polykernel.rmsnorm` is GONE; `polykernel.fused_rmsnorm_matmul`
+present; epsilon carried (1.0e-5 -> its f32 rounding 9.99999974E-6); operand order
+(%arg0=input, %arg1=weight); result type tensor<2x4x16xf32> (MxN); tracking attrs
+polykernel.eliminated_type + polykernel.fused_from attached.
+
+2b. Single-use rmsnorm WITHOUT epsilon -> fused (NO epsilon attr; optional handled).
+BEFORE (input IR):
+  polykernel.func @fuse_single_use_no_eps(%x: tensor<2x4x8xf32>, %w: tensor<8x16xf32>)
+      -> tensor<2x4x16xf32> {
+    %rms = polykernel.rmsnorm %x : tensor<2x4x8xf32>
+    %out = polykernel.matmul %rms, %w
+        : tensor<2x4x8xf32>, tensor<8x16xf32> -> tensor<2x4x16xf32>
+    polykernel.return %out : tensor<2x4x16xf32>
+  }
+AFTER (real pass output):
+  polykernel.func @fuse_single_use_no_eps(%arg0: tensor<2x4x8xf32>, %arg1: tensor<8x16xf32>) -> tensor<2x4x16xf32> {
+    %0 = polykernel.fused_rmsnorm_matmul %arg0, %arg1 {polykernel.eliminated_type = tensor<2x4x8xf32>, polykernel.fused_from = "rmsnorm_matmul"} : tensor<2x4x8xf32>, tensor<8x16xf32> -> tensor<2x4x16xf32>
+    polykernel.return %0 : tensor<2x4x16xf32>
+  }
+OBSERVABLE: attr dict is EXACTLY {polykernel.eliminated_type, polykernel.fused_from}
+— NO `epsilon` key (the lit test pins this dict literally to prove the negative).
+
+--------------------------------------------------------------------------------
+3. NEGATIVE (multi-use) — REAL before/after IR: rmsnorm SURVIVES, NOT fused
+--------------------------------------------------------------------------------
+3a. Multi-use rmsnorm (feeds the matmul AND a residual add) -> NOT fused.
+BEFORE (input IR):
+  polykernel.func @no_fuse_multi_use(%x: tensor<2x4x8xf32>, %w: tensor<8x16xf32>,
+                                     %r: tensor<2x4x8xf32>)
+      -> (tensor<2x4x16xf32>, tensor<2x4x8xf32>) {
+    %rms = polykernel.rmsnorm %x {epsilon = 1.0e-5 : f32} : tensor<2x4x8xf32>
+    %out = polykernel.matmul %rms, %w
+        : tensor<2x4x8xf32>, tensor<8x16xf32> -> tensor<2x4x16xf32>
+    %res = polykernel.add %rms, %r : tensor<2x4x8xf32>
+    polykernel.return %out, %res : tensor<2x4x16xf32>, tensor<2x4x8xf32>
+  }
+AFTER (real pass output — UNCHANGED, no fused op):
+  polykernel.func @no_fuse_multi_use(%arg0: tensor<2x4x8xf32>, %arg1: tensor<8x16xf32>, %arg2: tensor<2x4x8xf32>) -> (tensor<2x4x16xf32>, tensor<2x4x8xf32>) {
+    %0 = polykernel.rmsnorm %arg0 {epsilon = 9.99999974E-6 : f32} : tensor<2x4x8xf32>
+    %1 = polykernel.matmul %0, %arg1 : tensor<2x4x8xf32>, tensor<8x16xf32> -> tensor<2x4x16xf32>
+    %2 = polykernel.add %0, %arg2 : tensor<2x4x8xf32>
+    polykernel.return %1, %2 : tensor<2x4x16xf32>, tensor<2x4x8xf32>
+  }
+OBSERVABLE: the single-use check (`rmsnorm.getResult().hasOneUse()`) rejects this:
+the rmsnorm has TWO uses (matmul + add), so it is NOT fused. Standalone rmsnorm,
+matmul, and add all SURVIVE. No polykernel.fused_rmsnorm_matmul is produced.
+
+3b. rmsnorm feeding the matmul's B operand (not A) -> NOT fused (operand-position guard).
+AFTER (real pass output — UNCHANGED):
+  polykernel.func @no_fuse_rmsnorm_as_b(%arg0: tensor<2x4x8xf32>, %arg1: tensor<8x16xf32>) -> tensor<2x4x16xf32> {
+    %0 = polykernel.rmsnorm %arg1 : tensor<8x16xf32>
+    %1 = polykernel.matmul %arg0, %0 : tensor<2x4x8xf32>, tensor<8x16xf32> -> tensor<2x4x16xf32>
+    polykernel.return %1 : tensor<2x4x16xf32>
+  }
+OBSERVABLE: the pattern matches `matmul.getA().getDefiningOp<RmsNormOp>()`; here the
+rmsnorm produces the B operand, so getA() is a block arg -> no match -> not fused.
+
+--------------------------------------------------------------------------------
+4. EXAMPLE FUSION — examples/rmsnorm_matmul.mlir via --infer-shapes --fuse-rmsnorm-matmul
+--------------------------------------------------------------------------------
+Command:
+  build/tools/polykernel-opt/polykernel-opt examples/rmsnorm_matmul.mlir \
+      --infer-shapes --fuse-rmsnorm-matmul
+BEFORE (@unfused func in examples/rmsnorm_matmul.mlir):
+  polykernel.func @unfused(%x: tensor<1x2048x4096xbf16>, %w: tensor<4096x11008xbf16>)
+      -> tensor<1x2048x11008xbf16> {
+    %0 = polykernel.rmsnorm %x {epsilon = 1.0e-05 : f32} : tensor<1x2048x4096xbf16>
+    %1 = polykernel.matmul %0, %w
+        : tensor<1x2048x4096xbf16>, tensor<4096x11008xbf16> -> tensor<1x2048x11008xbf16>
+    polykernel.return %1 : tensor<1x2048x11008xbf16>
+  }
+AFTER (real pass output — @unfused now fused; @fused already-fused func untouched):
+  polykernel.func @fused(%arg0: tensor<1x2048x4096xbf16>, %arg1: tensor<4096x11008xbf16>) -> tensor<1x2048x11008xbf16> {
+    %0 = polykernel.fused_rmsnorm_matmul %arg0, %arg1 {epsilon = 9.99999974E-6 : f32} : tensor<1x2048x4096xbf16>, tensor<4096x11008xbf16> -> tensor<1x2048x11008xbf16>
+    polykernel.return %0 : tensor<1x2048x11008xbf16>
+  }
+  polykernel.func @unfused(%arg0: tensor<1x2048x4096xbf16>, %arg1: tensor<4096x11008xbf16>) -> tensor<1x2048x11008xbf16> {
+    %0 = polykernel.fused_rmsnorm_matmul %arg0, %arg1 {epsilon = 9.99999974E-6 : f32, polykernel.eliminated_type = tensor<1x2048x4096xbf16>, polykernel.fused_from = "rmsnorm_matmul"} : tensor<1x2048x4096xbf16>, tensor<4096x11008xbf16> -> tensor<1x2048x11008xbf16>
+    polykernel.return %0 : tensor<1x2048x11008xbf16>
+  }
+OBSERVABLE: the @unfused rmsnorm+matmul pair collapses to one fused_rmsnorm_matmul
+with the eliminated intermediate tensor<1x2048x4096xbf16> recorded. The pre-existing
+@fused func (already a fused op, no matmul) is correctly left untouched and carries
+NO tracking attrs (it was not produced by this pass) — the pass only tags what IT fuses.
+
+--------------------------------------------------------------------------------
+5. QA: FileCheck (flaky_tests: run twice — deterministic) + check-polykernel
+--------------------------------------------------------------------------------
+FileCheck (positive fuses + rmsnorm gone; negative multi-use survives):
+  $ polykernel-opt test/fuse_rmsnorm_matmul.mlir --fuse-rmsnorm-matmul | FileCheck test/fuse_rmsnorm_matmul.mlir
+  FC-RUN1: PASS
+  FC-RUN2: PASS   (deterministic across 2 runs)
+
+check-polykernel regression (all prior lit tests + the new one):
+  $ cmake --build build --target check-polykernel
+  -- Testing: 8 tests, 8 workers --
+  PASS: POLYKERNEL :: smoke.mlir (1 of 8)
+  PASS: POLYKERNEL :: op_set_closed.mlir (2 of 8)
+  PASS: POLYKERNEL :: fuse_rmsnorm_matmul.mlir (3 of 8)
+  PASS: POLYKERNEL :: infer_shapes.mlir (4 of 8)
+  PASS: POLYKERNEL :: canonicalize.mlir (5 of 8)
+  PASS: POLYKERNEL :: e2e_parse.mlir (6 of 8)
+  PASS: POLYKERNEL :: infer_shapes_mismatch.mlir (7 of 8)
+  PASS: POLYKERNEL :: dialect_roundtrip.mlir (8 of 8)
+  Testing Time: 0.13s
+  Total Discovered Tests: 8
+    Passed: 8 (100.00%)
+  (exit 0; the 7 pre-existing tests still pass -> no regression.)
+
+--------------------------------------------------------------------------------
+6. ELIMINATED-INTERMEDIATE TRACKING MECHANISM (for the Todo 17 traffic report)
+--------------------------------------------------------------------------------
+Chosen mechanism: two DISCARDABLE ATTRIBUTES attached to every fused op the pass
+creates (set via Operation::setAttr in the rewrite pattern):
+  - polykernel.fused_from      = "rmsnorm_matmul"   (StringAttr; the fusion kind)
+  - polykernel.eliminated_type = <tensor type>       (TypeAttr; the eliminated
+                                    rmsnorm result's tensor type/shape, e.g.
+                                    tensor<1x2048x4096xbf16>)
+Why attributes (not a pass statistic):
+  - EXACT under the greedy driver: one tag per committed fusion. A statistic
+    counter incremented inside a RewritePattern could miscount under the greedy
+    driver's speculative apply/retry/rollback loop; the IR attribute cannot.
+  - IR-OBSERVABLE + FileCheck-able: the lit test asserts the tags directly.
+  - Zero plumbing: no pattern<->pass counter wiring; survives IR round-trip.
+How Todo 17 uses it: walk the module for ops carrying `polykernel.fused_from`,
+group by its value, read `polykernel.eliminated_type`, and compute the saved
+global-memory round-trip per fusion as
+    saved_bytes = numElements(eliminated_type) * sizeof(element_type)
+(e.g. tensor<1x2048x4096xbf16> -> 1*2048*4096 elements * 2 bytes = 16 MiB saved
+per inference step for the @unfused example). Sum across fused ops for the report.
+
+--------------------------------------------------------------------------------
+7. CONSTRAINT COMPLIANCE
+--------------------------------------------------------------------------------
+- Single-use check: `rmsnorm.getResult().hasOneUse()` — multi-use rmsnorm NOT
+  fused (proven by @no_fuse_multi_use surviving). CONFIRMED.
+- Operand order + epsilon: fused op built as
+  replaceOpWithNewOp<FusedRmsNormMatMulOp>(matmul, matmul.getResult().getType(),
+      rmsnorm.getInput() /*input*/, matmul.getB() /*weight*/,
+      rmsnorm.getEpsilonAttr() /*epsilon*/) — EXACT .td order (input, weight,
+  epsilon?), result = matmul's MxN type, epsilon carried verbatim (null FloatAttr
+  -> absent). CONFIRMED by 2a/2b IR. (Note: the C++ class is FusedRmsNormMatMulOp
+  — capital N — per `def PolyKernel_FusedRmsNormMatMulOp`; the task's
+  "FusedRmsnormMatMulOp" was a typo.)
+- Typed IR: pass runs on explicit-type IR; lit test uses explicit types; also
+  validated after --infer-shapes on the example.
+- File discipline: FuseRmsnormMatmul.cpp = 47 pure LOC, .h = 3, test = 33
+  (all <= 250).
+- No git commit. Only deliverable + test/ + reports/ + Passes.td/Passes.h/
+  lib CMakeLists wiring touched. .codegraph/, .omo/ untouched.
+
+--------------------------------------------------------------------------------
+8. ADVERSARIAL CLASSES
+--------------------------------------------------------------------------------
+- misleading_success_output: PROBED — real before/after IR pasted in sections 2-4
+  (positive fusion present + standalone rmsnorm gone; negative multi-use survives;
+  example fuses). Not claimed without IR.
+- stale_state: PROBED — reconfigured (Passes.td/CMakeLists changed); configure
+  exit 0, Passes.h.inc rebuilt (section 1).
+- hung_or_long: n/a (fast IR pass; Testing Time 0.13s).
+- flaky_tests: PROBED — FileCheck run twice, both PASS; lit deterministic.
+- dirty_worktree: PROBED — only the listed deliverable/test/report/wiring files
+  created/edited.
+
+--------------------------------------------------------------------------------
+9. RISKS / NOTES FOR TODO 13 (the other fusion passes)
+--------------------------------------------------------------------------------
+1. PATTERN TEMPLATE: this pass is the reference. Each Todo 13 pass = an
+   OpRewritePattern on the CONSUMER op, inspecting its producer(s), guarded by
+   hasOneUse() on every consumed intermediate, replaceOpWithNewOp<FusedOp>(...)
+   with the .td-exact operand order + carried attrs + the consumer's result type,
+   eraseOp(dead producer), run under applyPatternsGreedily. Mirror the file layout
+   (Passes.td def + <Name>.h + <Name>.cpp + CMake source line + Passes.h include).
+2. MULTI-PRODUCER FUSIONS (e.g. fused_matmul_bias_gelu = matmul+bias+gelu,
+   fused_residual_rmsnorm = add+rmsnorm): every intermediate that gets absorbed
+   needs its OWN single-use check, and the chain must be matched in one pattern
+   (greedy driver applies one pattern per match). Watch operand order carefully —
+   fused_residual_rmsnorm is (residual, input, epsilon?), qkv_projection needs the
+   num_heads attr carried.
+3. MULTI-RESULT FUSIONS (qkv_projection -> Q,K,V; fused_kv_append_attention ->
+   output,updated_cache): replaceOpWithNewOp must pass ALL result types; the
+   single-use check applies to each consumed value, and erasing the producer(s)
+   must not remove a value still used elsewhere.
+4. TRACKING ATTRS: reuse the SAME two attr names (polykernel.fused_from with a
+   per-fusion value like "matmul_bias_gelu", and polykernel.eliminated_type). For
+   fusions eliminating MULTIPLE intermediates, either attach multiple
+   eliminated-type attrs (e.g. polykernel.eliminated_type_0/_1) or an array attr —
+   decide consistently so Todo 17's walker stays simple. The attribute mechanism
+   (not statistics) should be kept for the exactness reason in section 6.
+5. ATTR-PRINT ORDER: discardable attrs print sorted by name; epsilon (a declared
+   property) sorts among them. Lit CHECK lines for fused ops should either pin the
+   full dict literally (proves presence/absence precisely) or use ordered
+   CHECK-SAME chains — and operand regexes must be non-greedy/non-whitespace
+   (%{{[^[:space:]]*}}) so a trailing %{{.*}} does not swallow the attr dict.
+6. EPSILON FLOAT FORMAT: f32 attrs reprint as the rounded value (1.0e-5 ->
+   9.99999974E-6). Lit checks should use `epsilon = {{.*}} : f32`, not a pinned
+   literal, unless pinning the whole dict.
+================================================================================

@@ -18,6 +18,8 @@
 //     (Canonicalize.h).
 //   - `--lower-to-cuda`  (Todo 8): emit portable CUDA/HIP kernel source
 //     (LowerToCuda.h).
+//   - `--fuse-rmsnorm-matmul` (Todo 12): fuse single-use rmsnorm + matmul into
+//     fused_rmsnorm_matmul (FuseRmsnormMatmul.h).
 // All are picked up by registerPolyKernelPasses() automatically.
 //
 //===----------------------------------------------------------------------===//
@@ -26,6 +28,7 @@
 #define POLYKERNEL_PASSES_PASSES_H
 
 #include "PolyKernel/Passes/Canonicalize.h"
+#include "PolyKernel/Passes/FuseRmsnormMatmul.h"
 #include "PolyKernel/Passes/InferShapes.h"
 #include "PolyKernel/Passes/LowerToCuda.h"
 
