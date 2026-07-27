@@ -1,0 +1,69 @@
+##############################################################################
+# PolyKernel Todo 22 (Wave 4): WMMA bf16 MATMUL — QA log (NEGATIVE PATH: WMMA is safely ADDITIVE)
+# Host: Linux 7.1.4-1-cachyos x86_64   Date: 2026-07-27T10:35Z
+# GPU:  AMD Radeon RX 7800 XT (Navi 32) = gfx1101   ROCm/clr: 7.2.3 (HIP 7.2.53211)   wave32
+# Driver: tests/kernels/test_wmma.py -> build/wmma_run/wmma_run (hipcc --offload-arch=gfx1101)
+# Verdict: PASS (negative behaves as designed) — a wrong-lane-mapping WMMA variant FAILS golden
+#          (validated=false / EXCLUDED) while the scalar baseline STILL PASSES -> WMMA never blocks the wave
+##############################################################################
+
+=== WHAT THIS PROVES (WMMA is safely additive) ===
+The Todo 22 acceptance requires: "If WMMA correctness fails locally, it is excluded
+from the tuning cache (correctness-gated) and the scalar baseline remains — never
+blocks the wave." This log demonstrates exactly that. A WMMA fragment with a
+DELIBERATELY WRONG lane-mapping produces a result that FAILS golden decisively, so the
+autotuner would mark it validated=false and EXCLUDE it — while the UNCHANGED scalar
+baseline (kernels/generated/matmul.cu, Todo 10) STILL PASSES on the identical inputs.
+A bad WMMA variant can never replace the correct scalar baseline.
+
+=== THE DELIBERATE BUG (a believable WMMA lane-mapping mistake) ===
+matmul_wmma.cu's kernel is templated on BadLane. The CORRECT RDNA3 store lane-mapping
+interleaves rows across the two lane halves:
+    row = base_m + 2*e + (lane >> 4)        # even rows in lanes 0..15, odd in 16..31
+The BadLane=true variant substitutes the BELIEVABLE BUG of assuming CONTIGUOUS rows per
+half (the mistake a developer makes by guessing the layout instead of reading the
+GPUOpen RDNA3 WMMA guide):
+    row = base_m + 8*(lane >> 4) + e        # WRONG: scrambles the output rows
+A and B fragment LOADING is identical (correct) in both; only the accumulator STORE
+lane-mapping differs — isolating the bug to the output fragment layout, exactly "a
+WMMA fragment with a wrong lane-mapping". The scrambled output fails all three golden
+metrics (cosine/pcc collapse to ~0.15 for random data; max_rel_err explodes).
+
+=== COMMANDS ===
+nix develop --impure --accept-flake-config -c \
+  python3 -m pytest "tests/kernels/test_wmma.py::test_wmma_negative_bad_lane_excluded_scalar_stands" -v -s
+# plus a direct side-by-side driver demo on identical inputs (wmma vs wmma_bad vs scalar).
+
+=== NEGATIVE TEST IN ISOLATION (-v -s; verbatim) ===
+tests/kernels/test_wmma.py::test_wmma_negative_bad_lane_excluded_scalar_stands
+[NEG] wmma_bad validated=False {'cosine': 0.14763715863227844, 'pcc': 0.14763669669628143, 'max_rel_err': 3742.3388671875, 'bit_exact': 0.12542724609375}
+[NEG] scalar   validated=True {'cosine': 1.0000001192092896, 'pcc': 0.9999999403953552, 'max_rel_err': 0.0, 'bit_exact': 1.0}
+[NEG] bad WMMA variant EXCLUDED (fails golden); scalar baseline STANDS -> WMMA is safely additive
+PASSED
+============================== 1 passed in 5.72s ===============================
+
+The test asserts BOTH halves of the additive guarantee:
+  (1) pytest.raises(AssertionError) around assert_correct(out_bad, ref) — the
+      wrong-lane WMMA variant FAILS golden (and cosine < 0.999, pcc < 0.99 decisively,
+      so it is a real correctness failure, not a flake) -> validated=false / excluded;
+  (2) assert_correct(out_scalar, ref) PASSES on the SAME inputs -> scalar stands.
+
+=== DIRECT SIDE-BY-SIDE DEMO (wmma vs wmma_bad vs scalar, IDENTICAL inputs; verbatim) ===
+Identical inputs: A,B = bf16 uniform(-1,1) 128x128, SEED=0xC0FFEE; golden ref = G.matmul
+Golden contract C: cosine>=0.999, max_rel_err<=1e-2, pcc>=0.99
+
+path=wmma      cosine=1.000000 max_rel_err=0.000000e+00 pcc=1.000000 -> validated=True PASS golden (selected)
+    driver: [polykernel-wmma] path=wmma M=128 N=128 K=128
+path=wmma_bad  cosine=0.147637 max_rel_err=3.742339e+03 pcc=0.147637 -> validated=False FAIL golden (EXCLUDED, validated=false)
+    driver: [polykernel-wmma] path=wmma_bad M=128 N=128 K=128
+path=scalar    cosine=1.000000 max_rel_err=0.000000e+00 pcc=1.000000 -> validated=True PASS golden (selected)
+    driver: [polykernel-wmma] path=scalar M=128 N=128 K=128
+
+=== RESULT ===
+On identical 128x128x128 bf16 inputs: the CORRECT WMMA variant passes golden
+(cosine=pcc=1.0, bit-exact) and would be selected; the WRONG-lane-mapping variant
+FAILS golden catastrophically (cosine=pcc~0.148, max_rel_err~3.7e3) and is EXCLUDED
+(validated=false); the scalar baseline passes (cosine=pcc=1.0) and STANDS. This is the
+correctness-gating guarantee the autotuner (Todo 25) relies on: WMMA is ADDITIVE — a
+bad WMMA variant is discarded and never selected over the correct scalar baseline, so
+WMMA correctness can never block the wave. Negative path CONFIRMED.
