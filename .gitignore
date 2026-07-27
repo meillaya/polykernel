@@ -22,17 +22,21 @@ __pycache__/
 *.pyo
 .venv/
 
-# Compiled objects
+# Compiled objects / build artifacts
 *.o
 *.obj
 *.so
 *.a
+*.cubin
+*.ptx
+*.fatbin
+*.bc
+*.out
+a.out
 
 # Caches
 .cache/
 cache/
 
-# Transient orchestration state (keep .omo/plans, .omo/start-work/)
-.omo/boulder.json
-.omo/run-continuation/
-.omo/drafts/
+# Orchestration state (Atlas / OhMyOpenCode) - not part of the product
+.omo/
