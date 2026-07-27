@@ -28,6 +28,8 @@
 //     fused_softmax_mask (FuseSoftmaxMask.h).
 //   - `--infer-tile-layout` (Todo 15): assign tile shapes (BLOCK_M/N/K) + operand
 //     layout to the matmul ops via shape heuristics (InferTileLayout.h).
+//   - `--plan-memory` (Todo 16): compute a per-kernel memory plan (smem budget +
+//     non-fused workspace + over-budget guard) for the matmul ops (PlanMemory.h).
 // All are picked up by registerPolyKernelPasses() automatically.
 //
 //===----------------------------------------------------------------------===//
@@ -43,6 +45,7 @@
 #include "PolyKernel/Passes/InferShapes.h"
 #include "PolyKernel/Passes/InferTileLayout.h"
 #include "PolyKernel/Passes/LowerToCuda.h"
+#include "PolyKernel/Passes/PlanMemory.h"
 
 namespace mlir::polykernel {
 // Generated registration helpers: registerInferShapesPass() /

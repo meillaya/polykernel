@@ -23,6 +23,9 @@
 //     mask-add+softmax).
 //   - Todo 15: `InferTileLayout` (`--infer-tile-layout`), assign tile shapes
 //     (BLOCK_M/N/K) + operand layout to the matmul ops via shape heuristics.
+//   - Todo 16: `PlanMemory` (`--plan-memory`), compute a per-kernel memory plan
+//     (shared-memory budget + non-fused workspace + over-budget guard) for the
+//     matmul ops as discardable attributes.
 //
 // The generated registration is EXPLICIT (no registerAllPasses / MLIRRegisterAll*
 // — nixpkgs MLIR does not ship the aggregate object archives; see
@@ -336,6 +339,49 @@ def InferTileLayout : Pass<"infer-tile-layout", "ModuleOp"> {
   // registerInferTileLayoutPass() / registerPolyKernelPasses() (see Passes.h)
   // — never registerAllPasses (nix out-of-tree constraint).
   let constructor = "::mlir::polykernel::createInferTileLayoutPass()";
+}
+
+//===----------------------------------------------------------------------===//
+// PlanMemory
+//===----------------------------------------------------------------------===//
+
+def PlanMemory : Pass<"plan-memory", "ModuleOp"> {
+  let summary = "Compute a per-kernel memory plan (smem budget + workspace + "
+                "over-budget guard) for the matmul ops";
+  let description = [{
+    PolyKernel memory-plan pass (Wave 3, Todo 16). Walks the matmul-structured ops
+    (`matmul`, `fused_rmsnorm_matmul`, `fused_matmul_bias_gelu`) and computes a
+    per-kernel memory plan, attaching DISCARDABLE attributes (the op set stays
+    closed — no new declared op attributes are added to PolyKernelOps.td). These are
+    PLANNING / REPORTING estimates, not cycle-accurate.
+
+      - `polykernel.smem_bytes` (I64Attr): the tiled shared-memory budget,
+        `(tile_m*tile_k + tile_k*tile_n) * dtype_bytes * stages`. tile_m/n/k are read
+        from the `--infer-tile-layout` attrs (ABSENT -> fallback 16x16x16, the
+        baseline CUDA GEMM tile); dtype_bytes is the operand-0 element width / 8
+        (bf16/fp16 = 2, fp32 = 4); stages = 2 (a documented default double-buffer).
+        `polykernel.layout` is READ (fallback "row_major"), not hardcoded; the
+        baseline footprint is layout-agnostic.
+      - `polykernel.workspace_bytes` (I64Attr): global scratch for intermediates NOT
+        fused away — 0 for a fused op (carries `polykernel.fused_from`; its
+        `polykernel.eliminated_type*` intermediates are gone), else the standalone
+        result-tensor size numElements(result) * dtype_bytes.
+      - `polykernel.smem_over_budget` (BoolAttr=true): set only when `smem_bytes`
+        exceeds the per-block limit (163 * 1024 bytes — the sm_80 budget, a single
+        conservative default; sm_90 allows 227KB). A warning is also emitted.
+
+    Runs on typed IR (after `--infer-shapes`, and after `--infer-tile-layout` when
+    tile-accurate budgets are wanted). Ops with a dynamic operand/result dim are
+    skipped (consistent with --infer-tile-layout).
+
+    Scope: the three PRIMARY matmul ops. qkv_projection / fused_kv_append_attention
+    are matmul-LIKE but have a head-split / cache structure and are out of scope.
+  }];
+
+  // Registered explicitly via the TableGen-generated registerPlanMemoryPass() /
+  // registerPolyKernelPasses() (see Passes.h) — never registerAllPasses (nix
+  // out-of-tree constraint).
+  let constructor = "::mlir::polykernel::createPlanMemoryPass()";
 }
 
 #endif // POLYKERNEL_PASSES

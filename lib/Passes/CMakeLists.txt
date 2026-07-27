@@ -5,8 +5,9 @@
 # pass (Todo 12), and the three remaining Wave 3 fusion passes (Todo 13):
 # --fuse-matmul-bias-gelu, --fuse-residual-rmsnorm, --fuse-softmax-mask.
 # The --infer-tile-layout pass (Todo 15) assigns tile shapes + operand layout to
-# the matmul ops. registerPolyKernelPasses() (Passes.h) picks all of them up
-# automatically.
+# the matmul ops. The --plan-memory pass (Todo 16) computes a per-kernel memory
+# plan (smem budget + non-fused workspace + over-budget guard) for the matmul ops.
+# registerPolyKernelPasses() (Passes.h) picks all of them up automatically.
 #
 # Upstream libs (nix ships individual libs only; NO MLIRRegisterAll*):
 #   - MLIRPolyKernel:           the dialect + ops (InferTypeOpInterface impls;
@@ -29,6 +30,7 @@ add_mlir_library(MLIRPolyKernelPasses
   InferShapes.cpp
   InferTileLayout.cpp
   LowerToCuda.cpp
+  PlanMemory.cpp
 
   ADDITIONAL_HEADER_DIRS
   ${POLYKERNEL_SOURCE_DIR}/include/PolyKernel

@@ -1,0 +1,100 @@
+===== Todo 16 (Wave 3): --plan-memory QA (definitive) =====
+command (full pipeline): polykernel-opt test/plan_memory.mlir --infer-shapes --fuse-rmsnorm-matmul --infer-tile-layout --plan-memory | FileCheck test/plan_memory.mlir
+command (fallback):      polykernel-opt test/plan_memory.mlir --infer-shapes --plan-memory | FileCheck test/plan_memory.mlir --check-prefix=FALLBACK
+
+MEMORY MODEL (documented in lib/Passes/PlanMemory.cpp):
+  smem_bytes      = (tile_m*tile_k + tile_k*tile_n) * dtype_bytes * stages
+                    tile_m/n/k from polykernel.tile_* attrs (ABSENT -> fallback 16x16x16);
+                    dtype_bytes = operand-0 element width/8 (bf16/fp16=2, fp32=4); stages=2 (double-buffer).
+  workspace_bytes = 0 for a fused op (carries polykernel.fused_from; eliminated intermediates fused away),
+                    else numElements(result) * dtype_bytes (standalone result = global working set).
+  over-budget     = smem_bytes > 163*1024 (166912 bytes, sm_80 per-block budget) -> polykernel.smem_over_budget=true + warning.
+  layout          = polykernel.layout is READ (fallback row_major), not hardcoded; baseline footprint is layout-agnostic.
+
+===== BEFORE (input IR, parsed with no passes) =====
+module {
+  polykernel.func @standalone(%arg0: tensor<32x32xbf16>, %arg1: tensor<32x32xbf16>) -> tensor<32x32xbf16> {
+    %0 = polykernel.matmul %arg0, %arg1 : tensor<32x32xbf16>, tensor<32x32xbf16> -> tensor<32x32xbf16>
+    polykernel.return %0 : tensor<32x32xbf16>
+  }
+  polykernel.func @fused(%arg0: tensor<2x4x8xf32>, %arg1: tensor<8x16xf32>) -> tensor<2x4x16xf32> {
+    %0 = polykernel.rmsnorm %arg0 {epsilon = 9.99999974E-6 : f32} : tensor<2x4x8xf32>
+    %1 = polykernel.matmul %0, %arg1 : tensor<2x4x8xf32>, tensor<8x16xf32> -> tensor<2x4x16xf32>
+    polykernel.return %1 : tensor<2x4x16xf32>
+  }
+  polykernel.func @over_budget(%arg0: tensor<256x256xf32>, %arg1: tensor<256x256xf32>) -> tensor<256x256xf32> {
+    %0 = polykernel.matmul %arg0, %arg1 : tensor<256x256xf32>, tensor<256x256xf32> -> tensor<256x256xf32>
+    polykernel.return %0 : tensor<256x256xf32>
+  }
+}
+
+
+===== AFTER (full pipeline: fusion + tile-layout + plan-memory) =====
+(stderr warning from the over-budget guard is shown first, then the IR on stdout)
+test/plan_memory.mlir:93:8: warning: shared-memory budget 262144 bytes exceeds the 166912-byte per-block limit (sm_80); tile config (layout=row_major) may not fit
+  %0 = polykernel.matmul %a, %b
+       ^
+test/plan_memory.mlir:93:8: note: see current operation: %0 = polykernel.matmul %arg0, %arg1 {polykernel.layout = "row_major", polykernel.smem_bytes = 262144 : i64, polykernel.smem_over_budget = true, polykernel.tile_k = 128 : i64, polykernel.tile_m = 128 : i64, polykernel.tile_n = 128 : i64, polykernel.workspace_bytes = 262144 : i64} : tensor<256x256xf32>, tensor<256x256xf32> -> tensor<256x256xf32>
+module {
+  polykernel.func @standalone(%arg0: tensor<32x32xbf16>, %arg1: tensor<32x32xbf16>) -> tensor<32x32xbf16> {
+    %0 = polykernel.matmul %arg0, %arg1 {polykernel.layout = "row_major", polykernel.smem_bytes = 8192 : i64, polykernel.tile_k = 32 : i64, polykernel.tile_m = 32 : i64, polykernel.tile_n = 32 : i64, polykernel.workspace_bytes = 2048 : i64} : tensor<32x32xbf16>, tensor<32x32xbf16> -> tensor<32x32xbf16>
+    polykernel.return %0 : tensor<32x32xbf16>
+  }
+  polykernel.func @fused(%arg0: tensor<2x4x8xf32>, %arg1: tensor<8x16xf32>) -> tensor<2x4x16xf32> {
+    %0 = polykernel.fused_rmsnorm_matmul %arg0, %arg1 {epsilon = 9.99999974E-6 : f32, polykernel.eliminated_type = tensor<2x4x8xf32>, polykernel.fused_from = "rmsnorm_matmul", polykernel.layout = "row_major", polykernel.smem_bytes = 1536 : i64, polykernel.tile_k = 8 : i64, polykernel.tile_m = 8 : i64, polykernel.tile_n = 16 : i64, polykernel.workspace_bytes = 0 : i64} : tensor<2x4x8xf32>, tensor<8x16xf32> -> tensor<2x4x16xf32>
+    polykernel.return %0 : tensor<2x4x16xf32>
+  }
+  polykernel.func @over_budget(%arg0: tensor<256x256xf32>, %arg1: tensor<256x256xf32>) -> tensor<256x256xf32> {
+    %0 = polykernel.matmul %arg0, %arg1 {polykernel.layout = "row_major", polykernel.smem_bytes = 262144 : i64, polykernel.smem_over_budget = true, polykernel.tile_k = 128 : i64, polykernel.tile_m = 128 : i64, polykernel.tile_n = 128 : i64, polykernel.workspace_bytes = 262144 : i64} : tensor<256x256xf32>, tensor<256x256xf32> -> tensor<256x256xf32>
+    polykernel.return %0 : tensor<256x256xf32>
+  }
+}
+
+
+===== FALLBACK AFTER (--infer-shapes --plan-memory, NO --infer-tile-layout) =====
+(proves absent tile attrs fall back to 16x16x16: @standalone smem=2048, not the 8192 of the tiled case)
+module {
+  polykernel.func @standalone(%arg0: tensor<32x32xbf16>, %arg1: tensor<32x32xbf16>) -> tensor<32x32xbf16> {
+    %0 = polykernel.matmul %arg0, %arg1 {polykernel.smem_bytes = 2048 : i64, polykernel.workspace_bytes = 2048 : i64} : tensor<32x32xbf16>, tensor<32x32xbf16> -> tensor<32x32xbf16>
+    polykernel.return %0 : tensor<32x32xbf16>
+  }
+  polykernel.func @fused(%arg0: tensor<2x4x8xf32>, %arg1: tensor<8x16xf32>) -> tensor<2x4x16xf32> {
+    %0 = polykernel.rmsnorm %arg0 {epsilon = 9.99999974E-6 : f32} : tensor<2x4x8xf32>
+    %1 = polykernel.matmul %0, %arg1 {polykernel.smem_bytes = 4096 : i64, polykernel.workspace_bytes = 512 : i64} : tensor<2x4x8xf32>, tensor<8x16xf32> -> tensor<2x4x16xf32>
+    polykernel.return %1 : tensor<2x4x16xf32>
+  }
+  polykernel.func @over_budget(%arg0: tensor<256x256xf32>, %arg1: tensor<256x256xf32>) -> tensor<256x256xf32> {
+    %0 = polykernel.matmul %arg0, %arg1 {polykernel.smem_bytes = 4096 : i64, polykernel.workspace_bytes = 262144 : i64} : tensor<256x256xf32>, tensor<256x256xf32> -> tensor<256x256xf32>
+    polykernel.return %0 : tensor<256x256xf32>
+  }
+}
+
+
+===== FileCheck run 1 (CHECK + FALLBACK) =====
+CHECK prefix: PASS (exit 0)
+FALLBACK prefix: PASS (exit 0)
+===== FileCheck run 2 (determinism) =====
+CHECK prefix: PASS (exit 0)
+FALLBACK prefix: PASS (exit 0)
+
+===== Regression: cmake --build build --target check-polykernel =====
+[0/1] Running the PolyKernel regression tests
+-- Testing: 13 tests, 13 workers --
+PASS: POLYKERNEL :: fuse_rmsnorm_matmul.mlir (1 of 13)
+PASS: POLYKERNEL :: infer_tile_layout.mlir (2 of 13)
+PASS: POLYKERNEL :: fuse_softmax_mask.mlir (3 of 13)
+PASS: POLYKERNEL :: infer_shapes_mismatch.mlir (4 of 13)
+PASS: POLYKERNEL :: op_set_closed.mlir (5 of 13)
+PASS: POLYKERNEL :: infer_shapes.mlir (6 of 13)
+PASS: POLYKERNEL :: smoke.mlir (7 of 13)
+PASS: POLYKERNEL :: fuse_residual_rmsnorm.mlir (8 of 13)
+PASS: POLYKERNEL :: fuse_matmul_bias_gelu.mlir (9 of 13)
+PASS: POLYKERNEL :: canonicalize.mlir (10 of 13)
+PASS: POLYKERNEL :: e2e_parse.mlir (11 of 13)
+PASS: POLYKERNEL :: dialect_roundtrip.mlir (12 of 13)
+PASS: POLYKERNEL :: plan_memory.mlir (13 of 13)
+
+Testing Time: 0.14s
+
+Total Discovered Tests: 13
+  Passed: 13 (100.00%)
