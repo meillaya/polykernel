@@ -1,0 +1,48 @@
+##############################################################################
+# PolyKernel Todo 41 (Wave 8 elite): QUANTIZED INFERENCE — QA log (NEGATIVE PATH: wrong per-channel scale)
+# Host: Linux 7.1.4-1-cachyos x86_64   Date: 2026-07-27T18:34:57Z
+# GPU:  AMD Radeon RX 7800 XT (Navi 32) = gfx1101   ROCm/clr: 7.2.3   ml_dtypes: 0.5.4
+# Driver: tests/kernels/test_quant.py::test_int8_wrong_per_channel_scale_fails_golden
+# Verdict: PASS (negative behaves correctly) — a WRONG per-channel scale FAILS the quantized golden decisively
+##############################################################################
+
+=== WHAT THIS PROVES ===
+The per-channel scale in the int8 weight-only matmul is VERIFIED, not cosmetic. With the
+CORRECT scale the int8 output passes the quantization-aware golden (cosine >= 0.99,
+max_rel_err <= 5e-2, pcc >= 0.99); with a WRONG per-channel scale the SAME int8 dequant-matmul
+FAILS the golden on ALL THREE relaxed metrics, decisively. So a scale bug cannot slip through
+the gate — the test is sensitive to per-channel scale correctness.
+
+=== THE CORRUPTION ===
+quantize_per_channel(W) -> (wq int8[K,N], scale fp32[N])  (correct per-output-channel scale)
+scale_wrong = scale * linspace(0.25, 4.0, N)              (a wrong gain ramped across channels)
+The int8 weights wq are UNCHANGED; only the per-channel dequant scale is wrong, so each output
+column n is multiplied by the wrong factor scale_wrong[n] instead of scale[n].
+
+=== STANDALONE EVIDENCE (quant_golden + metrics, verbatim) ===
+correct scale  : cosine=1.00000 max_rel_err=0.0000 pcc=1.00000
+wrong scale    : cosine=0.88796 max_rel_err=3.0000 pcc=0.88796
+assert_quant_correct(correct) -> PASS
+assert_quant_correct(wrong)   -> FAIL (quant assert_quant_correct FAILED: cosine=0.887963 (need >= 0.99), max_rel_err=3...)
+
+=== PYTEST NEGATIVE TEST (-v -s; verbatim) ===
+[NEG int8 wrong-scale] correct=PASS  wrong-scale validated=False {'cosine': 0.8879626989364624, 'pcc': 0.8879622220993042, 'max_rel_err': 2.999999761581421, 'bit_exact': 0.0}
+[NEG] wrong per-channel scale FAILS the quantized golden on cosine+rel+pcc -> scale is verified
+PASSED
+============================== 1 passed in 2.03s ===============================
+
+=== WHY IT FAILS ON ALL THREE METRICS ===
+- cosine 0.888 < 0.99 : the per-channel gain ramp re-weights columns differently, rotating the
+  output vector away from the reference (cosine is scale-invariant only for a UNIFORM factor;
+  a per-channel ramp breaks the direction).
+- max_rel_err 3.0 >> 5e-2 : columns scaled up to 4x / down to 0.25x diverge element-wise.
+- pcc 0.888 < 0.99 : the per-column correlation collapses for the same reason.
+- bit_exact 0.0 : no output element survives the wrong dequant.
+(A UNIFORM wrong scale, e.g. scale*2, would fail on max_rel_err alone with cosine ~1.0; the
+ramp is used here precisely because it is a decisive, structurally-wrong PER-CHANNEL error.)
+
+=== RESULT ===
+The int8 weight-only path is correctness-gated on the per-channel scale: the correct scale
+passes, a wrong per-channel scale fails decisively (cosine 0.888 / rel 3.0 / pcc 0.888, all
+three below the relaxed quant thresholds). Scale correctness IS tested. This is the negative
+sibling of reports/w8_quant.log (happy path).

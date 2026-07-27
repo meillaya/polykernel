@@ -1,0 +1,106 @@
+##############################################################################
+# PolyKernel Todo 41 (Wave 8 elite): QUANTIZED INFERENCE — int8 weight-only + fp8 simulation — QA log (HAPPY PATH)
+# Host: Linux 7.1.4-1-cachyos x86_64   Date: 2026-07-27T18:34:57Z
+# GPU:  AMD Radeon RX 7800 XT (Navi 32) = gfx1101   ROCm/clr: 7.2.3 (HIP 7.2.53211)   wave32
+# CUDA: nvcc 12.6 (GPU-free compile/PTX only — no local NVIDIA GPU)   ml_dtypes: 0.5.4
+# Driver: tests/kernels/test_quant.py -> build_t41/{quant_cpu/matmul_quant, quant_run/matmul_int8_run}
+# Verdict: PASS — 13/13 tests, 0 failures; int8 weight-only (CPU ref + REAL GPU) + fp8-sim match the quantization-aware golden
+##############################################################################
+
+=== WHAT THIS PROVES (the Wave-8 quantization milestone) ===
+An int8 WEIGHT-ONLY quantized matmul (kernels/generated/matmul_int8.cu) compiles clean
+for nvcc sm_80 AND sm_90 (GPU-free PTX) AND compiles + RUNS on the RX 7800 XT (gfx1101,
+hipcc), and passes the QUANTIZATION-AWARE golden (tests/golden/quant_golden.py — a NEW
+golden module; the shared golden.py/metrics.py are UNCHANGED) under the RELAXED quant
+thresholds (cosine >= 0.99, max_rel_err <= 5e-2, pcc >= 0.99). The fp8 (e4m3fn/e5m2)
+path is a SIMULATION (NO fp8 hardware): weights are rounded onto the fp8 grid (ml_dtypes
+float8 in the golden; a portable RNE round in the CPU ref) and matmul'd in bf16/fp32 —
+the CPU ref matches the golden BIT-EXACTLY for uniform [-1,1] weights.
+
+int8 weight-only is a codegen VARIANT of the CLOSED `polykernel.matmul` op (NO new op, NO
+new declared attribute); `path=int8_weight_only` is a report annotation (contract H),
+exactly as `path=wmma` is for the WMMA variant. The tiled bf16 SCALAR baseline
+(kernels/generated/matmul.cu) is UNCHANGED and remains the correctness reference.
+
+=== QUANTIZATION CONTRACT (matches tests/golden/quant_golden.py) ===
+int8 weight-only, per output channel (per column of W[K,N]), symmetric:
+    amax[n] = max_k |W[k,n]|;  scale[n] = amax[n]/127   (fp32; all-zero channel -> scale=1)
+    wq[k,n] = clip(round(W[k,n]/scale[n]), -127, 127)    (int8, round-to-nearest-even)
+    dequant: w_deq[k,n] = wq[k,n] * scale[n]             (fp32, per output channel n)
+    C[m,n]  = bf16( sum_k fp32(A[m,k]) * (fp32(Wq[k,n]) * scale[n]) )   (fp32 accum, bf16 RNE out)
+Activations A stay bf16 — only the WEIGHTS are int8 (weight-only). The kernel dequantizes
+on the fly inside the inner loop (acc += bf16(As) * (float(Bs_int8) * scale[col])).
+fp8 simulation (weights only): w_fp8 = W.astype(float8_e4m3fn|float8_e5m2).astype(fp32);
+    C = bf16( fp32(bf16(A)) @ w_fp8 ).  NO fp8 hardware — a simulation (labelled as such).
+
+=== DELIVERABLES ===
+kernels/generated/matmul_int8.cu   int8 weight-only kernel + POLYKERNEL_QUANT_MAIN .npy driver
+kernels/cpu/matmul_quant.cpp       CPU ref (int8 dequant-matmul + fp8-sim e4m3/e5m2 portable RNE)
+lib/Codegen/Quantize.cpp (+h)      quantization codegen emitter (int8 path + fp8-sim path)
+lib/Codegen/CMakeLists.txt         MLIRPolyKernelCodegen static lib + gtest (wired into lib/)
+tests/golden/quant_golden.py       quantization-aware golden (NEW; relaxed thresholds)
+tests/kernels/test_quant.py        pytest: int8 CPU+GPU + fp8-sim vs golden + wrong-scale negative
+
+=== BUILD (nvcc GPU-free; the int8 kernel compiles UNCHANGED under nvcc + hipcc) ===
+$ python3 tools/polykernel-bench/nvcc_driver.py --kernel matmul_int8 --arch sm_80,sm_90 --ptx --out-dir build_t41/nvcc
+  [parsed] registers=32 smem=768B spill_stores=0B spill_loads=0B stack=0B cmem0=396B   (sm_80)
+  [parsed] registers=32 smem=768B spill_stores=0B spill_loads=0B stack=0B cmem0=0B     (sm_90)
+  OK: compiled matmul_int8 for sm_80, sm_90; PTX emitted.
+  (smem = 512B bf16 A tile + 256B int8 Wq tile = 768B; 0 spills both archs.)
+$ hipcc --offload-arch=gfx1101 -DPOLYKERNEL_HIP -O2 -Ikernels/template -c kernels/generated/matmul_int8.cu
+  -> EXIT=0 (pure-kernel compile, gfx1101).
+
+=== CODEGEN EMITTER (lib/Codegen/Quantize.cpp) ===
+emitMatMulInt8Cuda emits the int8 kernel BYTE-IDENTICAL to the committed matmul_int8.cu
+kernel+launch portion (verified: 5374 bytes, 0 diff lines). The fp8 e4m3/e5m2 paths emit
+a clearly-labeled SIMULATION note ("NOT a hardware fp8 kernel"). Built as the
+MLIRPolyKernelCodegen static lib (strict LLVM warnings, clean); gtest 4/4:
+$ ctest --test-dir build_t41 -R quantize
+  100% tests passed, 0 tests failed out of 4
+
+=== SHAPES (int8: tile-multiple clean + a non-tile-multiple for kernel bounds checks) ===
+int8 (CPU + GPU):  128x128x128 | 256x128x256 (M!=N) | 192x160x224 (non-pow2) | 130x127x65 (non-tile-multiple)
+fp8-sim (CPU):     e4m3 + e5m2 each at 128x128x128 and 192x160x224
+
+=== PATH ANNOTATION (contract H) ===
+The drivers print `[polykernel-quant] path=int8_weight_only dtype=bf16xint8 scale=per-channel
+M=.. N=.. K=..` (GPU) and `[polykernel-quant-cpu] path=int8_weight_only|fp8_sim ...` (CPU) to
+stderr; every happy test asserts the path was noted. (The shared report emitter
+tools/polykernel-report/report.py is UNTOUCHED — the per-kernel path note rides the driver
+stderr annotation, the same mechanism as the WMMA variant's `path=wmma`; no contract-H field
+is renamed.)
+
+=== COMMAND (acceptance) ===
+$ nix develop --impure --accept-flake-config -c python3 -m pytest tests/kernels/test_quant.py -q
+
+=== PYTEST OUTPUT (-q; verbatim) ===
+.............                                                            [100%]
+13 passed in 6.27s
+
+=== PYTEST OUTPUT (-v -s; per-test metrics, verbatim) ===
+[int8 CPU 128x128x128] path=int8_weight_only {'cosine': 1.0, 'pcc': 0.9999999403953552, 'max_rel_err': 0.006824806798249483, 'bit_exact': 0.99981689453125}      PASSED
+[int8 CPU 256x128x256] path=int8_weight_only {'cosine': 1.0000001192092896, 'pcc': 1.0, 'max_rel_err': 0.007462657522410154, 'bit_exact': 0.9998779296875}     PASSED
+[int8 CPU 192x160x224] path=int8_weight_only {'cosine': 1.0, 'pcc': 1.0, 'max_rel_err': 0.02757696993649006, 'bit_exact': 0.9997442336309523}                  PASSED
+[int8 CPU 130x127x65]  path=int8_weight_only {'cosine': 0.9999999403953552, 'pcc': 0.9999999403953552, 'max_rel_err': 0.00483091501519084, 'bit_exact': 0.9998816568047337} PASSED
+[int8 GPU 128x128x128] path=int8_weight_only {'cosine': 1.0, 'pcc': 0.9999999403953552, 'max_rel_err': 0.006824806798249483, 'bit_exact': 0.99993896484375}     PASSED
+[int8 GPU 256x128x256] path=int8_weight_only {'cosine': 0.9999999403953552, 'pcc': 1.0, 'max_rel_err': 0.00724637508392334, 'bit_exact': 0.999908447265625}     PASSED
+[int8 GPU 192x160x224] path=int8_weight_only {'cosine': 1.0, 'pcc': 0.9999999403953552, 'max_rel_err': 0.02068272791802883, 'bit_exact': 0.9998139880952381}    PASSED
+[int8 GPU 130x127x65]  path=int8_weight_only {'cosine': 0.9999999403953552, 'pcc': 0.9999999403953552, 'max_rel_err': 0.00483091501519084, 'bit_exact': 0.9998816568047337} PASSED
+[fp8_sim e4m3 128x128x128] path=fp8_sim {'cosine': 1.0, 'pcc': 1.0000001192092896, 'max_rel_err': 0.0, 'bit_exact': 1.0}                                       PASSED
+[fp8_sim e5m2 128x128x128] path=fp8_sim {'cosine': 1.0000001192092896, 'pcc': 1.0, 'max_rel_err': 0.0, 'bit_exact': 1.0}                                       PASSED
+[fp8_sim e4m3 192x160x224] path=fp8_sim {'cosine': 1.0000001192092896, 'pcc': 1.0000001192092896, 'max_rel_err': 0.0, 'bit_exact': 1.0}                         PASSED
+[fp8_sim e5m2 192x160x224] path=fp8_sim {'cosine': 1.0000001192092896, 'pcc': 0.9999999403953552, 'max_rel_err': 0.0, 'bit_exact': 1.0}                         PASSED
+test_int8_wrong_per_channel_scale_fails_golden                                                                                                                  PASSED
+============================== 13 passed in 6.88s ==============================
+
+=== RESULT ===
+int8 weight-only matmul compiles clean for nvcc sm_80 + sm_90 (32 regs, 768B smem, 0 spills)
+and compiles + RUNS on the RX 7800 XT (gfx1101), matching the quantization-aware golden on
+every shape: cosine ~1.0, max_rel_err <= 2.8e-2 (within the relaxed 5e-2; the residual is the
+fp32 K-reduction order vs NumPy, NOT a bug), >= 99.97% bit-exact. The CPU reference matches
+the same golden (int8) and matches the ml_dtypes fp8 golden BIT-EXACTLY (e4m3 + e5m2: rel=0.0,
+bit_exact=1.0). The codegen emitter (lib/Codegen/Quantize.cpp) emits the int8 kernel
+byte-identical + a labelled fp8-sim path; its gtest is 4/4. check-polykernel lit stays green
+(14/14). The report notes path=int8_weight_only / path=fp8_sim (driver annotation; contract-H
+fields untouched). The wrong-per-channel-scale negative (reports/w8_quant_scale_neg.log) proves
+the scale is verified. Wave 8 Todo 41 quantized inference COMPLETE.
