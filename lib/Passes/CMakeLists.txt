@@ -4,7 +4,9 @@
 # --lower-to-cuda source-emitter pass (Todo 8), the --fuse-rmsnorm-matmul fusion
 # pass (Todo 12), and the three remaining Wave 3 fusion passes (Todo 13):
 # --fuse-matmul-bias-gelu, --fuse-residual-rmsnorm, --fuse-softmax-mask.
-# registerPolyKernelPasses() (Passes.h) picks all of them up automatically.
+# The --infer-tile-layout pass (Todo 15) assigns tile shapes + operand layout to
+# the matmul ops. registerPolyKernelPasses() (Passes.h) picks all of them up
+# automatically.
 #
 # Upstream libs (nix ships individual libs only; NO MLIRRegisterAll*):
 #   - MLIRPolyKernel:           the dialect + ops (InferTypeOpInterface impls;
@@ -25,6 +27,7 @@ add_mlir_library(MLIRPolyKernelPasses
   FuseRmsnormMatmul.cpp
   FuseSoftmaxMask.cpp
   InferShapes.cpp
+  InferTileLayout.cpp
   LowerToCuda.cpp
 
   ADDITIONAL_HEADER_DIRS

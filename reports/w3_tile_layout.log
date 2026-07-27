@@ -1,0 +1,55 @@
+===== Todo 15 (Wave 3): --infer-tile-layout QA (definitive) =====
+command: polykernel-opt test/infer_tile_layout.mlir --infer-shapes --infer-tile-layout | FileCheck test/infer_tile_layout.mlir
+
+Tile heuristic: for problem dim D, tile = largest power-of-two in {128,64,32,16} <= D;
+if D < 16, tile = D (SMALL-DIM CLAMP: tile_m<=M, tile_n<=N, tile_k<=K, always).
+M = product(operand0 leading dims), K = last dim(operand0), N = last dim(operand1).
+Attrs (discardable): polykernel.tile_m/n/k (I64Attr), polykernel.layout = "row_major" (StringAttr).
+
+===== BEFORE (input IR, the three matmul ops) =====
+37:  %0 = polykernel.matmul %a, %b
+56:  %0 = polykernel.fused_rmsnorm_matmul %x, %w
+75:  %0 = polykernel.matmul %a, %b
+
+===== AFTER (full output IR with tile + layout attrs attached) =====
+module {
+  polykernel.func @matmul_large(%arg0: tensor<2048x4096xbf16>, %arg1: tensor<4096x11008xbf16>) -> tensor<2048x11008xbf16> {
+    %0 = polykernel.matmul %arg0, %arg1 {polykernel.layout = "row_major", polykernel.tile_k = 128 : i64, polykernel.tile_m = 128 : i64, polykernel.tile_n = 128 : i64} : tensor<2048x4096xbf16>, tensor<4096x11008xbf16> -> tensor<2048x11008xbf16>
+    polykernel.return %0 : tensor<2048x11008xbf16>
+  }
+  polykernel.func @fused_rmsnorm_matmul_scaled(%arg0: tensor<48x64xbf16>, %arg1: tensor<64x24xbf16>) -> tensor<48x24xbf16> {
+    %0 = polykernel.fused_rmsnorm_matmul %arg0, %arg1 {polykernel.layout = "row_major", polykernel.tile_k = 64 : i64, polykernel.tile_m = 32 : i64, polykernel.tile_n = 16 : i64} : tensor<48x64xbf16>, tensor<64x24xbf16> -> tensor<48x24xbf16>
+    polykernel.return %0 : tensor<48x24xbf16>
+  }
+  polykernel.func @matmul_small_clamped(%arg0: tensor<8x8xf32>, %arg1: tensor<8x8xf32>) -> tensor<8x8xf32> {
+    %0 = polykernel.matmul %arg0, %arg1 {polykernel.layout = "row_major", polykernel.tile_k = 8 : i64, polykernel.tile_m = 8 : i64, polykernel.tile_n = 8 : i64} : tensor<8x8xf32>, tensor<8x8xf32> -> tensor<8x8xf32>
+    polykernel.return %0 : tensor<8x8xf32>
+  }
+}
+
+
+===== FileCheck run 1 =====
+FileCheck run 1: PASS (exit 0)
+===== FileCheck run 2 (determinism) =====
+FileCheck run 2: PASS (exit 0)
+
+===== Regression: cmake --build build --target check-polykernel =====
+[0/1] Running the PolyKernel regression tests
+-- Testing: 12 tests, 12 workers --
+PASS: POLYKERNEL :: infer_tile_layout.mlir (1 of 12)
+PASS: POLYKERNEL :: fuse_matmul_bias_gelu.mlir (2 of 12)
+PASS: POLYKERNEL :: smoke.mlir (3 of 12)
+PASS: POLYKERNEL :: op_set_closed.mlir (4 of 12)
+PASS: POLYKERNEL :: infer_shapes.mlir (5 of 12)
+PASS: POLYKERNEL :: e2e_parse.mlir (6 of 12)
+PASS: POLYKERNEL :: fuse_rmsnorm_matmul.mlir (7 of 12)
+PASS: POLYKERNEL :: canonicalize.mlir (8 of 12)
+PASS: POLYKERNEL :: fuse_softmax_mask.mlir (9 of 12)
+PASS: POLYKERNEL :: dialect_roundtrip.mlir (10 of 12)
+PASS: POLYKERNEL :: fuse_residual_rmsnorm.mlir (11 of 12)
+PASS: POLYKERNEL :: infer_shapes_mismatch.mlir (12 of 12)
+
+Testing Time: 0.12s
+
+Total Discovered Tests: 12
+  Passed: 12 (100.00%)

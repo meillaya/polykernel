@@ -26,6 +26,8 @@
 //     into fused_residual_rmsnorm (FuseResidualRmsnorm.h).
 //   - `--fuse-softmax-mask` (Todo 13): fuse single-use mask add + softmax into
 //     fused_softmax_mask (FuseSoftmaxMask.h).
+//   - `--infer-tile-layout` (Todo 15): assign tile shapes (BLOCK_M/N/K) + operand
+//     layout to the matmul ops via shape heuristics (InferTileLayout.h).
 // All are picked up by registerPolyKernelPasses() automatically.
 //
 //===----------------------------------------------------------------------===//
@@ -39,6 +41,7 @@
 #include "PolyKernel/Passes/FuseRmsnormMatmul.h"
 #include "PolyKernel/Passes/FuseSoftmaxMask.h"
 #include "PolyKernel/Passes/InferShapes.h"
+#include "PolyKernel/Passes/InferTileLayout.h"
 #include "PolyKernel/Passes/LowerToCuda.h"
 
 namespace mlir::polykernel {

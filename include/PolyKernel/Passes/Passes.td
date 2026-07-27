@@ -21,6 +21,8 @@
 //     `FuseSoftmaxMask` (`--fuse-softmax-mask`) — the three remaining Wave 3
 //     fusion passes (single-use matmul+bias+gelu, residual-add+rmsnorm,
 //     mask-add+softmax).
+//   - Todo 15: `InferTileLayout` (`--infer-tile-layout`), assign tile shapes
+//     (BLOCK_M/N/K) + operand layout to the matmul ops via shape heuristics.
 //
 // The generated registration is EXPLICIT (no registerAllPasses / MLIRRegisterAll*
 // — nixpkgs MLIR does not ship the aggregate object archives; see
@@ -293,6 +295,47 @@ def FuseSoftmaxMask : Pass<"fuse-softmax-mask", "ModuleOp"> {
   // registerFuseSoftmaxMaskPass() / registerPolyKernelPasses() (see Passes.h)
   // — never registerAllPasses (nix out-of-tree constraint).
   let constructor = "::mlir::polykernel::createFuseSoftmaxMaskPass()";
+}
+
+//===----------------------------------------------------------------------===//
+// InferTileLayout
+//===----------------------------------------------------------------------===//
+
+def InferTileLayout : Pass<"infer-tile-layout", "ModuleOp"> {
+  let summary = "Assign tile shapes (BLOCK_M/N/K) + operand layout to matmul ops";
+  let description = [{
+    PolyKernel tile-layout pass (Wave 3, Todo 15). Walks the matmul-structured ops
+    (`matmul`, `fused_rmsnorm_matmul`, `fused_matmul_bias_gelu`) and assigns each an
+    INITIAL tile shape + operand layout as DISCARDABLE attributes (the op set stays
+    closed — no new declared op attributes are added to PolyKernelOps.td):
+
+      - `polykernel.tile_m` / `polykernel.tile_n` / `polykernel.tile_k` (I64Attr):
+        the BLOCK_M / BLOCK_N / BLOCK_K the lowering targets. The baseline CUDA GEMM
+        (kernels/generated/matmul.cu) uses 16x16x16.
+      - `polykernel.layout` (StringAttr): the operand memory layout — always
+        "row_major" today (the baseline; transposed / packed layouts are a future
+        refinement).
+
+    Shape extraction (operand 0 = [..,M,K], operand 1 = [K,N], matching the kernel's
+    "flatten leading dims into M" model): K = last dim of operand 0, N = last dim of
+    operand 1, M = product of operand 0's leading dims.
+
+    Tile heuristic (simple, deterministic): for a problem dim D, pick the LARGEST
+    power-of-two candidate in {128, 64, 32, 16} that is <= D; if D < 16, clamp the
+    tile to D itself (SMALL-DIM CLAMP — tile_m <= M, tile_n <= N, tile_k <= K,
+    always). These are DEFAULTS the autotuner (Todo 24) refines later; they need only
+    be sensible + deterministic + clamped, not optimal. Runs on typed IR (after
+    `--infer-shapes`); ops with a dynamic operand dim are skipped.
+
+    Scope: the three PRIMARY matmul ops. qkv_projection / fused_kv_append_attention
+    are matmul-LIKE but have a head-split / cache structure (not a plain [M,K]x[K,N])
+    and are intentionally out of scope for this initial pass.
+  }];
+
+  // Registered explicitly via the TableGen-generated
+  // registerInferTileLayoutPass() / registerPolyKernelPasses() (see Passes.h)
+  // — never registerAllPasses (nix out-of-tree constraint).
+  let constructor = "::mlir::polykernel::createInferTileLayoutPass()";
 }
 
 #endif // POLYKERNEL_PASSES
