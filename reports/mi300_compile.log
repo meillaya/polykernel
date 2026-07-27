@@ -1,0 +1,108 @@
+##############################################################################
+# PolyKernel Todo 23 (Wave 4): gfx942 (MI300 / CDNA3) COMPILE TARGET — QA log (HAPPY PATH)
+# Host: Linux 7.1.4-1-cachyos x86_64   Date: 2026-07-27T09:59:13Z
+# Local GPU: AMD Radeon RX 7800 XT (Navi 32) = gfx1101   ROCm/clr: 7.2.3
+# Target:  gfx942 = AMD Instinct MI300 (CDNA3), the report headline AMD part.
+# Driver:  tools/polykernel-bench/hipcc_driver.py --arch gfx942 --all
+# Verdict: PASS (all 7 kernels cross-compile clean for gfx942 + AMDGPU ISA captured)
+##############################################################################
+
+=== COMPILE-ONLY LOCALLY; RUNTIME ON RENTAL (W5) ===
+gfx942 (MI300) is the report headline AMD part, but there is NO MI300 hardware on
+this host (local GPU = gfx1101). `hipcc --offload-arch=gfx942` is a target-
+independent clang AMDGPU codegen step: it cross-compiles the portable kernels to a
+gfx942 code object WITHOUT needing the device. Therefore EVERY MI300 figure below
+is "compile-only locally; runtime on rental (W5)". The runtime launch + golden
+correctness on real MI300 is deferred to the Wave 5 rental. The matching negative
+(attempting to RUN a gfx942 binary locally -> graceful "no gfx942 device,
+compile-only", not a crash) is in reports/w4_gfx942_norun.log.
+
+=== PORTABILITY PROOF (unchanged source) ===
+The SAME committed kernels/generated/*.cu that compile for gfx1101 (Todo 19) and
+that nvcc builds with -DPOLYKERNEL_CUDA cross-compile UNCHANGED for gfx942 under
+`hipcc --offload-arch=gfx942 -DPOLYKERNEL_HIP`. Only the --offload-arch flag
+changes; the portable source (kernels/template/kernel_common.h, pk_* / PK_* names)
+is byte-identical.
+
+=== ISA CAPTURE (reuses the Todo 21 AMD ISA analyzer) ===
+hipcc_driver.py --all implies --dump-isa: after each clean compile it reuses
+amd_analyze.py (hipcc --save-temps + parse of the emitted .amdhsa metadata) to
+read VGPR/SGPR/LDS/scratch/spills from the cross-compiled .s. No GPU of the target
+arch is required — the ISA is parsed from the .s, which is exactly how the MI300
+figures are obtained without hardware. (The [amd_analyze] lines below are those
+--save-temps compiles.) Occupancy / runtime metrics are NOT claimed for gfx942
+here — they need the real device (W5 rental).
+
+=== COMMAND ===
+nix develop --impure --accept-flake-config -c \
+  python3 tools/polykernel-bench/hipcc_driver.py --arch gfx942 --all
+
+=== DRIVER OUTPUT (stdout + interleaved [amd_analyze] --save-temps stderr) ===
+[amd_analyze] hipcc --save-temps --offload-arch=gfx942 -DPOLYKERNEL_HIP -I.../kernels/template -c .../kernels/generated/rmsnorm.cu            (ISA capture)
+[amd_analyze] hipcc --save-temps --offload-arch=gfx942 -DPOLYKERNEL_HIP -I.../kernels/template -c .../kernels/generated/gelu.cu               (ISA capture)
+[amd_analyze] hipcc --save-temps --offload-arch=gfx942 -DPOLYKERNEL_HIP -I.../kernels/template -c .../kernels/generated/silu.cu               (ISA capture)
+[amd_analyze] hipcc --save-temps --offload-arch=gfx942 -DPOLYKERNEL_HIP -I.../kernels/template -c .../kernels/generated/matmul.cu             (ISA capture)
+[amd_analyze] hipcc --save-temps --offload-arch=gfx942 -DPOLYKERNEL_HIP -I.../kernels/template -c .../kernels/generated/softmax.cu            (ISA capture)
+[amd_analyze] hipcc --save-temps --offload-arch=gfx942 -DPOLYKERNEL_HIP -I.../kernels/template -c .../kernels/generated/fused_rmsnorm_matmul.cu      (ISA capture)
+[amd_analyze] hipcc --save-temps --offload-arch=gfx942 -DPOLYKERNEL_HIP -I.../kernels/template -c .../kernels/generated/fused_matmul_bias_gelu.cu    (ISA capture)
+kernels: rmsnorm, gelu, silu, matmul, softmax, fused_rmsnorm_matmul, fused_matmul_bias_gelu
+archs:   gfx942
+hipcc:   /nix/store/jc7q7dm8y1r2317sg888mi7pxzarg7m2-clr-7.2.3/bin/hipcc
+ISA:     dump (VGPR/SGPR/LDS via amd_analyze)
+========================================================================
+[hipcc] hipcc --offload-arch=gfx942 -DPOLYKERNEL_HIP -Ikernels/template -c kernels/generated/rmsnorm.cu -o build/hipcc/rmsnorm_gfx942.o
+  [PASS] rmsnorm (gfx942) -> build/hipcc/rmsnorm_gfx942.o
+  [ISA] rmsnorm (gfx942): vgpr=20 sgpr=35 lds=36B scratch=0B spills=no
+========================================================================
+[hipcc] hipcc --offload-arch=gfx942 -DPOLYKERNEL_HIP -Ikernels/template -c kernels/generated/gelu.cu -o build/hipcc/gelu_gfx942.o
+  [PASS] gelu (gfx942) -> build/hipcc/gelu_gfx942.o
+  [ISA] gelu (gfx942): vgpr=44 sgpr=46 lds=0B scratch=0B spills=no
+========================================================================
+[hipcc] hipcc --offload-arch=gfx942 -DPOLYKERNEL_HIP -Ikernels/template -c kernels/generated/silu.cu -o build/hipcc/silu_gfx942.o
+  [PASS] silu (gfx942) -> build/hipcc/silu_gfx942.o
+  [ISA] silu (gfx942): vgpr=40 sgpr=25 lds=0B scratch=0B spills=no
+========================================================================
+[hipcc] hipcc --offload-arch=gfx942 -DPOLYKERNEL_HIP -Ikernels/template -c kernels/generated/matmul.cu -o build/hipcc/matmul_gfx942.o
+  [PASS] matmul (gfx942) -> build/hipcc/matmul_gfx942.o
+  [ISA] matmul (gfx942): vgpr=31 sgpr=16 lds=1024B scratch=0B spills=no
+========================================================================
+[hipcc] hipcc --offload-arch=gfx942 -DPOLYKERNEL_HIP -Ikernels/template -c kernels/generated/softmax.cu -o build/hipcc/softmax_gfx942.o
+  [PASS] softmax (gfx942) -> build/hipcc/softmax_gfx942.o
+  [ISA] softmax (gfx942): vgpr=39 sgpr=35 lds=40B scratch=0B spills=no
+========================================================================
+[hipcc] hipcc --offload-arch=gfx942 -DPOLYKERNEL_HIP -Ikernels/template -c kernels/generated/fused_rmsnorm_matmul.cu -o build/hipcc/fused_rmsnorm_matmul_gfx942.o
+  [PASS] fused_rmsnorm_matmul (gfx942) -> build/hipcc/fused_rmsnorm_matmul_gfx942.o
+  [ISA] fused_rmsnorm_matmul (gfx942): vgpr=32 sgpr=18 lds=1024B scratch=0B spills=no
+========================================================================
+[hipcc] hipcc --offload-arch=gfx942 -DPOLYKERNEL_HIP -Ikernels/template -c kernels/generated/fused_matmul_bias_gelu.cu -o build/hipcc/fused_matmul_bias_gelu_gfx942.o
+  [PASS] fused_matmul_bias_gelu (gfx942) -> build/hipcc/fused_matmul_bias_gelu_gfx942.o
+  [ISA] fused_matmul_bias_gelu (gfx942): vgpr=31 sgpr=18 lds=1024B scratch=0B spills=no
+========================================================================
+OK: compiled 7 kernel x arch target(s) for gfx942 clean.
+
+=== gfx942 (MI300) CAPTURED AMDGPU ISA — compile-only locally; runtime on rental (W5) ===
+  kernel                    VGPR  SGPR  LDS(B)  scratch(B)  spills
+  rmsnorm                     20    35      36           0    no
+  gelu                        44    46       0           0    no
+  silu                        40    25       0           0    no
+  matmul                      31    16    1024           0    no   <- report headline
+  softmax                     39    35      40           0    no
+  fused_rmsnorm_matmul        32    18    1024           0    no
+  fused_matmul_bias_gelu      31    18    1024           0    no
+
+  matmul (gfx942, headline): VGPR=31  SGPR=16  LDS=1024 B  scratch=0 B  no spills.
+
+=== RESULT ===
+driver exit code: 0
+kernels cross-compiled clean for gfx942: 7/7 (rmsnorm, gelu, silu, matmul, softmax,
+  fused_rmsnorm_matmul, fused_matmul_bias_gelu)
+objects produced (gfx942 code objects, host + device):
+  build/hipcc/rmsnorm_gfx942.o            build/hipcc/gelu_gfx942.o
+  build/hipcc/silu_gfx942.o               build/hipcc/matmul_gfx942.o
+  build/hipcc/softmax_gfx942.o            build/hipcc/fused_rmsnorm_matmul_gfx942.o
+  build/hipcc/fused_matmul_bias_gelu_gfx942.o
+AMDGPU ISA captured for all 7 (VGPR/SGPR/LDS/scratch/spills via Todo 21 analyzer).
+
+VERDICT: PASS — hipcc cross-compiles all 7 portable kernels for gfx942 (MI300)
+clean, compile-only, with the AMDGPU ISA captured for the report. All figures are
+compile-only locally; runtime + occupancy on the W5 MI300 rental.

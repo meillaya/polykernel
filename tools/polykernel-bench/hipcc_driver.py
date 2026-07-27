@@ -1,26 +1,42 @@
 #!/usr/bin/env python3
-"""hipcc driver: compile a generated PolyKernel .cu for an AMDGPU arch (gfx1101).
+"""hipcc driver: compile a generated PolyKernel .cu for an AMDGPU arch.
 
-Todo 19 / Wave 4. The HIP sibling of nvcc_driver.py. Compiles a generated portable
-kernel (kernels/generated/<kernel>.cu, emitted by `polykernel-opt --lower-to-cuda`
-OR `--lower-to-hip` — the emitted source is byte-identical) for one or more
-`--offload-arch` targets using hipcc (from the nix shell rocmPackages.clr), with
-`-DPOLYKERNEL_HIP`, producing a code object — all GPU-FREE (compile only; the
-kernels are NOT launched here — runtime launch + golden correctness is Todo 20).
+Todo 19 / Wave 4 (+ Todo 23: gfx942 / MI300 compile target). The HIP sibling of
+nvcc_driver.py. Compiles a generated portable kernel (kernels/generated/<kernel>.cu,
+emitted by `polykernel-opt --lower-to-cuda` OR `--lower-to-hip` — the emitted
+source is byte-identical) for one or more `--offload-arch` targets using hipcc
+(from the nix shell rocmPackages.clr), with `-DPOLYKERNEL_HIP`, producing a code
+object — all GPU-FREE (compile only; the kernels are NOT launched here — runtime
+launch + golden correctness is Todo 20).
+
+The driver is ARCH-AGNOSTIC: the SAME portable source cross-compiles for the
+local gfx1101 (RX 7800 XT) AND for gfx942 (MI300 / CDNA3, the report headline
+AMD part). gfx942 is COMPILE-ONLY locally (no MI300 hardware) — `--offload-arch=
+gfx942` is a target-independent clang AMDGPU codegen step, so it needs no device;
+gfx942 runtime is deferred to the Wave 5 rental. Every MI300 figure is therefore
+"compile-only locally; runtime on rental".
 
 This is the PORTABILITY PROOF: the SAME .cu that nvcc builds with -DPOLYKERNEL_CUDA
-compiles UNCHANGED under `hipcc -DPOLYKERNEL_HIP --offload-arch=gfx1101`, because
+compiles UNCHANGED under `hipcc -DPOLYKERNEL_HIP --offload-arch=<arch>`, because
 every kernel is written against kernels/template/kernel_common.h and uses only the
 portable pk_* / PK_* names (the backend is selected by the -D define, never by an
 edit to the source).
 
 Usage:
     hipcc_driver.py --arch gfx1101 --all          # compile every generated kernel
-    hipcc_driver.py --kernel matmul --arch gfx1101 # compile one kernel
+    hipcc_driver.py --arch gfx942 --all           # MI300 cross-compile (compile-only) + ISA dump
+    hipcc_driver.py --kernel matmul --arch gfx942 --dump-isa  # one kernel + its ISA
 
 Output (per kernel x arch):
     <out-dir>/<kernel>_<arch>.o    the compiled object (host + device code object)
     stdout: the hipcc command + any diagnostics + a per-kernel PASS/FAIL line.
+
+ISA dump (`--dump-isa`, IMPLIED by `--all`; disable with `--no-dump-isa`): after
+each clean compile, reuses the Todo 21 AMD ISA analyzer (amd_analyze.py:
+`hipcc --save-temps` + parse of the emitted .amdhsa metadata) to print the
+AMDGPU resource usage — VGPR/SGPR/LDS/scratch/spills — for that kernel x arch.
+Works identically for gfx1101 and gfx942 (the ISA is read from the cross-compiled
+.s; no GPU of that arch is required).
 
 Exits non-zero if hipcc is missing, a kernel source is absent, or any compile
 fails (so a portability bug — e.g. an unguarded CUDA-only intrinsic — surfaces as
@@ -94,12 +110,43 @@ def compile_object(
         raise SystemExit(f"error: hipcc failed for {cu.name} ({arch}, exit {proc.returncode})")
 
 
+def dump_kernel_isa(
+    kernel: str, arch: str, kernel_dir: Path, include_dir: Path, timeout_s: int
+) -> None:
+    """Capture + print the AMDGPU ISA resource usage for `kernel`@`arch`.
+
+    Reuses the Todo 21 analyzer (amd_analyze.py): `hipcc --save-temps` in a temp
+    dir (compile-only, NO GPU) then a parse of the emitted .amdhsa metadata for
+    VGPR/SGPR/LDS/scratch. Target-independent, so it works for gfx1101 and gfx942
+    alike — the ISA is read from the cross-compiled .s; no device of that arch is
+    needed (this is how the MI300/gfx942 figures are captured without hardware).
+    """
+    # Lazy import: amd_analyze lives in this directory and imports hipcc_driver
+    # at module scope. Importing it here (not at module top) avoids a cycle when
+    # this file runs as __main__, and keeps the plain-compile path dependency-free.
+    import amd_analyze
+
+    assembly = amd_analyze.capture_assembly(
+        kernel, arch, kernel_dir, include_dir, timeout_s
+    )
+    stats = amd_analyze.parse_amd_isa(assembly)
+    spills = stats["scratch_store_count"] + stats["scratch_load_count"]
+    print(
+        f"  [ISA] {kernel} ({arch}): vgpr={stats['vgpr']} sgpr={stats['sgpr']} "
+        f"lds={stats['lds_bytes']}B scratch={stats['scratch_bytes']}B "
+        f"spills={'yes' if spills else 'no'}"
+    )
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--kernel", default="rmsnorm", help="kernel name (basename of the .cu)")
     ap.add_argument("--all", action="store_true", dest="all_kernels",
                     help="compile every generated kernel (rmsnorm, gelu, silu, matmul, softmax + fused)")
     ap.add_argument("--arch", default="gfx1101", help="comma-separated --offload-arch list")
+    ap.add_argument("--dump-isa", action=argparse.BooleanOptionalAction, default=None,
+                    help="dump AMDGPU ISA (VGPR/SGPR/LDS/scratch) per kernel via the Todo 21 "
+                         "analyzer; IMPLIED by --all (disable with --no-dump-isa)")
     ap.add_argument("--kernel-dir", default="kernels/generated", help="dir holding <kernel>.cu")
     ap.add_argument("--include-dir", default="kernels/template", help="dir holding kernel_common.h")
     ap.add_argument("--out-dir", default="build/hipcc", help="dir for .o output")
@@ -131,6 +178,8 @@ def main() -> None:
     print(f"kernels: {', '.join(kernels)}")
     print(f"archs:   {', '.join(archs)}")
     print(f"hipcc:   {hipcc}")
+    dump_isa = args.all_kernels if args.dump_isa is None else args.dump_isa
+    print(f"ISA:     {'dump (VGPR/SGPR/LDS via amd_analyze)' if dump_isa else 'off'}")
     print("=" * 72)
 
     compiled = 0
@@ -140,6 +189,8 @@ def main() -> None:
             compile_object(hipcc, cu, arch, obj, include_dir, args.timeout)
             print(f"  [PASS] {name} ({arch}) -> {obj}")
             compiled += 1
+            if dump_isa:
+                dump_kernel_isa(name, arch, kernel_dir, include_dir, args.timeout)
         print("=" * 72)
 
     print(f"OK: compiled {compiled} kernel x arch target(s) for {', '.join(archs)} clean.")

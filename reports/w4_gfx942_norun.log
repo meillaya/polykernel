@@ -1,0 +1,59 @@
+##############################################################################
+# PolyKernel Todo 23 (Wave 4): gfx942 NO-RUN NEGATIVE — QA log (GRACEFUL DEVICE-NOT-FOUND)
+# Host: Linux 7.1.4-1-cachyos x86_64   Date: 2026-07-27T10:05:00Z
+# Local GPU: AMD Radeon RX 7800 XT (Navi 32) = gfx1101   ROCm/clr: 7.2.3
+# Probe:   a gfx942 binary (gfx942 code object embedded, NO gfx1101 code object)
+# Verdict: PASS — running a gfx942 binary locally reports "no gfx942 device,
+#          compile-only" GRACEFULLY (checked hipGetDeviceCount/hipGetDeviceProperties
+#          device-not-found path, exit 0), NOT a crash or a doomed launch.
+##############################################################################
+
+=== WHAT THIS PROVES ===
+The happy path (reports/mi300_compile.log) shows gfx942 cross-compiles clean. This
+negative shows the OTHER half of the contract: because there is NO MI300 on this
+host (local GPU = gfx1101), a gfx942 binary must NOT be launched. The runtime guard
+enumerates HIP devices, looks for a gfx942 by gcnArchName, and on finding none
+reports "compile-only" and exits 0 — a checked device-not-found path. This is the
+exact guard the bench (Todo 25) uses to skip gfx942 runs until the W5 rental.
+
+=== PROBE (scratch, not a deliverable: /tmp/opencode/gfx942_norun_probe.hip.cpp) ===
+A trivial __global__ kernel + a host main that:
+  1. hipGetDeviceCount(&count)            — checked; hipSuccess here (1 device).
+  2. hipGetDeviceProperties per device    — prints name + gcnArchName.
+  3. searches for a device whose gcnArchName contains "gfx942".
+  4. if none -> prints "no gfx942 device, compile-only ..." and returns 0 (graceful).
+The kernel is NEVER launched locally — the device check gates it (a launch of the
+gfx942 code object on the gfx1101 device would be a launch error; we avoid it).
+
+=== COMMANDS ===
+nix develop --impure --accept-flake-config -c bash -c '
+  hipcc --offload-arch=gfx942 /tmp/opencode/gfx942_norun_probe.hip.cpp \
+        -o /tmp/opencode/gfx942_norun_probe        # embed a gfx942 code object
+  /tmp/opencode/gfx942_norun_probe                 # run on the gfx1101 host
+'
+
+=== OUTPUT ===
++ hipcc --offload-arch=gfx942 /tmp/opencode/gfx942_norun_probe.hip.cpp -o /tmp/opencode/gfx942_norun_probe
+COMPILE_EXIT=0                       # gfx942 code object built clean (compile-only)
+
+# The binary genuinely carries a gfx942 code object (and NO gfx1101 code object):
+$ grep -a -o "gfx9[0-9][0-9]" /tmp/opencode/gfx942_norun_probe | sort -u
+gfx942                               # only arch embedded = gfx942 (a real gfx942 binary)
+
+=== RUN on local host (no MI300) ===
+HIP devices found: 1
+  device 0: AMD Radeon RX 7800 XT (arch gfx1101)
+no gfx942 device, compile-only (local GPU is not MI300); gfx942 runtime deferred to the W5 rental
+RUN_EXIT=0
+
+=== RESULT ===
+compile exit code: 0  (gfx942 code object embedded)
+run exit code:     0  (GRACEFUL — clean device-not-found report, no crash, no abort)
+observed devices:  1   (gfx1101 only; gfx942 absent, as expected without MI300)
+behavior:          the gfx942 binary detected the absence of any gfx942 device via
+                   hipGetDeviceProperties and reported "compile-only" instead of
+                   launching -> exactly the graceful negative the plan requires.
+
+VERDICT: PASS — attempting to RUN a gfx942 binary locally (no MI300) reports
+"no gfx942 device, compile-only" gracefully (exit 0), not a crash. gfx942 runtime
+is deferred to the W5 rental.
