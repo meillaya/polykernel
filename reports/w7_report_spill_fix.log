@@ -1,0 +1,120 @@
+############################################################
+# Todo 27 (Wave 5): full per-kernel report - QA failure log
+# NEGATIVE: a kernel with spills>0 -> suggested_fixes MUST
+# include a register-pressure / spill remedy (rules fire).
+############################################################
+
+=== [1] ctest -R kernel_report (gtest: all 4 suggested-fix rules fire) ===
+Test project /home/mei/projects/polykernel/build
+    Start 19: kernel_report.HighRegisterFiresReduceUnroll
+1/6 Test #19: kernel_report.HighRegisterFiresReduceUnroll ........   Passed    0.00 sec
+    Start 20: kernel_report.SpillsFireReduceRegisterPressure
+2/6 Test #20: kernel_report.SpillsFireReduceRegisterPressure .....   Passed    0.00 sec
+    Start 21: kernel_report.LowOccupancyFiresIncreaseOccupancy
+3/6 Test #21: kernel_report.LowOccupancyFiresIncreaseOccupancy ...   Passed    0.00 sec
+    Start 22: kernel_report.MemoryBoundFiresVectorize
+4/6 Test #22: kernel_report.MemoryBoundFiresVectorize ............   Passed    0.00 sec
+    Start 23: kernel_report.CleanKernelHasNoFixes
+5/6 Test #23: kernel_report.CleanKernelHasNoFixes ................   Passed    0.00 sec
+    Start 24: kernel_report.ToJsonEmitsContractHSchema
+6/6 Test #24: kernel_report.ToJsonEmitsContractHSchema ...........   Passed    0.00 sec
+
+100% tests passed, 0 tests failed out of 6
+
+Total Test time (real) =   0.01 sec
+
+=== [2] gtest detail: the spill rule (SpillsFireReduceRegisterPressure) ===
+Running main() from /build/source/googletest/src/gtest_main.cc
+Note: Google Test filter = kernel_report.SpillsFireReduceRegisterPressure
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from kernel_report
+[ RUN      ] kernel_report.SpillsFireReduceRegisterPressure
+[       OK ] kernel_report.SpillsFireReduceRegisterPressure (0 ms)
+[----------] 1 test from kernel_report (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (0 ms total)
+[  PASSED  ] 1 test.
+
+=== [3] report.py end-to-end on a SPILLING kernel (crafted ptxas -v log) ===
+$ python3 tools/polykernel-report/report.py --kernel fused_rmsnorm_matmul --backend cuda --arch sm_90 --shape 2048,11008,4096 --ptxas-log /tmp/opencode/spill_ptxas.log
+{
+  "kernel": "fused_rmsnorm_matmul",
+  "backend": "cuda",
+  "arch": "sm_90",
+  "registers_per_thread": 96,
+  "smem_per_block_bytes": 16384,
+  "spill_stores_bytes": 256,
+  "spill_loads_bytes": 128,
+  "occupancy": {
+    "active_warps_per_sm": 16,
+    "max_warps_per_sm": 64,
+    "occupancy_pct": 25,
+    "limiter": "registers"
+  },
+  "traffic": {
+    "global_read_bytes": 106954752,
+    "global_write_bytes": 45088768,
+    "arithmetic_intensity_flop_per_byte": 1214.68,
+    "roofline": "compute-bound"
+  },
+  "bottleneck": "latency",
+  "suggested_fixes": [
+    "reduce register pressure (smaller tile/fewer live values)",
+    "reduce unroll/block size to lower register pressure",
+    "increase occupancy (smaller tile / fewer registers / less smem)"
+  ],
+  "path": "scalar"
+}
+
+=== [4] assertion: suggested_fixes includes the register-pressure remedy ===
+PASS: spills>0 -> ['reduce register pressure (smaller tile/fewer live values)', 'reduce unroll/block size to lower register pressure', 'increase occupancy (smaller tile / fewer registers / less smem)']
+PASS: bottleneck = latency
+
+=== [5] BONUS: autotuner merge (Todo 25) - validated tuning-cache entry -> path ===
+$ python3 tools/polykernel-report/report.py --kernel fused_rmsnorm_matmul --backend cuda --arch sm_90 --tuning-cache /tmp/opencode/tuning_cache_demo.json --ptxas-log /tmp/opencode/spill_ptxas.log
+path = wmma (autotuner-derived: vector_width=4 -> wmma)
+tuned_config = {"block_m": 128, "block_n": 128, "block_k": 64, "num_warps": 8, "vector_width": 4, "unroll": 4, "shared_memory_stages": 3}
+tuning_validated = True
+PASS: autotuner result merged into the report
+
+=== [6] AMD path coverage (acceptance: CUDA + AMD) - real hipcc --save-temps ===
+$ python3 tools/polykernel-report/report.py --kernel matmul --backend hip --arch gfx1101 --shape 128,128,128
+{
+  "kernel": "matmul",
+  "backend": "hip",
+  "arch": "gfx1101",
+  "registers_per_thread": 31,
+  "smem_per_block_bytes": 1024,
+  "spill_stores_bytes": 0,
+  "spill_loads_bytes": 0,
+  "occupancy": {
+    "active_warps_per_sm": 32,
+    "max_warps_per_sm": 32,
+    "occupancy_pct": 100.0,
+    "limiter": "warps"
+  },
+  "traffic": {
+    "global_read_bytes": 65536,
+    "global_write_bytes": 32768,
+    "arithmetic_intensity_flop_per_byte": 42.6667,
+    "roofline": "memory-bound"
+  },
+  "bottleneck": "compute",
+  "suggested_fixes": [],
+  "path": "scalar",
+  "amd_isa": {
+    "sgpr": 16,
+    "scratch_bytes_per_thread": 0,
+    "scratch_store_count": 0,
+    "scratch_load_count": 0,
+    "has_spills": false
+  }
+}
+
+AMD spill negative (reuse the AMD spill fixture lib/Analysis/tests/fixtures/spill_gfx1101.s):
+$ python3 tools/polykernel-report/report.py --kernel matmul_spill --backend hip --arch gfx1101 --assembly lib/Analysis/tests/fixtures/spill_gfx1101.s
+spill_stores_bytes = 16 spill_loads_bytes = 8
+suggested_fixes = ['reduce register pressure (smaller tile/fewer live values)']
+PASS: AMD spilling kernel -> register-pressure remedy fires

@@ -424,4 +424,66 @@ def PlanMemory : Pass<"plan-memory", "ModuleOp"> {
   let constructor = "::mlir::polykernel::createPlanMemoryPass()";
 }
 
+//===----------------------------------------------------------------------===//
+// EmitKernelReport
+//===----------------------------------------------------------------------===//
+
+def EmitKernelReport : Pass<"emit-kernel-report", "ModuleOp"> {
+  let summary = "Emit/attach the contract-H per-kernel report skeleton for the "
+                "matmul-structured kernels";
+  let description = [{
+    PolyKernel full per-kernel report pass (Wave 5, Todo 27). Walks the
+    matmul-structured ops (`matmul`, `fused_rmsnorm_matmul`,
+    `fused_matmul_bias_gelu` — the same scope as --infer-tile-layout /
+    --plan-memory) and, for each generated kernel, ATTACHES the IR-derivable
+    contract-H report fields as DISCARDABLE attributes (the op set stays CLOSED —
+    no new declared op attributes are added to PolyKernelOps.td) and EMITS a
+    per-kernel report manifest (`kernel_report.json`) into `--output-dir`.
+
+    The fields this pass can derive from the IR alone are attached / emitted:
+    the kernel name (from the op kind), backend + arch + path (from the pass
+    options), the GEMM shape (M/N/K from the operands) + dtype bytes, the tile
+    shape (read from the --infer-tile-layout attrs, fallback 16x16x16), the
+    shared-memory budget (read from the --plan-memory `polykernel.smem_bytes`
+    attr), and the fusion provenance (`polykernel.fused_from`).
+
+    The COMPILE-TIME fields — registers/thread, spill bytes, occupancy, global
+    traffic, roofline, bottleneck, and the suggested fixes — require the
+    nvcc/ptxas (CUDA) or hipcc --save-temps (AMD) analyzers and are filled by the
+    `polykernel-report` CLI (tools/polykernel-report/report.py), which merges this
+    IR skeleton with the CUDA compile-time analysis (Todo 11), the AMD ISA
+    analysis (Todo 21), and the autotuner result (Todo 25) into the full
+    contract-H report. This pass is the IR half of that pipeline; it does NOT
+    fabricate register/spill numbers (those need a compiler).
+
+    Attached discardable attributes (per kernel op):
+      - `polykernel.report_kernel`  (StringAttr): the kernel name.
+      - `polykernel.report_backend` (StringAttr): "cuda" | "hip".
+      - `polykernel.report_arch`    (StringAttr): the target arch string.
+      - `polykernel.report_path`    (StringAttr): "scalar" | "wmma" | "mma".
+
+    Runs on typed IR (after `--infer-shapes`); ops with a dynamic operand dim are
+    skipped (consistent with --infer-tile-layout / --plan-memory). The IR is
+    otherwise left unchanged (report emitter, not a transform).
+  }];
+
+  let options = [
+    Option<"outputDir", "output-dir", "std::string",
+           /*default=*/"\"build/report\"",
+           "Directory to write the kernel_report.json manifest into">,
+    Option<"backend", "backend", "std::string", /*default=*/"\"cuda\"",
+           "Target backend recorded in the report: cuda or hip">,
+    Option<"arch", "arch", "std::string", /*default=*/"\"sm_90\"",
+           "Target arch recorded in the report, e.g. sm_90 or gfx1101">,
+    Option<"path", "path", "std::string", /*default=*/"\"scalar\"",
+           "Kernel implementation path recorded in the report: scalar, wmma, "
+           "or mma">
+  ];
+
+  // Registered explicitly via the TableGen-generated registerEmitKernelReportPass()
+  // / registerPolyKernelPasses() (see Passes.h) — never registerAllPasses (nix
+  // out-of-tree constraint).
+  let constructor = "::mlir::polykernel::createEmitKernelReportPass()";
+}
+
 #endif // POLYKERNEL_PASSES

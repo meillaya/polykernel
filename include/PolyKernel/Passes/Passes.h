@@ -33,6 +33,9 @@
 //     layout to the matmul ops via shape heuristics (InferTileLayout.h).
 //   - `--plan-memory` (Todo 16): compute a per-kernel memory plan (smem budget +
 //     non-fused workspace + over-budget guard) for the matmul ops (PlanMemory.h).
+//   - `--emit-kernel-report` (Todo 27): emit/attach the contract-H per-kernel
+//     report skeleton (kernel/backend/arch/path/shape/tile/smem/fusion) for the
+//     matmul ops; the compile-time fields are filled by polykernel-report.
 // All are picked up by registerPolyKernelPasses() automatically.
 //
 //===----------------------------------------------------------------------===//
@@ -52,11 +55,31 @@
 #include "PolyKernel/Passes/PlanMemory.h"
 
 namespace mlir::polykernel {
+
+/// Create the `--emit-kernel-report` pass (Todo 27 / Wave 5): walks the
+/// matmul-structured ops (matmul, fused_rmsnorm_matmul, fused_matmul_bias_gelu)
+/// and, for each generated kernel, attaches the IR-derivable contract-H report
+/// fields as DISCARDABLE attributes (`polykernel.report_kernel/backend/arch/path`)
+/// and emits a per-kernel report manifest (`kernel_report.json`) into
+/// `--output-dir`. The compile-time fields (registers/spills/occupancy/traffic/
+/// roofline/bottleneck/suggested-fixes) are filled by the `polykernel-report`
+/// CLI, which merges this skeleton with the CUDA + AMD analyzers + autotuner.
+/// (Declared here rather than a per-pass header to keep the pass surface in one
+/// place; the CRTP base is emitted by GEN_PASS_DEF_EMITKERNELREPORT in the .cpp.)
+std::unique_ptr<::mlir::Pass> createEmitKernelReportPass();
+
 // Generated registration helpers: registerInferShapesPass() /
 // registerCanonicalizePass() (per pass) and registerPolyKernelPasses() (all
 // PolyKernel passes), from Passes.td via `-gen-pass-decls -name PolyKernel`.
 #define GEN_PASS_REGISTRATION
 #include "PolyKernel/Passes/Passes.h.inc"
 } // namespace mlir::polykernel
+
+// Generated pass declaration for `EmitKernelReport` (from Passes.td via
+// `-gen-pass-decls -name PolyKernel`). Mirrors the per-pass headers' decl hook;
+// the CRTP base (impl::EmitKernelReportBase) is emitted by
+// GEN_PASS_DEF_EMITKERNELREPORT in lib/Passes/EmitKernelReport.cpp.
+#define GEN_PASS_DECL_EMITKERNELREPORT
+#include "PolyKernel/Passes/Passes.h.inc"
 
 #endif // POLYKERNEL_PASSES_PASSES_H

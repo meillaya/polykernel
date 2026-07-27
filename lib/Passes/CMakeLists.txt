@@ -25,6 +25,7 @@
 
 add_mlir_library(MLIRPolyKernelPasses
   Canonicalize.cpp
+  EmitKernelReport.cpp
   FuseMatmulBiasGelu.cpp
   FuseResidualRmsnorm.cpp
   FuseRmsnormMatmul.cpp

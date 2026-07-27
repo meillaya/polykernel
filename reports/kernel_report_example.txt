@@ -1,0 +1,21 @@
+kernel:                 fused_rmsnorm_matmul
+backend:                cuda
+arch:                   sm_90
+registers_per_thread:   31
+smem_per_block_bytes:   1024
+spill_stores_bytes:     0
+spill_loads_bytes:      0
+occupancy:
+  active_warps_per_sm:  64
+  max_warps_per_sm:     64
+  occupancy_pct:        100
+  limiter:              registers
+traffic:
+  global_read_bytes:    106954752
+  global_write_bytes:   45088768
+  arithmetic_intensity: 1214.68 flop/byte
+  roofline:             compute-bound
+bottleneck:             compute
+path:                   scalar
+suggested_fixes:
+  (none)

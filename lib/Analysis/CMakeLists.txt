@@ -42,6 +42,12 @@ add_executable(roofline_test tests/roofline_test.cpp)
 target_link_libraries(roofline_test PRIVATE PolyKernelAnalysis GTest::gtest_main)
 gtest_discover_tests(roofline_test)
 
+# Todo 27 (Wave 5): per-kernel report + suggested-fix rules. Suite is named
+# `kernel_report` (TEST(kernel_report, ...)) so `ctest -R kernel_report` finds it.
+add_executable(kernel_report_test tests/kernel_report_test.cpp)
+target_link_libraries(kernel_report_test PRIVATE PolyKernelAnalysis GTest::gtest_main)
+gtest_discover_tests(kernel_report_test)
+
 add_executable(amd_isa_test tests/amd_isa_test.cpp)
 target_link_libraries(amd_isa_test PRIVATE PolyKernelAnalysis GTest::gtest_main)
 target_compile_definitions(amd_isa_test PRIVATE
