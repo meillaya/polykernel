@@ -1,0 +1,70 @@
+====================================================================
+PolyKernel T24 Wave 5: Autotuner config space + pruner + JSON cache
+Evidence: ctest -R config_space|tuning_cache + enumerator + round-trip
+====================================================================
+
+### [1] ctest -R config_space|tuning_cache  (from build/) ###
+
+Test project /home/mei/projects/polykernel/build
+      Start 19: config_space.FullGridIsBounded4608
+ 1/19 Test #19: config_space.FullGridIsBounded4608 ..............   Passed    0.00 sec
+      Start 20: config_space.PrunedCountInBand
+ 2/19 Test #20: config_space.PrunedCountInBand ..................   Passed    0.00 sec
+      Start 21: config_space.DeterministicAndUnique
+ 3/19 Test #21: config_space.DeterministicAndUnique .............   Passed    0.00 sec
+      Start 22: config_space.AllSurvivorsAdmissible
+ 4/19 Test #22: config_space.AllSurvivorsAdmissible .............   Passed    0.00 sec
+      Start 23: config_space.ExcludesSmallTileWith8Warps
+ 5/19 Test #23: config_space.ExcludesSmallTileWith8Warps ........   Passed    0.00 sec
+      Start 24: config_space.ExcludesSmemOverBudgetStages
+ 6/19 Test #24: config_space.ExcludesSmemOverBudgetStages .......   Passed    0.00 sec
+      Start 25: config_space.VectorizationClosure
+ 7/19 Test #25: config_space.VectorizationClosure ...............   Passed    0.00 sec
+      Start 26: config_space.SpecificInvalidConfigsRejected
+ 8/19 Test #26: config_space.SpecificInvalidConfigsRejected .....   Passed    0.00 sec
+      Start 27: config_space.KnownGoodConfigAdmitted
+ 9/19 Test #27: config_space.KnownGoodConfigAdmitted ............   Passed    0.00 sec
+      Start 28: tuning_cache.RoundTrip
+10/19 Test #28: tuning_cache.RoundTrip ..........................   Passed    0.00 sec
+      Start 29: tuning_cache.NullTimeMsPreserved
+11/19 Test #29: tuning_cache.NullTimeMsPreserved ................   Passed    0.00 sec
+      Start 30: tuning_cache.MeasuredTimeIsNumber
+12/19 Test #30: tuning_cache.MeasuredTimeIsNumber ...............   Passed    0.00 sec
+      Start 31: tuning_cache.ValidDocumentParses
+13/19 Test #31: tuning_cache.ValidDocumentParses ................   Passed    0.00 sec
+      Start 32: tuning_cache.MissingScoredByRejected
+14/19 Test #32: tuning_cache.MissingScoredByRejected ............   Passed    0.00 sec
+      Start 33: tuning_cache.MissingCorrectnessCosineRejected
+15/19 Test #33: tuning_cache.MissingCorrectnessCosineRejected ...   Passed    0.00 sec
+      Start 34: tuning_cache.MissingTimeMsKeyRejected
+16/19 Test #34: tuning_cache.MissingTimeMsKeyRejected ...........   Passed    0.00 sec
+      Start 35: tuning_cache.WrongTypeRejected
+17/19 Test #35: tuning_cache.WrongTypeRejected ..................   Passed    0.00 sec
+      Start 36: tuning_cache.WrongVersionRejected
+18/19 Test #36: tuning_cache.WrongVersionRejected ...............   Passed    0.00 sec
+      Start 37: tuning_cache.MalformedJsonRejected
+19/19 Test #37: tuning_cache.MalformedJsonRejected ..............   Passed    0.00 sec
+
+100% tests passed, 0 tests failed out of 19
+
+Total Test time (real) =   0.04 sec
+
+### [2] Enumerator: bounded grid -> deterministic pruned list ###
+###     pruning rules R1..R7 documented in ConfigSpace.cpp    ###
+
+full_grid_size   = 4608
+pruned_count     = 141
+in_100_150_band  = yes
+
+first 5 pruned configs:
+  [0] block_m=16 block_n=32 block_k=32 num_warps=4 vector_width=1 unroll=4 shared_memory_stages=2
+  [1] block_m=16 block_n=32 block_k=32 num_warps=4 vector_width=1 unroll=4 shared_memory_stages=3
+  [2] block_m=16 block_n=32 block_k=32 num_warps=4 vector_width=1 unroll=4 shared_memory_stages=4
+  [3] block_m=16 block_n=32 block_k=32 num_warps=4 vector_width=2 unroll=2 shared_memory_stages=2
+  [4] block_m=16 block_n=32 block_k=32 num_warps=4 vector_width=2 unroll=2 shared_memory_stages=3
+
+serialized tuning cache (contract H envelope):
+{"entries":[{"best":{"block_k":32,"block_m":64,"block_n":64,"num_warps":8,"shared_memory_stages":2,"unroll":4,"vector_width":4},"correctness":{"cosine":0.99990000000000001,"max_rel_err":0.0001,"pcc":0.999},"gpu":"sm_90","op":"matmul","scored_by":"measure","shape":{"K":4096,"M":4096,"N":4096,"dtype":"bf16"},"time_ms":0.123,"validated":true},{"best":{"block_k":32,"block_m":16,"block_n":32,"num_warps":4,"shared_memory_stages":2,"unroll":4,"vector_width":1},"correctness":{"cosine":0.99990000000000001,"max_rel_err":0.0001,"pcc":0.999},"gpu":"gfx942","op":"matmul","scored_by":"compile_time_model","shape":{"K":128,"M":128,"N":128,"dtype":"fp16"},"time_ms":null,"validated":false}],"version":1}
+
+round_trip_ok    = yes
+round_trip_equal = yes

@@ -1,0 +1,42 @@
+====================================================================
+PolyKernel T24 Wave 5 NEGATIVE: TuningCache schema rejection
+Parse-don't-validate: a missing contract-H field yields a typed
+schema error naming the field -- NEVER a silent default.
+====================================================================
+
+### [1] Standalone decoder fed entries missing required fields ###
+
+--- entry missing scored_by ---
+ok    = false
+error = entries[0].scored_by: missing required string field
+
+--- entry missing correctness.cosine ---
+ok    = false
+error = entries[0].correctness.cosine: missing required number field
+
+--- entry missing time_ms key ---
+ok    = false
+error = entries[0].time_ms: missing required field (use null for a compile-time-model score)
+
+### [2] gtest negative cases (tuning_cache suite) ###
+
+Running main() from /build/source/googletest/src/gtest_main.cc
+Note: Google Test filter = tuning_cache.Missing*:tuning_cache.Wrong*
+[==========] Running 5 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 5 tests from tuning_cache
+[ RUN      ] tuning_cache.MissingScoredByRejected
+[       OK ] tuning_cache.MissingScoredByRejected (0 ms)
+[ RUN      ] tuning_cache.MissingCorrectnessCosineRejected
+[       OK ] tuning_cache.MissingCorrectnessCosineRejected (0 ms)
+[ RUN      ] tuning_cache.MissingTimeMsKeyRejected
+[       OK ] tuning_cache.MissingTimeMsKeyRejected (0 ms)
+[ RUN      ] tuning_cache.WrongTypeRejected
+[       OK ] tuning_cache.WrongTypeRejected (0 ms)
+[ RUN      ] tuning_cache.WrongVersionRejected
+[       OK ] tuning_cache.WrongVersionRejected (0 ms)
+[----------] 5 tests from tuning_cache (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 5 tests from 1 test suite ran. (0 ms total)
+[  PASSED  ] 5 tests.

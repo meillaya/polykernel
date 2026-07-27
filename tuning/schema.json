@@ -1,0 +1,92 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "polykernel/tuning/schema.json",
+  "title": "PolyKernel tuning cache (Pinned contract H, AUTHORITATIVE)",
+  "description": "Versioned-envelope tuning cache mapping (gpu, op, shape) to the best autotuner config, its score, and per-variant correctness metrics. Implemented by lib/Autotune/TuningCache.cpp (Todo 24). Parse-don't-validate: a missing or wrong-typed required field is a schema error, never a silent default. time_ms is the only nullable field (null when scored by a compile-time model rather than measured). Field names are PINNED - do not rename.",
+  "type": "object",
+  "required": ["version", "entries"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "integer",
+      "description": "Envelope schema version. Currently 1 (kTuningCacheVersion). A parser rejects any other version.",
+      "const": 1
+    },
+    "entries": {
+      "type": "array",
+      "description": "One object per tuned (gpu, op, shape).",
+      "items": { "$ref": "#/definitions/entry" }
+    }
+  },
+  "definitions": {
+    "entry": {
+      "type": "object",
+      "required": ["gpu", "op", "shape", "best", "scored_by", "time_ms", "validated", "correctness"],
+      "additionalProperties": false,
+      "properties": {
+        "gpu": {
+          "type": "string",
+          "description": "Target GPU identity, part of the cache key (e.g. \"sm_90\", \"gfx942\")."
+        },
+        "op": {
+          "type": "string",
+          "description": "Op name, part of the cache key (e.g. \"matmul\")."
+        },
+        "shape": { "$ref": "#/definitions/shape" },
+        "best": { "$ref": "#/definitions/config" },
+        "scored_by": {
+          "type": "string",
+          "description": "How `best` was scored.",
+          "enum": ["measure", "compile_time_model"]
+        },
+        "time_ms": {
+          "type": ["number", "null"],
+          "description": "Measured wall time in milliseconds. REQUIRED key; null iff scored_by == \"compile_time_model\"."
+        },
+        "validated": {
+          "type": "boolean",
+          "description": "True iff this variant passed the correctness gate against the golden (contract C)."
+        },
+        "correctness": { "$ref": "#/definitions/correctness" }
+      }
+    },
+    "shape": {
+      "type": "object",
+      "description": "The problem shape, part of the cache key.",
+      "required": ["M", "N", "K", "dtype"],
+      "additionalProperties": false,
+      "properties": {
+        "M": { "type": "integer" },
+        "N": { "type": "integer" },
+        "K": { "type": "integer" },
+        "dtype": { "type": "string", "description": "Operand element type (e.g. \"bf16\", \"fp16\", \"fp32\")." }
+      }
+    },
+    "config": {
+      "type": "object",
+      "description": "The winning autotuner config (include/PolyKernel/Autotune/ConfigSpace.h Config). Field names match the config-space axes exactly.",
+      "required": ["block_m", "block_n", "block_k", "num_warps", "vector_width", "unroll", "shared_memory_stages"],
+      "additionalProperties": false,
+      "properties": {
+        "block_m": { "type": "integer", "description": "Tile rows (M). Grid {16,32,64,128}." },
+        "block_n": { "type": "integer", "description": "Tile cols (N). Grid {16,32,64,128}." },
+        "block_k": { "type": "integer", "description": "Reduction tile (K). Grid {32,64,128}." },
+        "num_warps": { "type": "integer", "description": "Warps per block. Grid {4,8}." },
+        "vector_width": { "type": "integer", "description": "Vectorized load/store width (elements). Grid {1,2,4,8}." },
+        "unroll": { "type": "integer", "description": "Inner-loop unroll factor. Grid {1,2,4,8}." },
+        "shared_memory_stages": { "type": "integer", "description": "Software-pipeline depth. Grid {2,3,4}." }
+      }
+    },
+    "correctness": {
+      "type": "object",
+      "description": "Per-variant correctness metrics vs the golden. The bench (Todo 25) gates on the contract-C thresholds: cosine >= 0.999, max_rel_err <= 1e-2 (eps=1e-6), pcc >= 0.99.",
+      "required": ["cosine", "max_rel_err", "pcc"],
+      "additionalProperties": false,
+      "properties": {
+        "cosine": { "type": "number", "description": "Cosine similarity to the golden (>= 0.999 to pass)." },
+        "max_rel_err": { "type": "number", "description": "Max relative error (<= 1e-2 to pass, eps=1e-6)." },
+        "pcc": { "type": "number", "description": "Pearson correlation coefficient (>= 0.99 to pass)." }
+      }
+    }
+  }
+}
