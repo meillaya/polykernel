@@ -1,0 +1,27 @@
+======================================================================
+PolyKernel T28 (Wave 5): RunPod benchmark suite — SKIPPED (no credentials)
+======================================================================
+UTC: 2026-07-27T12:13:51Z
+
+STATUS: SKIPPED (not FAILED). Missing credential: RUNPOD_API_KEY
+RunPod credential detection found NONE of: RUNPOD_API_KEY, RUNPOD_API_URL, ~/.runpod.
+
+ACTION TAKEN: graceful skip. NO pod provisioned, NO RunPod API create/start call, NO spend.
+The bench SUITE code is written (benchmarks/{bench_cuda.cpp,bench_hip.cpp,rent_runpod.sh});
+the rental is OPT-IN and gated behind the absent credential.
+
+PROJECTED reports written (clearly labeled PROJECTED, roofline-derived):
+  - reports/h100_bench.json
+  - reports/h100_bench.md
+  - reports/mi300_bench.json
+  - reports/mi300_bench.md
+
+Projected MLP-fragment speedup (H100, unfused=1.00x baseline): unfused=1.000x  fused=1.004x  autotuned=2.838x
+(PROJECTED — not measured; see reports/h100_bench.md + mi300_bench.md.)
+
+OPT-IN: to obtain REAL numbers, set the credential and re-run:
+    export RUNPOD_API_KEY=<your-key>     # ~$50-100 ceiling enforced
+    ./benchmarks/rent_runpod.sh --suite mlp
+  or: RUNPOD_API_KEY=<key> python3 benchmarks/run_bench_suite.py
+
+VERDICT: SKIPPED — graceful degradation, no crash, no surprise spend.
