@@ -1,0 +1,72 @@
+====================================================================
+PolyKernel T35 Wave 7: Dataflow simulator core
+  64x64 PE grid; PE = CE (4x FP16 FMAC, 64b datapath) + 48KB SRAM
+  (8 banks x 6KB, 2R+1W/cycle) + 5-port router (RAMP+E/W/N/S, 32b/link,
+  single-cycle hop, lossless backpressure). Wavelet = 32b (16b data +
+  16b control). Color = 5-bit tag, 24 routable (IDs 0-23), virtual
+  channels over a shared physical link.
+  NOTE: a GPU-free functional/cycle SIMULATOR - does NOT compile real
+  CSL and does NOT run on Cerebras hardware.
+Evidence: ctest -R router|color|grid (single-cycle hop, multicast tx,
+          24-color isolation, SRAM bank model).
+====================================================================
+
+### ctest --test-dir build -R 'router|color|grid' ###
+
+Test project /home/mei/projects/polykernel/build
+      Start 71: router.FivePorts32bLinkSingleCycleHop
+ 1/26 Test #71: router.FivePorts32bLinkSingleCycleHop ...   Passed    0.00 sec
+      Start 72: router.UnicastTx
+ 2/26 Test #72: router.UnicastTx ........................   Passed    0.00 sec
+      Start 73: router.MulticastTx
+ 3/26 Test #73: router.MulticastTx ......................   Passed    0.00 sec
+      Start 74: router.LosslessBackpressure
+ 4/26 Test #74: router.LosslessBackpressure .............   Passed    0.00 sec
+      Start 75: router.MulticastIsAllOrNothing
+ 5/26 Test #75: router.MulticastIsAllOrNothing ..........   Passed    0.00 sec
+      Start 76: router.ColorIsolationOnSharedLink
+ 6/26 Test #76: router.ColorIsolationOnSharedLink .......   Passed    0.00 sec
+      Start 77: router.RxBackpressure
+ 7/26 Test #77: router.RxBackpressure ...................   Passed    0.00 sec
+      Start 78: router.FabinFaboutDsd
+ 8/26 Test #78: router.FabinFaboutDsd ...................   Passed    0.00 sec
+      Start 79: router.SetColorConfigRxTx
+ 9/26 Test #79: router.SetColorConfigRxTx ...............   Passed    0.00 sec
+      Start 80: router.ApplyForwardingHonorsConfig
+10/26 Test #80: router.ApplyForwardingHonorsConfig ......   Passed    0.00 sec
+      Start 81: color.FiveBitTagTwentyFourRoutable
+11/26 Test #81: color.FiveBitTagTwentyFourRoutable ......   Passed    0.00 sec
+      Start 82: color.RoutableRange
+12/26 Test #82: color.RoutableRange .....................   Passed    0.00 sec
+      Start 83: color.DirMaskAndNames
+13/26 Test #83: color.DirMaskAndNames ...................   Passed    0.00 sec
+      Start 84: color.SetColorConfigRxTx
+14/26 Test #84: color.SetColorConfigRxTx ................   Passed    0.00 sec
+      Start 85: color.TwentyFourColorIsolation
+15/26 Test #85: color.TwentyFourColorIsolation ..........   Passed    0.00 sec
+      Start 86: color.PairwiseIsolation
+16/26 Test #86: color.PairwiseIsolation .................   Passed    0.00 sec
+      Start 87: grid.DefaultMeshIs64x64
+17/26 Test #87: grid.DefaultMeshIs64x64 .................   Passed    0.30 sec
+      Start 88: grid.PeBundlesCeSramRouter
+18/26 Test #88: grid.PeBundlesCeSramRouter ..............   Passed    0.31 sec
+      Start 89: grid.SingleCycleHop
+19/26 Test #89: grid.SingleCycleHop .....................   Passed    0.32 sec
+      Start 90: grid.HopIsExactlyOnePerCycle
+20/26 Test #90: grid.HopIsExactlyOnePerCycle ............   Passed    0.31 sec
+      Start 91: grid.MulticastAcrossMesh
+21/26 Test #91: grid.MulticastAcrossMesh ................   Passed    0.30 sec
+      Start 92: grid.OffGridEastIsDroppedNotCrash
+22/26 Test #92: grid.OffGridEastIsDroppedNotCrash .......   Passed    0.30 sec
+      Start 93: grid.AllBoundaryDirectionsAreSafe
+23/26 Test #93: grid.AllBoundaryDirectionsAreSafe .......   Passed    0.30 sec
+      Start 94: grid.TraverseThenDropOffEdge
+24/26 Test #94: grid.TraverseThenDropOffEdge ............   Passed    0.45 sec
+      Start 95: grid.SramBankModel
+25/26 Test #95: grid.SramBankModel ......................   Passed    0.28 sec
+      Start 96: grid.CeFmacFusedMultiplyAdd
+26/26 Test #96: grid.CeFmacFusedMultiplyAdd .............   Passed    0.28 sec
+
+100% tests passed, 0 tests failed out of 26
+
+Total Test time (real) =   3.19 sec

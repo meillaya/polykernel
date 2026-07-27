@@ -7,6 +7,9 @@ add_subdirectory(Analysis)
 # GPU-free autotuner infrastructure (Todo 24): bounded ConfigSpace + pruner +
 # contract-H JSON TuningCache + gtest unit tests.
 add_subdirectory(Autotune)
+# GPU-free dataflow simulator core (Todo 35 / Wave 7): 64x64 PE mesh, CE +
+# 5-port router + 48KB SRAM, 32b wavelet, 24 colors, single-cycle routing.
+add_subdirectory(DataflowSim)
 # HIP runtime launch layer (Todo 20): error-checked hipMalloc/hipMemcpy/hipSync
 # host wrapper (PolyKernelRuntime); guarded by hipcc availability.
 add_subdirectory(Runtime)
