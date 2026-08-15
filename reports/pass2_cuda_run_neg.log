@@ -19,3 +19,567 @@ PolyKernel dev shell (llvmPackages_21 MLIR / cudaPackages_12_6 / rocmPackages.cl
 tmpxft_00173bdb_00000000-6_cuda_run_main.cudafe1.cpp:(.text+0x22e3): undefined reference to `launch_matmul_typo(__nv_bfloat16 const*, __nv_bfloat16 const*, __nv_bfloat16*, int, int, int, void*)'
 collect2: error: ld returned 1 exit status
 nvcc exit=1
+
+=== Todo 8 (test_cuda_run.py): _gpu_probe-disabled negative QA (2026-08-15) ===
+# _gpu_probe temporarily disabled (if False and returncode != 0) -> ALL 18 run tests
+# FAIL with the no-device error instead of SKIPPING (proves the probe guards no-GPU
+# environments). Reverted byte-identical (md5 0055aea5cd8f00b8ca6788cf18f06ae0).
+# PYTEST_EXIT=1
+
+FFFFFFFFFFFFFFFFFF                                                       [100%]
+=================================== FAILURES ===================================
+________________________ test_cuda_rmsnorm_with_weight _________________________
+
+run_cuda_rmsnorm = <function run_cuda_rmsnorm.<locals>._run at 0x7fffe6d58f60>
+rand_bf16 = <function rand_bf16.<locals>._make at 0x7fffe6d6f950>
+
+    def test_cuda_rmsnorm_with_weight(run_cuda_rmsnorm, rand_bf16):
+        x = rand_bf16((256, 512))
+        w = rand_bf16((512,))
+>       _check(run_cuda_rmsnorm(x, w), G.rmsnorm(x, w))
+               ^^^^^^^^^^^^^^^^^^^^^^
+
+tests/kernels/test_cuda_run.py:296: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/kernels/test_cuda_run.py:186: in _run
+    cuda_drive(cmd)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+args = ['rmsnorm', '/tmp/pytest-of-mei/pytest-369/test_cuda_rmsnorm_with_weight0/input.npy', '/tmp/pytest-of-mei/pytest-369/test_cuda_rmsnorm_with_weight0/output.npy', '--epsilon', '1e-05', '--weight', ...]
+
+    def _drive(args: list[str]) -> subprocess.CompletedProcess:
+        proc = subprocess.run([str(cuda_run_exe), *args], capture_output=True,
+                              text=True, timeout=300)
+        if proc.returncode != 0:
+>           raise RuntimeError(
+                f"cuda_run {args[0]} failed (exit {proc.returncode}):\n{proc.stderr}"
+            )
+E           RuntimeError: cuda_run rmsnorm failed (exit 1):
+E           [polykernel-cuda] cudaMalloc(&p, bytes) failed at lib/Runtime/cuda_run_main.cpp:101: CUDA driver version is insufficient for CUDA runtime version
+
+tests/kernels/test_cuda_run.py:163: RuntimeError
+__________________________ test_cuda_rmsnorm_odd_cols __________________________
+
+run_cuda_rmsnorm = <function run_cuda_rmsnorm.<locals>._run at 0x7fffe6d91e80>
+rand_bf16 = <function rand_bf16.<locals>._make at 0x7fffe6d92090>
+
+    def test_cuda_rmsnorm_odd_cols(run_cuda_rmsnorm, rand_bf16):
+        x = rand_bf16((130, 127))  # odd last dim -> scalar tail path
+>       _check(run_cuda_rmsnorm(x), G.rmsnorm(x, None, 1e-5))
+               ^^^^^^^^^^^^^^^^^^^
+
+tests/kernels/test_cuda_run.py:301: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/kernels/test_cuda_run.py:186: in _run
+    cuda_drive(cmd)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+args = ['rmsnorm', '/tmp/pytest-of-mei/pytest-369/test_cuda_rmsnorm_odd_cols0/input.npy', '/tmp/pytest-of-mei/pytest-369/test_cuda_rmsnorm_odd_cols0/output.npy', '--epsilon', '1e-05']
+
+    def _drive(args: list[str]) -> subprocess.CompletedProcess:
+        proc = subprocess.run([str(cuda_run_exe), *args], capture_output=True,
+                              text=True, timeout=300)
+        if proc.returncode != 0:
+>           raise RuntimeError(
+                f"cuda_run {args[0]} failed (exit {proc.returncode}):\n{proc.stderr}"
+            )
+E           RuntimeError: cuda_run rmsnorm failed (exit 1):
+E           [polykernel-cuda] cudaMalloc(&p, bytes) failed at lib/Runtime/cuda_run_main.cpp:101: CUDA driver version is insufficient for CUDA runtime version
+
+tests/kernels/test_cuda_run.py:163: RuntimeError
+________________________ test_cuda_rmsnorm_3d_flattens _________________________
+
+run_cuda_rmsnorm = <function run_cuda_rmsnorm.<locals>._run at 0x7fffe6d924b0>
+rand_bf16 = <function rand_bf16.<locals>._make at 0x7fffe6d926c0>
+
+    def test_cuda_rmsnorm_3d_flattens(run_cuda_rmsnorm, rand_bf16):
+        x = rand_bf16((2, 64, 128))
+        w = rand_bf16((128,))
+>       _check(run_cuda_rmsnorm(x, w), G.rmsnorm(x, w))
+               ^^^^^^^^^^^^^^^^^^^^^^
+
+tests/kernels/test_cuda_run.py:307: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/kernels/test_cuda_run.py:186: in _run
+    cuda_drive(cmd)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+args = ['rmsnorm', '/tmp/pytest-of-mei/pytest-369/test_cuda_rmsnorm_3d_flattens0/input.npy', '/tmp/pytest-of-mei/pytest-369/test_cuda_rmsnorm_3d_flattens0/output.npy', '--epsilon', '1e-05', '--weight', ...]
+
+    def _drive(args: list[str]) -> subprocess.CompletedProcess:
+        proc = subprocess.run([str(cuda_run_exe), *args], capture_output=True,
+                              text=True, timeout=300)
+        if proc.returncode != 0:
+>           raise RuntimeError(
+                f"cuda_run {args[0]} failed (exit {proc.returncode}):\n{proc.stderr}"
+            )
+E           RuntimeError: cuda_run rmsnorm failed (exit 1):
+E           [polykernel-cuda] cudaMalloc(&p, bytes) failed at lib/Runtime/cuda_run_main.cpp:101: CUDA driver version is insufficient for CUDA runtime version
+
+tests/kernels/test_cuda_run.py:163: RuntimeError
+________________________________ test_cuda_gelu ________________________________
+
+run_cuda_gelu = <function run_cuda_gelu.<locals>._run at 0x7fffe6d917a0>
+rand_bf16 = <function rand_bf16.<locals>._make at 0x7fffe6d92090>
+
+    def test_cuda_gelu(run_cuda_gelu, rand_bf16):
+        x = rand_bf16((64, 128))
+>       _check(run_cuda_gelu(x), G.gelu(x))
+               ^^^^^^^^^^^^^^^^
+
+tests/kernels/test_cuda_run.py:315: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/kernels/test_cuda_run.py:198: in _run
+    cuda_drive(["gelu", str(inp), str(out)])
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+args = ['gelu', '/tmp/pytest-of-mei/pytest-369/test_cuda_gelu0/input.npy', '/tmp/pytest-of-mei/pytest-369/test_cuda_gelu0/output.npy']
+
+    def _drive(args: list[str]) -> subprocess.CompletedProcess:
+        proc = subprocess.run([str(cuda_run_exe), *args], capture_output=True,
+                              text=True, timeout=300)
+        if proc.returncode != 0:
+>           raise RuntimeError(
+                f"cuda_run {args[0]} failed (exit {proc.returncode}):\n{proc.stderr}"
+            )
+E           RuntimeError: cuda_run gelu failed (exit 1):
+E           [polykernel-cuda] cudaMalloc(&p, bytes) failed at lib/Runtime/cuda_run_main.cpp:101: CUDA driver version is insufficient for CUDA runtime version
+
+tests/kernels/test_cuda_run.py:163: RuntimeError
+_____________________________ test_cuda_gelu_odd_n _____________________________
+
+run_cuda_gelu = <function run_cuda_gelu.<locals>._run at 0x7fffe6d91bc0>
+rand_bf16 = <function rand_bf16.<locals>._make at 0x7fffe6d928d0>
+
+    def test_cuda_gelu_odd_n(run_cuda_gelu, rand_bf16):
+        x = rand_bf16((3, 127))  # odd element count -> scalar tail
+>       _check(run_cuda_gelu(x), G.gelu(x))
+               ^^^^^^^^^^^^^^^^
+
+tests/kernels/test_cuda_run.py:320: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/kernels/test_cuda_run.py:198: in _run
+    cuda_drive(["gelu", str(inp), str(out)])
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+args = ['gelu', '/tmp/pytest-of-mei/pytest-369/test_cuda_gelu_odd_n0/input.npy', '/tmp/pytest-of-mei/pytest-369/test_cuda_gelu_odd_n0/output.npy']
+
+    def _drive(args: list[str]) -> subprocess.CompletedProcess:
+        proc = subprocess.run([str(cuda_run_exe), *args], capture_output=True,
+                              text=True, timeout=300)
+        if proc.returncode != 0:
+>           raise RuntimeError(
+                f"cuda_run {args[0]} failed (exit {proc.returncode}):\n{proc.stderr}"
+            )
+E           RuntimeError: cuda_run gelu failed (exit 1):
+E           [polykernel-cuda] cudaMalloc(&p, bytes) failed at lib/Runtime/cuda_run_main.cpp:101: CUDA driver version is insufficient for CUDA runtime version
+
+tests/kernels/test_cuda_run.py:163: RuntimeError
+___________________________ test_cuda_matmul_square ____________________________
+
+run_cuda_matmul = <function run_cuda_matmul.<locals>._run at 0x7fffe6d92f00>
+rand_bf16 = <function rand_bf16.<locals>._make at 0x7fffe6d93110>
+
+    def test_cuda_matmul_square(run_cuda_matmul, rand_bf16):
+        a = rand_bf16((128, 128))
+        b = rand_bf16((128, 128))
+>       _check(run_cuda_matmul(a, b), G.matmul(a, b))
+               ^^^^^^^^^^^^^^^^^^^^^
+
+tests/kernels/test_cuda_run.py:329: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/kernels/test_cuda_run.py:212: in _run
+    cuda_drive(["matmul", str(ap), str(bp), str(out)])
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+args = ['matmul', '/tmp/pytest-of-mei/pytest-369/test_cuda_matmul_square0/a.npy', '/tmp/pytest-of-mei/pytest-369/test_cuda_matmul_square0/b.npy', '/tmp/pytest-of-mei/pytest-369/test_cuda_matmul_square0/c.npy']
+
+    def _drive(args: list[str]) -> subprocess.CompletedProcess:
+        proc = subprocess.run([str(cuda_run_exe), *args], capture_output=True,
+                              text=True, timeout=300)
+        if proc.returncode != 0:
+>           raise RuntimeError(
+                f"cuda_run {args[0]} failed (exit {proc.returncode}):\n{proc.stderr}"
+            )
+E           RuntimeError: cuda_run matmul failed (exit 1):
+E           [polykernel-cuda] cudaMalloc(&p, bytes) failed at lib/Runtime/cuda_run_main.cpp:101: CUDA driver version is insufficient for CUDA runtime version
+
+tests/kernels/test_cuda_run.py:163: RuntimeError
+_________________________ test_cuda_matmul_rectangular _________________________
+
+run_cuda_matmul = <function run_cuda_matmul.<locals>._run at 0x7fffe6d93530>
+rand_bf16 = <function rand_bf16.<locals>._make at 0x7fffe6d93740>
+
+    def test_cuda_matmul_rectangular(run_cuda_matmul, rand_bf16):
+        a = rand_bf16((256, 128))  # M != N, K = 128 (tile-multiple)
+        b = rand_bf16((128, 256))
+>       _check(run_cuda_matmul(a, b), G.matmul(a, b))
+               ^^^^^^^^^^^^^^^^^^^^^
+
+tests/kernels/test_cuda_run.py:335: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/kernels/test_cuda_run.py:212: in _run
+    cuda_drive(["matmul", str(ap), str(bp), str(out)])
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+args = ['matmul', '/tmp/pytest-of-mei/pytest-369/test_cuda_matmul_rectangular0/a.npy', '/tmp/pytest-of-mei/pytest-369/test_cuda_matmul_rectangular0/b.npy', '/tmp/pytest-of-mei/pytest-369/test_cuda_matmul_rectangular0/c.npy']
+
+    def _drive(args: list[str]) -> subprocess.CompletedProcess:
+        proc = subprocess.run([str(cuda_run_exe), *args], capture_output=True,
+                              text=True, timeout=300)
+        if proc.returncode != 0:
+>           raise RuntimeError(
+                f"cuda_run {args[0]} failed (exit {proc.returncode}):\n{proc.stderr}"
+            )
+E           RuntimeError: cuda_run matmul failed (exit 1):
+E           [polykernel-cuda] cudaMalloc(&p, bytes) failed at lib/Runtime/cuda_run_main.cpp:101: CUDA driver version is insufficient for CUDA runtime version
+
+tests/kernels/test_cuda_run.py:163: RuntimeError
+______________________ test_cuda_matmul_non_tile_multiple ______________________
+
+run_cuda_matmul = <function run_cuda_matmul.<locals>._run at 0x7fffe6d93d70>
+rand_bf16 = <function rand_bf16.<locals>._make at 0x7fffe6db8040>
+
+    def test_cuda_matmul_non_tile_multiple(run_cuda_matmul, rand_bf16):
+        a = rand_bf16((130, 65))  # none of M/N/K is a tile multiple -> bounds checks
+        b = rand_bf16((65, 127))
+>       _check(run_cuda_matmul(a, b), G.matmul(a, b))
+               ^^^^^^^^^^^^^^^^^^^^^
+
+tests/kernels/test_cuda_run.py:341: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/kernels/test_cuda_run.py:212: in _run
+    cuda_drive(["matmul", str(ap), str(bp), str(out)])
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+args = ['matmul', '/tmp/pytest-of-mei/pytest-369/test_cuda_matmul_non_tile_mult0/a.npy', '/tmp/pytest-of-mei/pytest-369/test_cuda_matmul_non_tile_mult0/b.npy', '/tmp/pytest-of-mei/pytest-369/test_cuda_matmul_non_tile_mult0/c.npy']
+
+    def _drive(args: list[str]) -> subprocess.CompletedProcess:
+        proc = subprocess.run([str(cuda_run_exe), *args], capture_output=True,
+                              text=True, timeout=300)
+        if proc.returncode != 0:
+>           raise RuntimeError(
+                f"cuda_run {args[0]} failed (exit {proc.returncode}):\n{proc.stderr}"
+            )
+E           RuntimeError: cuda_run matmul failed (exit 1):
+E           [polykernel-cuda] cudaMalloc(&p, bytes) failed at lib/Runtime/cuda_run_main.cpp:101: CUDA driver version is insufficient for CUDA runtime version
+
+tests/kernels/test_cuda_run.py:163: RuntimeError
+______________________ test_cuda_matmul_batched_flattens _______________________
+
+run_cuda_matmul = <function run_cuda_matmul.<locals>._run at 0x7fffe6db85c0>
+rand_bf16 = <function rand_bf16.<locals>._make at 0x7fffe6db87d0>
+
+    def test_cuda_matmul_batched_flattens(run_cuda_matmul, rand_bf16):
+        a = rand_bf16((2, 64, 128))  # leading batch flattens into M
+        b = rand_bf16((128, 64))
+>       _check(run_cuda_matmul(a, b), G.matmul(a, b))
+               ^^^^^^^^^^^^^^^^^^^^^
+
+tests/kernels/test_cuda_run.py:347: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/kernels/test_cuda_run.py:212: in _run
+    cuda_drive(["matmul", str(ap), str(bp), str(out)])
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+args = ['matmul', '/tmp/pytest-of-mei/pytest-369/test_cuda_matmul_batched_flatt0/a.npy', '/tmp/pytest-of-mei/pytest-369/test_cuda_matmul_batched_flatt0/b.npy', '/tmp/pytest-of-mei/pytest-369/test_cuda_matmul_batched_flatt0/c.npy']
+
+    def _drive(args: list[str]) -> subprocess.CompletedProcess:
+        proc = subprocess.run([str(cuda_run_exe), *args], capture_output=True,
+                              text=True, timeout=300)
+        if proc.returncode != 0:
+>           raise RuntimeError(
+                f"cuda_run {args[0]} failed (exit {proc.returncode}):\n{proc.stderr}"
+            )
+E           RuntimeError: cuda_run matmul failed (exit 1):
+E           [polykernel-cuda] cudaMalloc(&p, bytes) failed at lib/Runtime/cuda_run_main.cpp:101: CUDA driver version is insufficient for CUDA runtime version
+
+tests/kernels/test_cuda_run.py:163: RuntimeError
+___________________ test_cuda_matmul_large_k_reduction_order ___________________
+
+run_cuda_matmul = <function run_cuda_matmul.<locals>._run at 0x7fffe6db8e00>
+rand_bf16 = <function rand_bf16.<locals>._make at 0x7fffe6db9010>
+
+    def test_cuda_matmul_large_k_reduction_order(run_cuda_matmul, rand_bf16):
+        # K = 256: the tiled GEMM's K-accumulation order differs from NumPy's, so an
+        # ISOLATED element lands 1 bf16 ULP off at small magnitude (measured max_rel_err
+        # ~3e-2 on gfx1101) while cosine == pcc == 1.0 and >= 99.99% bit-exact. This is
+        # the documented reduction-order class (see module docstring), NOT a bug, so it
+        # uses the calibrated ceiling instead of the single-op max_rel_err <= 1e-2 gate.
+        a = rand_bf16((256, 256))
+        b = rand_bf16((256, 512))
+>       _check(run_cuda_matmul(a, b), G.matmul(a, b),
+               ^^^^^^^^^^^^^^^^^^^^^
+               rel_ceiling=_LARGE_K_REL_CEILING, full_contract=False)
+
+tests/kernels/test_cuda_run.py:358: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/kernels/test_cuda_run.py:212: in _run
+    cuda_drive(["matmul", str(ap), str(bp), str(out)])
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+args = ['matmul', '/tmp/pytest-of-mei/pytest-369/test_cuda_matmul_large_k_reduc0/a.npy', '/tmp/pytest-of-mei/pytest-369/test_cuda_matmul_large_k_reduc0/b.npy', '/tmp/pytest-of-mei/pytest-369/test_cuda_matmul_large_k_reduc0/c.npy']
+
+    def _drive(args: list[str]) -> subprocess.CompletedProcess:
+        proc = subprocess.run([str(cuda_run_exe), *args], capture_output=True,
+                              text=True, timeout=300)
+        if proc.returncode != 0:
+>           raise RuntimeError(
+                f"cuda_run {args[0]} failed (exit {proc.returncode}):\n{proc.stderr}"
+            )
+E           RuntimeError: cuda_run matmul failed (exit 1):
+E           [polykernel-cuda] cudaMalloc(&p, bytes) failed at lib/Runtime/cuda_run_main.cpp:101: CUDA driver version is insufficient for CUDA runtime version
+
+tests/kernels/test_cuda_run.py:163: RuntimeError
+________________________ test_cuda_softmax_tokens_vocab ________________________
+
+run_cuda_softmax = <function run_cuda_softmax.<locals>._run at 0x7fffe6db9640>
+rand_bf16 = <function rand_bf16.<locals>._make at 0x7fffe6db9850>
+
+    def test_cuda_softmax_tokens_vocab(run_cuda_softmax, rand_bf16):
+        x = rand_bf16((64, 256))
+>       _check(run_cuda_softmax(x), G.softmax(x))
+               ^^^^^^^^^^^^^^^^^^^
+
+tests/kernels/test_cuda_run.py:367: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/kernels/test_cuda_run.py:224: in _run
+    cuda_drive(["softmax", str(inp), str(out)])
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+args = ['softmax', '/tmp/pytest-of-mei/pytest-369/test_cuda_softmax_tokens_vocab0/input.npy', '/tmp/pytest-of-mei/pytest-369/test_cuda_softmax_tokens_vocab0/output.npy']
+
+    def _drive(args: list[str]) -> subprocess.CompletedProcess:
+        proc = subprocess.run([str(cuda_run_exe), *args], capture_output=True,
+                              text=True, timeout=300)
+        if proc.returncode != 0:
+>           raise RuntimeError(
+                f"cuda_run {args[0]} failed (exit {proc.returncode}):\n{proc.stderr}"
+            )
+E           RuntimeError: cuda_run softmax failed (exit 1):
+E           [polykernel-cuda] cudaMalloc(&p, bytes) failed at lib/Runtime/cuda_run_main.cpp:101: CUDA driver version is insufficient for CUDA runtime version
+
+tests/kernels/test_cuda_run.py:163: RuntimeError
+________________________ test_cuda_softmax_odd_last_dim ________________________
+
+run_cuda_softmax = <function run_cuda_softmax.<locals>._run at 0x7fffe6db9dd0>
+rand_bf16 = <function rand_bf16.<locals>._make at 0x7fffe6db9fe0>
+
+    def test_cuda_softmax_odd_last_dim(run_cuda_softmax, rand_bf16):
+        x = rand_bf16((32, 127))
+>       _check(run_cuda_softmax(x), G.softmax(x))
+               ^^^^^^^^^^^^^^^^^^^
+
+tests/kernels/test_cuda_run.py:372: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/kernels/test_cuda_run.py:224: in _run
+    cuda_drive(["softmax", str(inp), str(out)])
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+args = ['softmax', '/tmp/pytest-of-mei/pytest-369/test_cuda_softmax_odd_last_dim0/input.npy', '/tmp/pytest-of-mei/pytest-369/test_cuda_softmax_odd_last_dim0/output.npy']
+
+    def _drive(args: list[str]) -> subprocess.CompletedProcess:
+        proc = subprocess.run([str(cuda_run_exe), *args], capture_output=True,
+                              text=True, timeout=300)
+        if proc.returncode != 0:
+>           raise RuntimeError(
+                f"cuda_run {args[0]} failed (exit {proc.returncode}):\n{proc.stderr}"
+            )
+E           RuntimeError: cuda_run softmax failed (exit 1):
+E           [polykernel-cuda] cudaMalloc(&p, bytes) failed at lib/Runtime/cuda_run_main.cpp:101: CUDA driver version is insufficient for CUDA runtime version
+
+tests/kernels/test_cuda_run.py:163: RuntimeError
+________________________ test_cuda_softmax_3d_flattens _________________________
+
+run_cuda_softmax = <function run_cuda_softmax.<locals>._run at 0x7fffe6dba560>
+rand_bf16 = <function rand_bf16.<locals>._make at 0x7fffe6dba770>
+
+    def test_cuda_softmax_3d_flattens(run_cuda_softmax, rand_bf16):
+        x = rand_bf16((2, 16, 64))
+>       _check(run_cuda_softmax(x), G.softmax(x))
+               ^^^^^^^^^^^^^^^^^^^
+
+tests/kernels/test_cuda_run.py:377: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/kernels/test_cuda_run.py:224: in _run
+    cuda_drive(["softmax", str(inp), str(out)])
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+args = ['softmax', '/tmp/pytest-of-mei/pytest-369/test_cuda_softmax_3d_flattens0/input.npy', '/tmp/pytest-of-mei/pytest-369/test_cuda_softmax_3d_flattens0/output.npy']
+
+    def _drive(args: list[str]) -> subprocess.CompletedProcess:
+        proc = subprocess.run([str(cuda_run_exe), *args], capture_output=True,
+                              text=True, timeout=300)
+        if proc.returncode != 0:
+>           raise RuntimeError(
+                f"cuda_run {args[0]} failed (exit {proc.returncode}):\n{proc.stderr}"
+            )
+E           RuntimeError: cuda_run softmax failed (exit 1):
+E           [polykernel-cuda] cudaMalloc(&p, bytes) failed at lib/Runtime/cuda_run_main.cpp:101: CUDA driver version is insufficient for CUDA runtime version
+
+tests/kernels/test_cuda_run.py:163: RuntimeError
+____________________ test_cuda_fused_rmsnorm_matmul_square _____________________
+
+run_cuda_fused_rmsnorm_matmul = <function run_cuda_fused_rmsnorm_matmul.<locals>._run at 0x7fffe6dbacf0>
+rand_bf16 = <function rand_bf16.<locals>._make at 0x7fffe6dbaf00>
+
+    def test_cuda_fused_rmsnorm_matmul_square(run_cuda_fused_rmsnorm_matmul, rand_bf16):
+        x = rand_bf16((128, 128))
+        w = rand_bf16((128, 128))
+>       _check(run_cuda_fused_rmsnorm_matmul(x, w), G.fused_rmsnorm_matmul(x, w))
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/kernels/test_cuda_run.py:386: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/kernels/test_cuda_run.py:238: in _run
+    cuda_drive(["fused_rmsnorm_matmul", str(xp), str(wp), str(out),
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+args = ['fused_rmsnorm_matmul', '/tmp/pytest-of-mei/pytest-369/test_cuda_fused_rmsnorm_matmul0/x.npy', '/tmp/pytest-of-mei/py..._rmsnorm_matmul0/w.npy', '/tmp/pytest-of-mei/pytest-369/test_cuda_fused_rmsnorm_matmul0/out.npy', '--epsilon', '1e-05']
+
+    def _drive(args: list[str]) -> subprocess.CompletedProcess:
+        proc = subprocess.run([str(cuda_run_exe), *args], capture_output=True,
+                              text=True, timeout=300)
+        if proc.returncode != 0:
+>           raise RuntimeError(
+                f"cuda_run {args[0]} failed (exit {proc.returncode}):\n{proc.stderr}"
+            )
+E           RuntimeError: cuda_run fused_rmsnorm_matmul failed (exit 1):
+E           [polykernel-cuda] cudaMalloc(&p, bytes) failed at lib/Runtime/cuda_run_main.cpp:101: CUDA driver version is insufficient for CUDA runtime version
+
+tests/kernels/test_cuda_run.py:163: RuntimeError
+___________________ test_cuda_fused_rmsnorm_matmul_non_tile ____________________
+
+run_cuda_fused_rmsnorm_matmul = <function run_cuda_fused_rmsnorm_matmul.<locals>._run at 0x7fffe6dbb480>
+rand_bf16 = <function rand_bf16.<locals>._make at 0x7fffe6dbb690>
+
+    def test_cuda_fused_rmsnorm_matmul_non_tile(run_cuda_fused_rmsnorm_matmul, rand_bf16):
+        x = rand_bf16((130, 65))  # rmsnorm over odd, non-tile-multiple K (=65)
+        w = rand_bf16((65, 127))
+>       _check(run_cuda_fused_rmsnorm_matmul(x, w), G.fused_rmsnorm_matmul(x, w))
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/kernels/test_cuda_run.py:392: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/kernels/test_cuda_run.py:238: in _run
+    cuda_drive(["fused_rmsnorm_matmul", str(xp), str(wp), str(out),
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+args = ['fused_rmsnorm_matmul', '/tmp/pytest-of-mei/pytest-369/test_cuda_fused_rmsnorm_matmul1/x.npy', '/tmp/pytest-of-mei/py..._rmsnorm_matmul1/w.npy', '/tmp/pytest-of-mei/pytest-369/test_cuda_fused_rmsnorm_matmul1/out.npy', '--epsilon', '1e-05']
+
+    def _drive(args: list[str]) -> subprocess.CompletedProcess:
+        proc = subprocess.run([str(cuda_run_exe), *args], capture_output=True,
+                              text=True, timeout=300)
+        if proc.returncode != 0:
+>           raise RuntimeError(
+                f"cuda_run {args[0]} failed (exit {proc.returncode}):\n{proc.stderr}"
+            )
+E           RuntimeError: cuda_run fused_rmsnorm_matmul failed (exit 1):
+E           [polykernel-cuda] cudaMalloc(&p, bytes) failed at lib/Runtime/cuda_run_main.cpp:101: CUDA driver version is insufficient for CUDA runtime version
+
+tests/kernels/test_cuda_run.py:163: RuntimeError
+___________________ test_cuda_fused_matmul_bias_gelu_square ____________________
+
+run_cuda_fused_matmul_bias_gelu = <function run_cuda_fused_matmul_bias_gelu.<locals>._run at 0x7fffe6d931c0>
+rand_bf16 = <function rand_bf16.<locals>._make at 0x7fffe6d93740>
+
+    def test_cuda_fused_matmul_bias_gelu_square(run_cuda_fused_matmul_bias_gelu, rand_bf16):
+        a = rand_bf16((128, 128))
+        b = rand_bf16((128, 128))
+        bias = rand_bf16((128,))
+>       _check(run_cuda_fused_matmul_bias_gelu(a, b, bias),
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+               G.fused_matmul_bias_gelu(a, b, bias))
+
+tests/kernels/test_cuda_run.py:399: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/kernels/test_cuda_run.py:255: in _run
+    cuda_drive(["fused_matmul_bias_gelu", str(ap), str(bp), str(bs), str(out)])
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+args = ['fused_matmul_bias_gelu', '/tmp/pytest-of-mei/pytest-369/test_cuda_fused_matmul_bias_ge0/a.npy', '/tmp/pytest-of-mei/...369/test_cuda_fused_matmul_bias_ge0/bias.npy', '/tmp/pytest-of-mei/pytest-369/test_cuda_fused_matmul_bias_ge0/out.npy']
+
+    def _drive(args: list[str]) -> subprocess.CompletedProcess:
+        proc = subprocess.run([str(cuda_run_exe), *args], capture_output=True,
+                              text=True, timeout=300)
+        if proc.returncode != 0:
+>           raise RuntimeError(
+                f"cuda_run {args[0]} failed (exit {proc.returncode}):\n{proc.stderr}"
+            )
+E           RuntimeError: cuda_run fused_matmul_bias_gelu failed (exit 1):
+E           [polykernel-cuda] cudaMalloc(&p, bytes) failed at lib/Runtime/cuda_run_main.cpp:101: CUDA driver version is insufficient for CUDA runtime version
+
+tests/kernels/test_cuda_run.py:163: RuntimeError
+__________________ test_cuda_fused_matmul_bias_gelu_non_tile ___________________
+
+run_cuda_fused_matmul_bias_gelu = <function run_cuda_fused_matmul_bias_gelu.<locals>._run at 0x7fffe6d93060>
+rand_bf16 = <function rand_bf16.<locals>._make at 0x7fffe6d92e50>
+
+    def test_cuda_fused_matmul_bias_gelu_non_tile(run_cuda_fused_matmul_bias_gelu, rand_bf16):
+        a = rand_bf16((130, 65))
+        b = rand_bf16((65, 127))
+        bias = rand_bf16((127,))  # per-column bias on an odd N (=127)
+>       _check(run_cuda_fused_matmul_bias_gelu(a, b, bias),
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+               G.fused_matmul_bias_gelu(a, b, bias))
+
+tests/kernels/test_cuda_run.py:407: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/kernels/test_cuda_run.py:255: in _run
+    cuda_drive(["fused_matmul_bias_gelu", str(ap), str(bp), str(bs), str(out)])
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+args = ['fused_matmul_bias_gelu', '/tmp/pytest-of-mei/pytest-369/test_cuda_fused_matmul_bias_ge1/a.npy', '/tmp/pytest-of-mei/...369/test_cuda_fused_matmul_bias_ge1/bias.npy', '/tmp/pytest-of-mei/pytest-369/test_cuda_fused_matmul_bias_ge1/out.npy']
+
+    def _drive(args: list[str]) -> subprocess.CompletedProcess:
+        proc = subprocess.run([str(cuda_run_exe), *args], capture_output=True,
+                              text=True, timeout=300)
+        if proc.returncode != 0:
+>           raise RuntimeError(
+                f"cuda_run {args[0]} failed (exit {proc.returncode}):\n{proc.stderr}"
+            )
+E           RuntimeError: cuda_run fused_matmul_bias_gelu failed (exit 1):
+E           [polykernel-cuda] cudaMalloc(&p, bytes) failed at lib/Runtime/cuda_run_main.cpp:101: CUDA driver version is insufficient for CUDA runtime version
+
+tests/kernels/test_cuda_run.py:163: RuntimeError
+_______________________ test_cuda_negative_launch_caught _______________________
+
+cuda_run_exe = PosixPath('/home/mei/projects/polykernel/build/cuda_run/cuda_run')
+
+    def test_cuda_negative_launch_caught(cuda_run_exe: Path):
+        # `cuda_run neg` launches a probe kernel with a 2048-thread block (> the max
+        # threads-per-block of 1024 on sm_80/sm_89/sm_90 alike - the per-block limit,
+        # not the 1536 per-SM limit). The runtime must catch + report the CUDA error
+        # and exit non-zero (no silent wrong result, no crash).
+        proc = subprocess.run([str(cuda_run_exe), "neg"], capture_output=True, text=True,
+                              timeout=120)
+        assert proc.returncode == 1, (
+            f"negative launch must exit 1 (caught); got {proc.returncode}\n{proc.stderr}"
+        )
+>       assert "invalid launch CAUGHT" in proc.stderr, proc.stderr
+E       AssertionError: [polykernel-cuda] neg: cudaMalloc failed: CUDA driver version is insufficient for CUDA runtime version
+E         
+E       assert 'invalid launch CAUGHT' in '[polykernel-cuda] neg: cudaMalloc failed: CUDA driver version is insufficient for CUDA runtime version\n'
+E        +  where '[polykernel-cuda] neg: cudaMalloc failed: CUDA driver version is insufficient for CUDA runtime version\n' = CompletedProcess(args=['/home/mei/projects/polykernel/build/cuda_run/cuda_run', 'neg'], returncode=1, stdout='', stderr='[polykernel-cuda] neg: cudaMalloc failed: CUDA driver version is insufficient for CUDA runtime version\n').stderr
+
+tests/kernels/test_cuda_run.py:424: AssertionError
+=========================== short test summary info ============================
+FAILED tests/kernels/test_cuda_run.py::test_cuda_rmsnorm_with_weight - Runtim...
+FAILED tests/kernels/test_cuda_run.py::test_cuda_rmsnorm_odd_cols - RuntimeEr...
+FAILED tests/kernels/test_cuda_run.py::test_cuda_rmsnorm_3d_flattens - Runtim...
+FAILED tests/kernels/test_cuda_run.py::test_cuda_gelu - RuntimeError: cuda_ru...
+FAILED tests/kernels/test_cuda_run.py::test_cuda_gelu_odd_n - RuntimeError: c...
+FAILED tests/kernels/test_cuda_run.py::test_cuda_matmul_square - RuntimeError...
+FAILED tests/kernels/test_cuda_run.py::test_cuda_matmul_rectangular - Runtime...
+FAILED tests/kernels/test_cuda_run.py::test_cuda_matmul_non_tile_multiple - R...
+FAILED tests/kernels/test_cuda_run.py::test_cuda_matmul_batched_flattens - Ru...
+FAILED tests/kernels/test_cuda_run.py::test_cuda_matmul_large_k_reduction_order
+FAILED tests/kernels/test_cuda_run.py::test_cuda_softmax_tokens_vocab - Runti...
+FAILED tests/kernels/test_cuda_run.py::test_cuda_softmax_odd_last_dim - Runti...
+FAILED tests/kernels/test_cuda_run.py::test_cuda_softmax_3d_flattens - Runtim...
+FAILED tests/kernels/test_cuda_run.py::test_cuda_fused_rmsnorm_matmul_square
+FAILED tests/kernels/test_cuda_run.py::test_cuda_fused_rmsnorm_matmul_non_tile
+FAILED tests/kernels/test_cuda_run.py::test_cuda_fused_matmul_bias_gelu_square
+FAILED tests/kernels/test_cuda_run.py::test_cuda_fused_matmul_bias_gelu_non_tile
+FAILED tests/kernels/test_cuda_run.py::test_cuda_negative_launch_caught - Ass...
+18 failed in 13.00s

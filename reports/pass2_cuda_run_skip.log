@@ -1,0 +1,21 @@
+ssssssssssssssssss                                                       [100%]
+=========================== short test summary info ============================
+SKIPPED [1] tests/kernels/test_cuda_run.py:293: no usable CUDA device (sm_89): [polykernel-cuda] dev: no CUDA device (count=0, CUDA driver version is insufficient for CUDA runtime version)
+SKIPPED [1] tests/kernels/test_cuda_run.py:299: no usable CUDA device (sm_89): [polykernel-cuda] dev: no CUDA device (count=0, CUDA driver version is insufficient for CUDA runtime version)
+SKIPPED [1] tests/kernels/test_cuda_run.py:304: no usable CUDA device (sm_89): [polykernel-cuda] dev: no CUDA device (count=0, CUDA driver version is insufficient for CUDA runtime version)
+SKIPPED [1] tests/kernels/test_cuda_run.py:313: no usable CUDA device (sm_89): [polykernel-cuda] dev: no CUDA device (count=0, CUDA driver version is insufficient for CUDA runtime version)
+SKIPPED [1] tests/kernels/test_cuda_run.py:318: no usable CUDA device (sm_89): [polykernel-cuda] dev: no CUDA device (count=0, CUDA driver version is insufficient for CUDA runtime version)
+SKIPPED [1] tests/kernels/test_cuda_run.py:326: no usable CUDA device (sm_89): [polykernel-cuda] dev: no CUDA device (count=0, CUDA driver version is insufficient for CUDA runtime version)
+SKIPPED [1] tests/kernels/test_cuda_run.py:332: no usable CUDA device (sm_89): [polykernel-cuda] dev: no CUDA device (count=0, CUDA driver version is insufficient for CUDA runtime version)
+SKIPPED [1] tests/kernels/test_cuda_run.py:338: no usable CUDA device (sm_89): [polykernel-cuda] dev: no CUDA device (count=0, CUDA driver version is insufficient for CUDA runtime version)
+SKIPPED [1] tests/kernels/test_cuda_run.py:344: no usable CUDA device (sm_89): [polykernel-cuda] dev: no CUDA device (count=0, CUDA driver version is insufficient for CUDA runtime version)
+SKIPPED [1] tests/kernels/test_cuda_run.py:350: no usable CUDA device (sm_89): [polykernel-cuda] dev: no CUDA device (count=0, CUDA driver version is insufficient for CUDA runtime version)
+SKIPPED [1] tests/kernels/test_cuda_run.py:365: no usable CUDA device (sm_89): [polykernel-cuda] dev: no CUDA device (count=0, CUDA driver version is insufficient for CUDA runtime version)
+SKIPPED [1] tests/kernels/test_cuda_run.py:370: no usable CUDA device (sm_89): [polykernel-cuda] dev: no CUDA device (count=0, CUDA driver version is insufficient for CUDA runtime version)
+SKIPPED [1] tests/kernels/test_cuda_run.py:375: no usable CUDA device (sm_89): [polykernel-cuda] dev: no CUDA device (count=0, CUDA driver version is insufficient for CUDA runtime version)
+SKIPPED [1] tests/kernels/test_cuda_run.py:383: no usable CUDA device (sm_89): [polykernel-cuda] dev: no CUDA device (count=0, CUDA driver version is insufficient for CUDA runtime version)
+SKIPPED [1] tests/kernels/test_cuda_run.py:389: no usable CUDA device (sm_89): [polykernel-cuda] dev: no CUDA device (count=0, CUDA driver version is insufficient for CUDA runtime version)
+SKIPPED [1] tests/kernels/test_cuda_run.py:395: no usable CUDA device (sm_89): [polykernel-cuda] dev: no CUDA device (count=0, CUDA driver version is insufficient for CUDA runtime version)
+SKIPPED [1] tests/kernels/test_cuda_run.py:403: no usable CUDA device (sm_89): [polykernel-cuda] dev: no CUDA device (count=0, CUDA driver version is insufficient for CUDA runtime version)
+SKIPPED [1] tests/kernels/test_cuda_run.py:414: no usable CUDA device (sm_89): [polykernel-cuda] dev: no CUDA device (count=0, CUDA driver version is insufficient for CUDA runtime version)
+18 skipped in 11.96s
