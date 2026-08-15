@@ -18,7 +18,7 @@ and Modal hire for.**
 |---|---|
 | A compiler/runtime **machinery** demonstration | A claim to **beat vLLM** or any production stack |
 | A Cerebras-style dataflow **simulator** (correct CSL terminology: CE+FMAC, `@set_color_config`, `fabin_dsd`/`fabout_dsd`) | Real CSL / `cslc` / **Cerebras hardware** |
-| Compile + PTX + GPU-free analysis for CUDA; a CUDA runtime-validation harness (`cuda_run_main.cpp` + the MMA tensor-core kernel) built and compile-validated for sm_80/89/90, on-GPU run on the RTX 6000 Ada pod pending pod-key authorization; real H100/A100 numbers from owner-gated rental | Running NVIDIA kernels locally (no local NVIDIA GPU; runtime validation targets the remote RTX 6000 Ada pod, currently pending key authorization) |
+| Compile + PTX + GPU-free analysis for CUDA; a CUDA runtime-validation harness (`cuda_run_main.cpp` + the MMA tensor-core kernel) built and compile-validated for sm_80/89/90 and **runtime-validated on the RTX 6000 Ada pod** (0 failed correctness); H100/A100 numbers from owner-gated rental (still projected) | Running NVIDIA kernels locally (no local NVIDIA GPU; runtime validation runs on the remote RTX 6000 Ada pod, which has validated the kernels) |
 | Hand-written `.mlir` input in the `polykernel` dialect | A full PyTorch/ONNX/StableHLO frontend |
 | Exactly the named ops + fused variants (closed op set) | An op zoo |
 
@@ -79,8 +79,9 @@ aggregates the committed per-backend reports into:
 - `reports/dataflow_report.html` — the dataflow visualizer (linked, not regenerated).
 
 Every HTML page is **static + self-contained** (inline CSS/JS, no external dependencies)
-and renders offline. The H100/A100/MI300/RTX 6000 Ada (sm_89) speedups are **PROJECTED**
-(roofline + analytic traffic) unless a rental ran; see
+and renders offline. The RTX 6000 Ada (sm_89) speedups are **MEASURED** on the pod
+(1.000×/0.838×/0.857×); H100/A100/MI300 speedups are **PROJECTED** (roofline + analytic
+traffic) until a rental runs; see
 [`docs/performance_model.md`](docs/performance_model.md). The dashboard reflects reality:
 `--inject-failed-correctness` runs the golden harness with a deliberately-broken kernel and
 the report shows `failed correctness: N>0` prominently (`reports/w6_dashboard_neg.log`).
@@ -93,9 +94,11 @@ error ≤ 1e-2, PCC ≥ 0.99. CUDA correctness rests on the **shared** portable 
 validated by running the HIP + CPU-reference builds on the RX 7800 XT, the CUDA
 runtime-validation harness (`lib/Runtime/cuda_run_main.cpp` + the MMA kernel
 `kernels/generated/matmul_mma.cu`) which is built and compile-validated for sm_80/89/90
-with the on-GPU run on the RTX 6000 Ada pod **pending pod-key authorization** (pod gate
-SKIPPED), and the dataflow simulator's functional execution — all compared to the same
-golden. H100/A100/MI300/RTX 6000 Ada (sm_89) speedups remain **PROJECTED** (see
+and **runtime-validated on the RTX 6000 Ada (sm_89) pod: 0 failed correctness (18/18
+golden, cosine==pcc==1.0)**, the dataflow simulator's functional execution, all compared
+to the same golden. The first on-NVIDIA run exposed and fixed two real CUDA bugs (bf16x2
+store corruption, gelu erf precision, commit d85866a). H100/A100/MI300 speedups remain
+**PROJECTED** (see
 [`docs/performance_model.md`](docs/performance_model.md)). **0 failed correctness tests**
 is a success criterion.
 
@@ -111,11 +114,14 @@ is a success criterion.
   (`kernels/generated/matmul_mma.cu`, nvcuda::wmma m16n16k16 bf16, additive +
   correctness-gated), and sm_89 (RTX 6000 Ada) support across the analyzer,
   per-kernel report, bench suite, and dashboard: all **built +
-  compile-validated locally** (sm_80/89/90). The **on-GPU run is PENDING pod-key
-  authorization** (pass-2 pod gate SKIPPED, `reports/pod_env.log`), so no CUDA number is
-  claimed as measured. The dashboard (`reports/benchmark_report.md`) now carries an
-  RTX 6000 Ada (sm_89) row next to H100/A100: **PROJECTED**, like
-  H100/A100/MI300, which remain **PROJECTED**.
+  compile-validated locally** (sm_80/89/90) and **runtime-validated on the RTX 6000
+  Ada pod** (0 failed correctness, `reports/pass2_ada_cuda_run.log`). The pod
+  (216.81.200.13, user ubuntu) ran the validation after the original 65.109.75.15 pod
+  was terminated by the user and this one was provisioned at the user's authorization.
+  The dashboard (`reports/benchmark_report.md`) now carries the RTX 6000 Ada (sm_89) row
+  as **MEASURED**: unfused 1.000× / fused 0.838× / autotuned 0.857× (fused is slower at
+  this compute-bound shape, the plan's shape-dependence caveat, confirmed).
+  H100/A100/MI300 remain **PROJECTED**.
 - **Lit:** 14/14 `.mlir` tests green (`check-polykernel`).
 
 <!--## Documentation

@@ -97,8 +97,11 @@ PTX. The **compile-time analyzer** (`lib/Analysis/`: `PtxasParser`, `Occupancy`,
 from the sm_80/sm_89/sm_90 constants table, and classifies the roofline, all with no
 device attached to the analysis. The **CUDA runtime-validation harness**
 (`lib/Runtime/cuda_run_main.cpp`) is built and compile-validated for sm_80/89/90 (with a
-`dev` probe that prints the device + compute capability); the on-GPU run on the RTX 6000
-Ada pod is **PENDING pod-key authorization** (pod gate SKIPPED, `reports/pod_env.log`).
+`dev` probe that prints the device + compute capability) and **runtime-validated on the
+RTX 6000 Ada pod** (0 failed correctness, 18/18 golden,
+`reports/pass2_ada_cuda_run.log`). The original pod (65.109.75.15) was terminated by the
+user; a new RTX 6000 Ada pod (216.81.200.13, user ubuntu) was provisioned at the user's
+authorization and is the one that ran the validation.
 Detail in [`cuda_backend.md`](cuda_backend.md).
 
 ## The HIP/ROCm backend (C3b)
@@ -118,9 +121,11 @@ is established three ways: (1) the CUDA and HIP backends share **one** portable 
 so the shared compute logic is validated by running the HIP build (and the CPU-reference
 build) on the RX 7800 XT against the golden; (2) CUDA-specific paths, the MMA tensor-core
 kernel `matmul_mma.cu` and the runtime launcher `cuda_run_main.cpp`, are **built and
-compile-validated locally** (nvcc sm_80/89/90, PTX, `ptxas -v`), with the on-GPU run on
-the RTX 6000 Ada (sm_89) pod **PENDING pod-key authorization** (pod gate SKIPPED,
-`reports/pod_env.log`); (3) the dataflow simulator **functionally executes** the scheduled
+compile-validated locally** (nvcc sm_80/89/90, PTX, `ptxas -v`) and **runtime-validated
+on the RTX 6000 Ada (sm_89) pod: 0 failed correctness (18/18 golden, cosine==pcc==1.0)**;
+the first on-NVIDIA run exposed and fixed two real CUDA bugs (bf16x2 store corruption,
+gelu erf precision, commit d85866a); (3) the dataflow simulator **functionally executes**
+the scheduled
 tile program and is compared to the same golden. The golden
 (`tests/golden/`) uses NumPy + `ml_dtypes.bfloat16` only, with the pinned rounding
 contract (bf16 RNE inputs, fp32 accumulate, bf16 output) and thresholds. The end-to-end
@@ -169,10 +174,10 @@ reports — CUDA (`reports/h100_bench.json` + `reports/kernel_report_example.jso
 stats (passes / generated kernels / validated / **failed correctness**) into
 `reports/benchmark_report.{md,html}` and the per-backend `reports/h100_report.html` /
 `reports/mi300_report.html`. Every HTML page is **static + self-contained** (inline
-CSS/JS, no external dependencies, renders offline). The H100/A100/MI300 speedups are
-**PROJECTED** (roofline + analytic traffic) unless a RunPod rental ran; the RTX 6000 Ada
-(sm_89) is the first real-validation target, currently **PENDING pod-key authorization**
-(pod gate SKIPPED, `reports/pod_env.log`); the dataflow
+CSS/JS, no external dependencies, renders offline). The RTX 6000 Ada (sm_89) speedups are
+**MEASURED** on the pod (unfused 1.000× / fused 0.838× / autotuned 0.857×,
+`reports/ada6000_bench.json`); H100/A100/MI300 speedups are **PROJECTED** (roofline +
+analytic traffic) until a RunPod rental ran; the dataflow
 figures are the simulator's model. See [`performance_model.md`](performance_model.md).
 
 ## Directory layout

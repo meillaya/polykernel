@@ -1,0 +1,64 @@
+##############################################################################
+# PolyKernel pass2 F1 docs re-sync QA (2026-08-15) - README + docs to post-pod reality
+# Pre-fix stale-state captured in /tmp/opencode/f1/prefix_sweep1.txt (34 hits:
+#  README L21/L82/L96-98/L112-117 + architecture L101/L122/L174-175 +
+#  cuda_backend L8/L77/L159/L172 + performance_model L10/L113 + upstream_pr L330).
+##############################################################################
+
+=== QA 1: stale-claim sweep (must return NOTHING) ===
+[PASS] grep -rn 'pending pod-key|no CUDA number|no measured' README.md docs/ -> EMPTY
+[PASS] grep -rn 'PENDING pod-key|pod gate SKIPPED|Permission denied|first real-validation target' -> EMPTY
+
+=== QA 2: README RTX 6000 Ada rows (MEASURED numbers + H100/A100/MI300 PROJECTED) ===
+21:| Compile + PTX + GPU-free analysis for CUDA; a CUDA runtime-validation harness (`cuda_run_main.cpp` + the MMA tensor-core kernel) built and compile-validated for sm_80/89/90 and **runtime-validated on the RTX 6000 Ada pod** (0 failed correctness); H100/A100 numbers from owner-gated rental (still projected) | Running NVIDIA kernels locally (no local NVIDIA GPU; runtime validation runs on the remote RTX 6000 Ada pod, which has validated the kernels) |
+33:   + MMA kernel + runtime launcher  (CUDA twin: matmul_mma.cu · RTX 6000 Ada)
+82:and renders offline. The RTX 6000 Ada (sm_89) speedups are **MEASURED** on the pod
+97:and **runtime-validated on the RTX 6000 Ada (sm_89) pod: 0 failed correctness (18/18
+115:  correctness-gated), and sm_89 (RTX 6000 Ada) support across the analyzer,
+121:  The dashboard (`reports/benchmark_report.md`) now carries the RTX 6000 Ada (sm_89) row
+
+=== QA 3: README correctness story (runtime-validated on the Ada) ===
+21:| Compile + PTX + GPU-free analysis for CUDA; a CUDA runtime-validation harness (`cuda_run_main.cpp` + the MMA tensor-core kernel) built and compile-validated for sm_80/89/90 and **runtime-validated on the RTX 6000 Ada pod** (0 failed correctness); H100/A100 numbers from owner-gated rental (still projected) | Running NVIDIA kernels locally (no local NVIDIA GPU; runtime validation runs on the remote RTX 6000 Ada pod, which has validated the kernels) |
+97:and **runtime-validated on the RTX 6000 Ada (sm_89) pod: 0 failed correctness (18/18
+100:store corruption, gelu erf precision, commit d85866a). H100/A100/MI300 speedups remain
+102:[`docs/performance_model.md`](docs/performance_model.md)). **0 failed correctness tests**
+118:  Ada pod** (0 failed correctness, `reports/pass2_ada_cuda_run.log`). The pod
+
+=== QA 4: Ada row never claimed PROJECTED ===
+[PASS] no line claims the RTX 6000 Ada row is PROJECTED
+
+=== QA 5: pod story (old terminated / new provisioned) ===
+README.md:119:  (216.81.200.13, user ubuntu) ran the validation after the original 65.109.75.15 pod
+docs/architecture.md:102:`reports/pass2_ada_cuda_run.log`). The original pod (65.109.75.15) was terminated by the
+docs/architecture.md:103:user; a new RTX 6000 Ada pod (216.81.200.13, user ubuntu) was provisioned at the user's
+docs/performance_model.md:122:MEASURED speedups (`reports/ada6000_bench.json`). The original pod (65.109.75.15) was
+docs/performance_model.md:123:terminated by the user; a new RTX 6000 Ada pod (216.81.200.13, user ubuntu) was provisioned
+
+=== QA 6: no em dashes in rewritten prose ===
+[PASS] README
+[PASS] architecture.md
+[PASS] cuda_backend.md
+[PASS] performance_model.md
+[PASS] upstream_pr.md
+
+=== QA 7: exact measured numbers present (1.000x / 0.838x / 0.857x) ===
+README.md:83:(1.000×/0.838×/0.857×); H100/A100/MI300 speedups are **PROJECTED** (roofline + analytic
+README.md:122:  as **MEASURED**: unfused 1.000× / fused 0.838× / autotuned 0.857× (fused is slower at
+docs/architecture.md:178:**MEASURED** on the pod (unfused 1.000× / fused 0.838× / autotuned 0.857×,
+docs/performance_model.md:4:> MEASURED** on the pod with CUDA events: unfused 1.000× / fused 0.838× / autotuned
+docs/performance_model.md:5:> 0.857× (`reports/ada6000_bench.json`; the pod story is in the "Getting REAL numbers"
+docs/performance_model.md:65:| NVIDIA H100 (SXM5, sm_90) | cuda (sm_90) | 1.000× | 1.004× | **2.838×** |
+docs/performance_model.md:66:| NVIDIA A100 (80GB, sm_80) | cuda (sm_80) | 1.000× | 1.003× | **2.862×** |
+docs/performance_model.md:67:| AMD Instinct MI300X (gfx942) | hip (gfx942) | 1.000× | 1.003× | **2.850×** |
+docs/performance_model.md:107:  fused kernel is *slower* (0.838×) at this compute-bound shape (AI ≈ 1215 >> ridge),
+
+=== diff summary vs pre-fix state ===
+ README.md                 | 28 ++++++++++++++++----------
+ docs/architecture.md      | 23 ++++++++++++---------
+ docs/cuda_backend.md      | 33 ++++++++++++++++--------------
+ docs/performance_model.md | 51 ++++++++++++++++++++++++-----------------------
+ docs/upstream_pr.md       |  8 ++++----
+ 5 files changed, 79 insertions(+), 64 deletions(-)
+
+=== VERDICT ===
+All sweeps green: README + docs now match the MEASURED dashboard (dc0537a).

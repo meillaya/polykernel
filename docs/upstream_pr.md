@@ -326,10 +326,10 @@ would recognize.
   mirrors the patterns in the existing `03-matrix-multiplication.py` tutorial.
 - **Not done here, by design**: running it. The verification block needs a CUDA
   or HIP GPU and an installed Triton, neither of which this environment has
-  (PolyKernel builds CUDA kernels but the local dev machine has no NVIDIA GPU: its
-  CUDA runtime validation targets the remote RTX 6000 Ada pod, pending pod-key
-  authorization, and Triton is not in the nix dev shell). Running the tutorial on a
-  GPU box is the first step at submission time.
+  (PolyKernel builds CUDA kernels and has runtime-validated them on the remote
+  RTX 6000 Ada pod, but Triton is not in the nix dev shell, so this Triton
+  tutorial has not been executed). Running the tutorial on a GPU box is the
+  first step at submission time.
 
 ## Submission status
 

@@ -1,18 +1,13 @@
 # PolyKernel Performance Model + Projections
 
-> **Real vs projected.** The H100/A100/MI300 speedups in the benchmark reports are
-> **PROJECTED, NOT MEASURED**. No GPU was rented; no RunPod was provisioned; no money was
-> spent. They are derived from a compile-time **roofline model** + analytic memory traffic,
-> not from a rented-GPU run. The **RTX 6000 Ada (sm_89)** pod instance is the first arch
-> targeted for **real measurement**: the CUDA runtime-validation harness
-> (`lib/Runtime/cuda_run_main.cpp`) and the MMA tensor-core kernel
-> (`kernels/generated/matmul_mma.cu`) are built and compile-validated for sm_80/89/90,
-> but the on-GPU run is **PENDING pod-key authorization** (the pass-2 pod gate was SKIPPED
-> with `Permission denied (publickey)`, `reports/pod_env.log`). **No measured sm_89
-> numbers exist yet**, so no speedup is reported as real. Real H100/A100 numbers still
-> require the opt-in RunPod rental (below). Every projected figure carries its status
-> (`status: "PROJECTED"`, `projected: true`, `measured: false` in the bench JSONs; the
-> `scored_by` tuning-cache field distinguishes `compile-time-model` from
+> **Real vs projected.** The **RTX 6000 Ada (sm_89) speedups in the benchmark reports are
+> MEASURED** on the pod with CUDA events: unfused 1.000× / fused 0.838× / autotuned
+> 0.857× (`reports/ada6000_bench.json`; the pod story is in the "Getting REAL numbers"
+> section below). The H100/A100/MI300 speedups are **PROJECTED, NOT MEASURED**: no
+> NVIDIA rental was provisioned; they are derived from a compile-time **roofline model**
+> + analytic memory traffic, not from a rented-GPU run. Every projected figure carries
+> its status (`status: "PROJECTED"`, `projected: true`, `measured: false` in the bench
+> JSONs; the `scored_by` tuning-cache field distinguishes `compile-time-model` from
 > `real-benchmark`). **No SOTA-performance claim is made**: the goal is the
 > compiler/runtime machinery, not beating vLLM.
 
@@ -103,25 +98,31 @@ broadcast. Both stem from the same fusion (`fused_rmsnorm_matmul` eliminating
 
 ## Caveats (carried verbatim into the reports)
 
-- **PROJECTED, not measured** — roofline model + analytic traffic, not a rented-GPU run.
+- **MEASURED for the RTX 6000 Ada (sm_89), PROJECTED for H100/A100/MI300**: the sm_89
+  numbers are real CUDA-event timings on the pod; H100/A100/MI300 come from the roofline
+  model + analytic traffic, not a rented-GPU run.
 - The **attainment factors are documented modeling assumptions**, not measured efficiencies.
 - The generated **fused kernel recomputes the per-row RMS in every output tile**, so the
-  *real* fusion speedup is shape-dependent — verified on the local gfx1101, where fused can
-  be *slower* at small, compute-light shapes.
+  *real* fusion speedup is shape-dependent: confirmed by the measured Ada run, where the
+  fused kernel is *slower* (0.838×) at this compute-bound shape (AI ≈ 1215 >> ridge),
+  matching the verified gfx1101 behavior at small, compute-light shapes.
 - The CUDA tensor-core path (`matmul_mma.cu`) and the runtime launcher
-  (`cuda_run_main.cpp`) are **built + compile-validated locally** (sm_80/89/90); the on-GPU
-  run on the RTX 6000 Ada (sm_89) pod is **PENDING pod-key authorization** (pod gate
-  SKIPPED, `reports/pod_env.log`), so **no CUDA number is reported as measured yet** (see
+  (`cuda_run_main.cpp`) are **built + compile-validated locally** (sm_80/89/90) and
+  **runtime-validated on the RTX 6000 Ada (sm_89) pod**: 0 failed correctness (18/18
+  golden, `reports/pass2_ada_cuda_run.log`; see
   [`cuda_backend.md`](cuda_backend.md)).
 
 ## Getting REAL numbers (opt-in, owner-gated)
 
-The **first real-validation target is the RTX 6000 Ada (sm_89) pod instance**: the CUDA
-runtime-validation harness (`lib/Runtime/cuda_run_main.cpp` + `tests/kernels/test_mma.py`)
-is built and compile-validated locally and only needs the pod's SSH key authorized to run
-the correctness-gated launches on the actual GPU (the pass-2 pod gate was SKIPPED with
-`Permission denied (publickey)`, `reports/pod_env.log`). Until that lands, no CUDA number
-is real; the docs say so explicitly.
+The **RTX 6000 Ada (sm_89) pod has run the real validation** (this is the measured source
+of the numbers above): the CUDA runtime-validation harness
+(`lib/Runtime/cuda_run_main.cpp` + `tests/kernels/test_mma.py`) ran the correctness-gated
+launches on the actual GPU with 0 failed correctness (`reports/pass2_ada_cuda_run.log`,
+`reports/pass2_ada_mma.log`), and `benchmarks/bench_cuda.cpp --arch sm_89` produced the
+MEASURED speedups (`reports/ada6000_bench.json`). The original pod (65.109.75.15) was
+terminated by the user; a new RTX 6000 Ada pod (216.81.200.13, user ubuntu) was provisioned
+at the user's authorization and is the one that ran the validation (`reports/pod_env_v2.log`
+GATE VERDICT: PASS).
 
 The H100/A100/MI300 real runs remain the opt-in RunPod rental:
 

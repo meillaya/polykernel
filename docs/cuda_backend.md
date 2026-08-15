@@ -4,9 +4,9 @@ The CUDA backend (C3a) generates CUDA kernels for the `polykernel` ops, compiles
 PTX for **sm_80** (A100), **sm_89** (RTX 6000 Ada) and **sm_90** (H100), and analyzes them
 **entirely at compile time, with no device attached to the analysis** (the heart of the
 backend). The local dev machine has **no NVIDIA GPU**; the CUDA runtime-validation
-target is the **remote RTX 6000 Ada (sm_89) pod instance**, and the on-GPU run there is
-**PENDING pod-key authorization** (the pass-2 pod gate was SKIPPED with
-`Permission denied (publickey)`, `reports/pod_env.log`). Real H100/A100 *runtime*
+target is the **remote RTX 6000 Ada (sm_89) pod instance**, and the kernels have been
+**runtime-validated there**: 0 failed correctness, 18/18 golden
+(`reports/pass2_ada_cuda_run.log`). Real H100/A100 *runtime*
 numbers would come only from an owner-gated RunPod rental, and until then stay
 clearly-labeled **projections** (see [`performance_model.md`](performance_model.md)).
 
@@ -73,8 +73,9 @@ the CUDA *compile* acceptance gate (Pinned contract G). It needs no device.
 The **runtime-validation harness** `lib/Runtime/cuda_run_main.cpp` (the CUDA twin of
 `hip_run_main`) links clean for the same three archs (build `build/cuda_run/cuda_run_{sm_80,
 sm_89,sm_90}`) and includes a `dev` probe that prints `DEVICE <name> COMPUTE_CAPABILITY
-<major>.<minor>`. It is built and compile-validated locally; launching it on the RTX 6000
-Ada pod is pending pod-key authorization.
+<major>.<minor>`. It is built and compile-validated locally and **runs on the RTX 6000
+Ada pod**: runtime-validated with 0 failed correctness, 18/18 golden
+(`reports/pass2_ada_cuda_run.log`).
 
 ## The GPU-free compile-time analyzer
 
@@ -155,10 +156,10 @@ of the HIP/RDNA3 WMMA path:
 - **HIP guard:** under `-DPOLYKERNEL_HIP` the file is a hard `#error`; the HIP tensor-core
   sibling is `matmul_wmma.cu`.
 - **Status:** built + compile-validated locally (nvcc sm_80/89/90, PTX contains the real
-  `mma.sync` instruction, `ptxas -v` parses, 0 spills). The on-GPU runtime validation on
-  the RTX 6000 Ada (sm_89) pod is **PENDING pod-key authorization** (pod gate SKIPPED,
-  `reports/pod_env.log`); the harness (`lib/Runtime/cuda_run_main.cpp` +
-  `tests/kernels/test_mma.py`) is ready to run once the key is authorized.
+  `mma.sync` instruction, `ptxas -v` parses, 0 spills) and **runtime-validated on the
+  RTX 6000 Ada (sm_89) pod** (5/5 golden PASS, 0 failed correctness,
+  `reports/pass2_ada_mma.log`); the bad-store variant fails the golden on the GPU and is
+  excluded while the scalar baseline stands, proving MMA is safely additive.
 
 ## Correctness model
 
@@ -166,13 +167,15 @@ of the HIP/RDNA3 WMMA path:
   build, `kernels/cpu/`) on the RX 7800 XT against the golden, which validates the
   algorithmic core for *both* backends.
 - CUDA-specific paths (the MMA tensor-core kernel `matmul_mma.cu` and the runtime launcher
-  `lib/Runtime/cuda_run_main.cpp`) are **built and compile-validated locally**: nvcc links
+  `lib/Runtime/cuda_run_main.cpp`) are **built and compile-validated locally** (nvcc links
   clean for sm_80/sm_89/sm_90, the PTX contains the real
-  `mma.sync.aligned.m16n16k16.f32.bf16.bf16.f32` instruction, and `ptxas -v` parses. The
-  **on-GPU runtime validation on the RTX 6000 Ada (sm_89) pod is PENDING pod-key
-  authorization** (the pass-2 pod gate was SKIPPED, `reports/pod_env.log`); the harness
-  is ready and will run on the pod once the SSH key is authorized. H100/A100 runtime
-  numbers remain **projected** (owner-gated RunPod rental).
+  `mma.sync.aligned.m16n16k16.f32.bf16.bf16.f32` instruction, `ptxas -v` parses) and
+  **runtime-validated on the RTX 6000 Ada (sm_89) pod**: 18/18 golden PASS for the
+  launcher (0 failed correctness, cosine==pcc==1.0) and 5/5 for the MMA kernel
+  (`reports/pass2_ada_cuda_run.log`, `reports/pass2_ada_mma.log`). The first on-NVIDIA
+  run exposed and fixed two real CUDA bugs (bf16x2 store corruption, gelu erf precision,
+  commit d85866a). H100/A100 runtime numbers remain **projected** (owner-gated RunPod
+  rental).
 
 ## See also
 
