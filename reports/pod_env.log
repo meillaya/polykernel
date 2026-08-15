@@ -1,0 +1,39 @@
+##############################################################################
+# PolyKernel pass2 todo 4: POD ENVIRONMENT PROBE (GATE for todos 9/11/13/14/15)
+# Host: Linux 7.1.8-1-cachyos x86_64   Date: 2026-08-15T13:27:05Z
+# Target: root@65.109.75.15:22  (existing Prime Intellect RTX 6000 Ada instance - direct SSH, no provisioning)
+# Key: /home/mei/projects/polykernel/private_key.pem  mode: 600  (contents never printed)
+##############################################################################
+
+=== CHECK 0: local prerequisites (ssh client + private key mode 600) ===
+[PASS] private key present, mode 600
+[PASS] ssh client: /home/mei/.nix-profile/bin/ssh
+
+=== CHECK 1: SSH connectivity (root@65.109.75.15:22, ConnectTimeout=15) ===
+[FAIL] ssh to root@65.109.75.15:22 FAILED (rc=255)
+[INFO]   root@65.109.75.15: Permission denied (publickey).
+
+=== CHECK 2: nvidia-smi -L (expect RTX 6000 Ada Generation, compute capability 8.9) ===
+[SKIP] nvidia-smi -L (no ssh session)
+
+=== CHECK 3: nvcc --version (require >= 11.8 for native sm_89) ===
+[SKIP] nvcc --version (no ssh session)
+
+=== CHECK 4: python3 --version ===
+[SKIP] python3 --version (no ssh session)
+
+=== CHECK 5: python packages numpy/ml_dtypes/pytest (pinned; PEP-668 venv fallback) ===
+[SKIP] python packages (no ssh session)
+
+=== CHECK 6: R2 closure decision inputs (gcc / disk free / glibc / apt llvm-21 / rsync) ===
+[SKIP] environment record (no ssh session)
+
+=== GATE VERDICT ===
+GATE VERDICT: SKIPPED
+  Pod-runnable todos (9/11/13/14/15) DEGRADE to SKIPPED with the exact cause named:
+    - SSH: cannot ssh to root@65.109.75.15:22 (rc=255): root@65.109.75.15: Permission denied (publickey).
+  REMEDY: verify the instance is RUNNING (it is a paid per-hour instance) and that
+          port 22 is reachable from here; do NOT provision a new pod.
+  checks: ssh=1 gpu=1 nvcc=1 python3=1 pkgs=1 (0=ok)
+
+[INFO] evidence: /home/mei/projects/polykernel/reports/pod_env.log (happy) or the POD_ENV_LOG path with POD_PORT set wrong (negative)
