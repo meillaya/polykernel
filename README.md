@@ -94,7 +94,7 @@ RX 7800 XT, compile-validation of the CUDA tensor-core paths (full validation on
 and the dataflow simulator's functional execution — all compared to the same golden.
 **0 failed correctness tests** is a success criterion.
 
-## Documentation
+<!--## Documentation
 
 | Doc | Contents |
 |---|---|
@@ -103,12 +103,4 @@ and the dataflow simulator's functional execution — all compared to the same g
 | [`docs/cuda_backend.md`](docs/cuda_backend.md) | nvcc/PTX, GPU-free analyzer, contract-H kernel report |
 | [`docs/hip_backend.md`](docs/hip_backend.md) | gfx1101 local run, gfx942 cross-compile, AMDGPU ISA, WMMA bf16 |
 | [`docs/dataflow_backend.md`](docs/dataflow_backend.md) | The Cerebras-style simulator (CE+FMAC, SUMMA, metrics, viz) |
-| [`docs/performance_model.md`](docs/performance_model.md) | Roofline model + real-vs-projected speedups |
-
-## Status
-
-Waves 1–5 (skeleton, CUDA backend, fusion + correctness, HIP backend, autotuner + analyzer +
-runtime) and Wave 7 (dataflow simulator + viz) are complete and green; Wave 6 (Modal +
-dashboard + reports + writeup) delivers this dashboard, the HTML reports, and these docs.
-Wave 8+ (FlashAttention-lite, quantization, kernel-cache hardening, viz polish, optional
-upstream PR) is post-MVP and never blocking.
+| [`docs/performance_model.md`](docs/performance_model.md) | Roofline model + real-vs-projected speedups |-->
