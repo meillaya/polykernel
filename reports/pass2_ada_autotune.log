@@ -1,0 +1,26 @@
+# pass2_ada_autotune.log - todo 15 happy: correctness-gated CUDA autotune on RTX 6000 Ada (sm_89)
+# date: 2026-08-15T14:54:54Z
+# host: 0127-dsm2-ty6k-prxmx70026
+# device: NVIDIA RTX 6000 Ada Generation
+# pod toolchain: nvcc release 12.2, clang++-15 + llvm-15-dev (apt, glibc <=2.34 -> pod glibc 2.35 OK)
+# driver: libLLVM-21.so symlink -> libLLVM-15.so; llvm-config + clang++ symlinked on PATH
+# cmd: python3 tools/polykernel-bench/bench.py --backend cuda --arch sm_89 --autotune --op fused_matmul_bias_gelu --shape 2048,4096,11008 --dtype bf16 --variants 8 --inject-broken --cache-out cache/tuning_cache.json
+
+[bench] op=fused_matmul_bias_gelu shape=M=2048,N=4096,K=11008 dtype=bf16 arch=sm_89 rel_ceiling=inf
+[bench] variant set: 8 pruned ConfigSpace configs + injected broken
+==============================================================================
+[bench] VALIDATED config_0     config=(16, 32, 32, 4, 1, 4, 2) cosine=1.000000 rel=1.953e+03 pcc=1.000000 min_ms=27.04282 median_ms=27.04896
+[bench] VALIDATED config_1     config=(16, 32, 32, 4, 1, 4, 3) cosine=1.000000 rel=1.953e+03 pcc=1.000000 min_ms=27.22509 median_ms=27.23226
+[bench] VALIDATED config_2     config=(16, 32, 32, 4, 1, 4, 4) cosine=1.000000 rel=1.953e+03 pcc=1.000000 min_ms=27.21382 median_ms=27.24352
+[bench] VALIDATED config_3     config=(16, 32, 32, 4, 2, 2, 2) cosine=1.000000 rel=1.953e+03 pcc=1.000000 min_ms=27.22816 median_ms=27.23430
+[bench] VALIDATED config_4     config=(16, 32, 32, 4, 2, 2, 3) cosine=1.000000 rel=1.953e+03 pcc=1.000000 min_ms=27.20970 median_ms=27.25888
+[bench] VALIDATED config_5     config=(16, 32, 32, 4, 2, 2, 4) cosine=1.000000 rel=1.953e+03 pcc=1.000000 min_ms=27.21277 median_ms=27.37357
+[bench] VALIDATED config_6     config=(16, 32, 32, 4, 4, 1, 2) cosine=1.000000 rel=1.953e+03 pcc=1.000000 min_ms=27.37357 median_ms=27.39610
+[bench] VALIDATED config_7     config=(16, 32, 32, 4, 4, 1, 3) cosine=1.000000 rel=1.953e+03 pcc=1.000000 min_ms=27.21280 median_ms=27.37152
+[bench] REJECTED  broken_fast  config=(16, 32, 32, 4, 1, 4, 2) cosine=0.564039 rel=7.000e+06 pcc=0.000000 -> validated:false, NOT timed, excluded
+          gate log: REJECTED fused_matmul_bias_gelu/broken: correctness gate FAILED (cosine=0.564039 max_rel_err=7.000000e+06 pcc=0.000000 ceiling=inf) - excluded, NOT timed, never best
+==============================================================================
+[bench] BEST (fastest validated): config_0 config=(16, 32, 32, 4, 1, 4, 2) median_ms=27.04896
+[bench] tuning cache written to cache/tuning_cache.json (validated:true):
+{"entries":[{"best":{"block_k":32,"block_m":16,"block_n":32,"num_warps":4,"shared_memory_stages":2,"unroll":4,"vector_width":1},"correctness":{"cosine":1.0000001192092896,"max_rel_err":1953.125,"pcc":0.99999970197677612},"gpu":"sm_89","op":"fused_matmul_bias_gelu","scored_by":"measure","shape":{"K":11008,"M":2048,"N":4096,"dtype":"bf16"},"time_ms":27.048960000000001,"validated":true}],"version":1}
+RC=0

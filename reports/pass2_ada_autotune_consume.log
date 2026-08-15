@@ -1,0 +1,14 @@
+# pass2_ada_autotune_consume.log - todo 15 consumption check (GPU-free: LoadTuningCache takes a JSON string)
+# date: 2026-08-15T14:56:04Z
+# harness: scratch C++ compiled on the pod with clang++-15 + apt llvm-15-dev linking lib/Runtime/KernelCache.cpp + lib/Autotune/{AmdTuningDb,TuningCache,ConfigSpace}.cpp
+# entry: gpu=sm_89 scored_by=measure validated=true time_ms=27.05 (the written best from pass2_ada_autotune.log)
+
+PASS: LoadTuningCache(reports/ada6000_tuning_cache.json) size=1
+PASS: Select(sm_89, fused_matmul_bias_gelu, 2048x4096x11008) -> gpu=sm_89 validated=1 scored_by=measure time_ms=27.048960
+PASS: best config block_m=16 block_n=32 block_k=32 num_warps=4 vector_width=1 unroll=4 shared_memory_stages=2
+ALL_PASS
+HAPPY_RC=0
+
+PASS: Select(sm_90) -> miss: no tuned kernel for sm_90/fused_matmul_bias_gelu/M=2048,N=4096,K=11008,bf16; run the autotuner (polykernel-bench --autotune) to populate the cache
+ALL_PASS
+WRONGGPU_RC=0
