@@ -132,7 +132,7 @@ def mma_run_exe() -> Path:
         "-include",
         "cstdio",
         "-O2",
-        "-std=c++17",
+        "-std=c++20",
         "-Ikernels/template",
         "-Iinclude",
         "-Ikernels/cpu",
