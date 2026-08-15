@@ -1,0 +1,41 @@
+=== NEGATIVE QA: devenv bump (prove the lock actually moved to v2.2.2) ===
+
+=== STEP 1: happy-state lock pins devenv at rev b8030c58 = tag v2.2.2 ===
+flake.lock devenv node before revert:
+  rev: b8030c58deafc013fc51791377fe8fea4dadcb00
+  GitHub tag v2.2.2 -> b8030c58deafc013fc51791377fe8fea4dadcb00 (API-verified)
+  MATCH: True
+
+=== STEP 2: revert flake.nix url to v2.1.2 (lock now stale vs url) + nix flake show ===
+warning: Git tree '/home/mei/projects/polykernel' has uncommitted changes
+warning: updating lock file "/home/mei/projects/polykernel/flake.lock":
+• Updated input 'devenv':
+    'github:cachix/devenv/b8030c5' (2026-08-13)
+  → 'github:cachix/devenv/ea3d94a' (2026-05-13)
+• Updated input 'devenv/cachix/nixpkgs':
+    'github:NixOS/nixpkgs/80bdc1e' (2026-03-04)
+  → follows 'devenv/nixpkgs'
+• Added input 'devenv/crate2nix/cachix':
+    'github:cachix/cachix/894c649' (2026-01-06)
+• Added input 'devenv/crate2nix/cachix/devenv':
+    follows 'devenv/crate2nix'
+• Added input 'devenv/crate2nix/cachix/flake-compat':
+    follows 'devenv/crate2nix'
+• Added input 'devenv/crate2nix/cachix/git-hooks':
+    'github:cachix/git-hooks.nix/2d6f589' (2025-12-10)
+• Added input 'devenv/crate2nix/cachix/git-hooks/flake-compat':
+    follows 'devenv/crate2nix/cachix/flake-compat'
+• Added input 'devenv/crate2nix/cachix/git-hooks/gitignore':
+    'github:hercules-ci/gitignore.nix/637db32' (2024-02-28)
+• Added input 'devenv/crate2nix/cachix/git-hooks/gitignore/nixpkgs':
+    follows 'devenv/crate2nix/cachix/git-hooks/nixpkgs'
+• Added input 'devenv/crate2nix/cachix/git-hooks/nixpkgs':
+    follows 'devenv/crate2nix/cachix/nixpkgs'
+• Added input 'devenv/crate2nix/cachix/nixpkgs':
+
+=== STEP 3: prove evaluation now resolves v2.1.2 (rev ea3d94ac...), NOT the locked b8030c58 ===
+  (if the lock had NOT moved, the revert would be a no-op pinning v2.1.2 all along)
+"ea3d94ac9d6bf6a1313773170122ca4e2ef5a0be"
+  expected v2.1.2 rev: ea3d94ac9d6bf6a1313773170122ca4e2ef5a0be
+
+=== CONCLUSION: the lockfile genuinely moved to v2.2.2 (b8030c58); reverting the url alone forces a re-resolution to v2.1.2 ===

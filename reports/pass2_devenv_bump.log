@@ -1,0 +1,435 @@
+warning: Nix search path entry '/home/mei/.nix-defexpr/channels' does not exist, ignoring
+copying path '/nix/store/3lj5bgmcpfls2ravjw1i1czqr6q9f5xj-source' from 'https://devenv.cachix.org'...
+copying path '/nix/store/j2r11kxv91yl5xqppy3vy84klwxjbz1i-source' from 'https://cache.nixos.org'...
+copying path '/nix/store/albs4p2gjdsin38x5s9x0pydgrqnacvm-source' from 'https://devenv.cachix.org'...
+copying path '/nix/store/a53iflnxs009s84g6pypml605hjcxjqi-rust_devenv-tasks-2.2.2' from 'https://devenv.cachix.org'...
+building '/nix/store/c4akb23hqmq5af0bphylf9hkx6qn4ifw-tasks.json.drv'...
+building '/nix/store/5ixp43lkd5a148db5dvna190whmj1x3m-devenv.drv'...
+building '/nix/store/zwkqx379ahhrh05mna51lavwa6z9npfj-process-compose.yaml.drv'...
+building '/nix/store/c9vqbq6xm8mdqsw3hfihsypa3b9hd1y7-devenv-up.drv'...
+building '/nix/store/i2gly0cs2zkpdkbvgbbywflnjmglnrvy-devenv-flake-tasks.drv'...
+building '/nix/store/cmmk7z1x50rwi2j9z9jlcx969i04swn1-devenv-test.drv'...
+building '/nix/store/aczm4xqsrd6nrhs0h00rs80vscqx97y2-devenv-flake-up.drv'...
+building '/nix/store/51bxzmf3xlc1fdw92yzsnrz1f0jlszp8-devenv-flake-test.drv'...
+building '/nix/store/dbwym2mibbf7fwi6xhcmhyii4wdvfwzz-devenv-flake-compat.drv'...
+building '/nix/store/yx91vzv632qkqljlc80p3rwvlzgsz7ka-devenv-shell-env.drv'...
+Running tasks     devenv:enterShell
+
+Running           devenv:files:cleanup
+Succeeded         devenv:files:cleanup (28.10ms)
+Running           devenv:enterShell
+Succeeded         devenv:enterShell (35.21ms)
+Running           devenv:enterTest
+No command        devenv:enterTest
+1 Skipped, 2 Succeeded
+PolyKernel dev shell (llvmPackages_21 MLIR / cudaPackages_12_6 / rocmPackages.clr)
+  CC/CXX:      /nix/store/m59w5gavjx8db0ay3m1yzbw02l54109b-clang-wrapper-21.1.8/bin/clang / /nix/store/m59w5gavjx8db0ay3m1yzbw02l54109b-clang-wrapper-21.1.8/bin/clang++
+  mlir-tblgen: LLVM (http://llvm.org/):
+  nvcc:        Cuda compilation tools, release 12.6, V12.6.85
+  hipcc:       HIP version: 7.2.53211-9999
+  cmake:       cmake version 4.1.2
+  clang:       clang version 21.1.8
+=== devenv version in shell ===
+https://devenv.sh (version 2.2.1): Fast, Declarative, Reproducible, and Composable Developer Environments
+
+This is a flake integration wrapper that comes with a subset of functionality from the flakeless devenv CLI.
+
+Usage: devenv command
+
+Commands:
+
+tasks           Manage and run tasks
+test            Run tests
+up              Start processes in the foreground. See http://devenv.sh/processes
+version         Display the devenv version
+
+=== resolve MLIR/LLVM dirs from the flake's own nixpkgs input ===
+warning: Nix search path entry '/home/mei/.nix-defexpr/channels' does not exist, ignoring
+warning: Nix search path entry '/home/mei/.nix-defexpr/channels' does not exist, ignoring
+MLIR_DIR=/nix/store/2lzr6hy0s5cikj7lxwpl0qhh2idmqfc1-mlir-21.1.8-dev/lib/cmake/mlir
+LLVM_DIR=/nix/store/4768r0pa7fswbi0mdjalqc9pm56fh2vm-llvm-21.1.8-dev/lib/cmake/llvm
+=== tool versions on PATH ===
+lit:    /nix/store/mnrhk9ghglznss3ds1mhd9pz4vlnk0d7-python3.14-lit-18.1.8/bin/lit
+llvm-lit: absent
+mlir-tblgen: /nix/store/a8lgffyjfxbjvj7bpdmhvbvl4zjhnckk-llvm-tblgen-21.1.8/bin/mlir-tblgen
+cmake:  cmake version 4.1.2
+ninja:  1.13.2
+clang++: clang version 21.1.8
+=== configure (robust path-resolution method, docs/compiler_pipeline.md L61-69) ===
+LLVM_EXTERNAL_LIT=/nix/store/mnrhk9ghglznss3ds1mhd9pz4vlnk0d7-python3.14-lit-18.1.8/bin/.lit-wrapped
+-- Could NOT find FFI (missing: FFI_LIBRARIES HAVE_FFI_CALL) 
+-- Could NOT find LibXml2 (missing: LIBXML2_LIBRARY LIBXML2_INCLUDE_DIR) 
+-- Using MLIRConfig.cmake in: /nix/store/2lzr6hy0s5cikj7lxwpl0qhh2idmqfc1-mlir-21.1.8-dev/lib/cmake/mlir
+-- Using LLVMConfig.cmake in: /nix/store/4768r0pa7fswbi0mdjalqc9pm56fh2vm-llvm-21.1.8-dev/lib/cmake/llvm
+-- Using mlir-tblgen: /nix/store/a8lgffyjfxbjvj7bpdmhvbvl4zjhnckk-llvm-tblgen-21.1.8/bin/mlir-tblgen
+-- Building with -fPIC
+-- PolyKernelRuntime: HIP host launch + selection runtime enabled (hipcc=/nix/store/jc7q7dm8y1r2317sg888mi7pxzarg7m2-clr-7.2.3/bin/hipcc)
+-- Configuring done (0.8s)
+-- Generating done (0.2s)
+-- Build files have been written to: /home/mei/projects/polykernel/build
+=== build ===
+[1/28] Building Passes.h.inc...
+[2/28] Building CXX object lib/Codegen/CMakeFiles/PolyKernelCodegen.dir/Quantize.cpp.o
+[3/28] Linking CXX static library lib/Codegen/libPolyKernelCodegen.a
+[4/28] Building CXX object lib/Runtime/CMakeFiles/PolyKernelRuntime.dir/Runtime.cpp.o
+[5/28] Building CXX object lib/Codegen/tests/CMakeFiles/quantize_test.dir/quantize_test.cpp.o
+[6/28] Linking CXX executable lib/Codegen/tests/quantize_test
+[7/28] Building CXX object lib/Runtime/tests/CMakeFiles/runtime_test.dir/runtime_test.cpp.o
+[8/28] Building CXX object lib/Runtime/tests/CMakeFiles/kernel_cache_persist_test.dir/kernel_cache_persist_test.cpp.o
+[9/28] Building CXX object lib/Passes/CMakeFiles/obj.MLIRPolyKernelPasses.dir/InferShapes.cpp.o
+[10/28] Building CXX object lib/Passes/CMakeFiles/obj.MLIRPolyKernelPasses.dir/InferTileLayout.cpp.o
+[11/28] Building CXX object lib/Passes/CMakeFiles/obj.MLIRPolyKernelPasses.dir/FuseResidualRmsnorm.cpp.o
+[12/28] Building CXX object lib/Passes/CMakeFiles/obj.MLIRPolyKernelPasses.dir/FuseSoftmaxMask.cpp.o
+[13/28] Building CXX object lib/Passes/CMakeFiles/obj.MLIRPolyKernelPasses.dir/PlanMemory.cpp.o
+[14/28] Building CXX object lib/Passes/CMakeFiles/obj.MLIRPolyKernelPasses.dir/FuseRmsnormMatmul.cpp.o
+[15/28] Building CXX object lib/Runtime/CMakeFiles/PolyKernelRuntime.dir/KernelCache.cpp.o
+[16/28] Building CXX object lib/Passes/CMakeFiles/obj.MLIRPolyKernelPasses.dir/FuseMatmulBiasGelu.cpp.o
+[17/28] Linking CXX static library lib/Runtime/libPolyKernelRuntime.a
+[18/28] Building CXX object lib/Passes/CMakeFiles/obj.MLIRPolyKernelPasses.dir/FuseKvAppendAttention.cpp.o
+[19/28] Linking CXX executable lib/Runtime/tests/device_detect_test
+[20/28] Linking CXX executable lib/Runtime/tests/runtime_test
+[21/28] Linking CXX executable lib/Runtime/tests/kernel_cache_persist_test
+[22/28] Building CXX object lib/Passes/CMakeFiles/obj.MLIRPolyKernelPasses.dir/LowerToHip.cpp.o
+[23/28] Building CXX object lib/Passes/CMakeFiles/obj.MLIRPolyKernelPasses.dir/Canonicalize.cpp.o
+[24/28] Building CXX object lib/Passes/CMakeFiles/obj.MLIRPolyKernelPasses.dir/LowerToCuda.cpp.o
+[25/28] Building CXX object tools/polykernel-opt/CMakeFiles/polykernel-opt.dir/polykernel-opt.cpp.o
+[26/28] Building CXX object lib/Passes/CMakeFiles/obj.MLIRPolyKernelPasses.dir/EmitKernelReport.cpp.o
+[27/28] Linking CXX static library lib/libMLIRPolyKernelPasses.a
+[28/28] Linking CXX executable tools/polykernel-opt/polykernel-opt
+=== check-polykernel (lit) ===
+[0/1] Running the PolyKernel regression tests
+-- Testing: 14 tests, 14 workers --
+PASS: POLYKERNEL :: fuse_softmax_mask.mlir (1 of 14)
+PASS: POLYKERNEL :: infer_tile_layout.mlir (2 of 14)
+PASS: POLYKERNEL :: e2e_parse.mlir (3 of 14)
+PASS: POLYKERNEL :: op_set_closed.mlir (4 of 14)
+PASS: POLYKERNEL :: smoke.mlir (5 of 14)
+PASS: POLYKERNEL :: fuse_kv_append_attention.mlir (6 of 14)
+PASS: POLYKERNEL :: fuse_rmsnorm_matmul.mlir (7 of 14)
+PASS: POLYKERNEL :: infer_shapes.mlir (8 of 14)
+PASS: POLYKERNEL :: fuse_residual_rmsnorm.mlir (9 of 14)
+PASS: POLYKERNEL :: canonicalize.mlir (10 of 14)
+PASS: POLYKERNEL :: dialect_roundtrip.mlir (11 of 14)
+PASS: POLYKERNEL :: fuse_matmul_bias_gelu.mlir (12 of 14)
+PASS: POLYKERNEL :: infer_shapes_mismatch.mlir (13 of 14)
+PASS: POLYKERNEL :: plan_memory.mlir (14 of 14)
+
+Testing Time: 0.57s
+
+Total Discovered Tests: 14
+  Passed: 14 (100.00%)
+=== ctest ===
+Test project /home/mei/projects/polykernel/build
+        Start   1: PtxasParser.NewFormatMatmul
+  1/154 Test   #1: PtxasParser.NewFormatMatmul ..................................   Passed    0.01 sec
+        Start   2: PtxasParser.OldFormatWithSpills
+  2/154 Test   #2: PtxasParser.OldFormatWithSpills ..............................   Passed    0.01 sec
+        Start   3: PtxasParser.NewFormatSoftmaxMissingFields
+  3/154 Test   #3: PtxasParser.NewFormatSoftmaxMissingFields ....................   Passed    0.02 sec
+        Start   4: PtxasParser.GmemField
+  4/154 Test   #4: PtxasParser.GmemField ........................................   Passed    0.01 sec
+        Start   5: PtxasParser.GarbageInputIsError
+  5/154 Test   #5: PtxasParser.GarbageInputIsError ..............................   Passed    0.01 sec
+        Start   6: PtxasParser.EmptyInputIsError
+  6/154 Test   #6: PtxasParser.EmptyInputIsError ................................   Passed    0.01 sec
+        Start   7: Occupancy.HandComputedRegisterLimitedSm90
+  7/154 Test   #7: Occupancy.HandComputedRegisterLimitedSm90 ....................   Passed    0.01 sec
+        Start   8: Occupancy.RegisterLimitedSm80
+  8/154 Test   #8: Occupancy.RegisterLimitedSm80 ................................   Passed    0.00 sec
+        Start   9: Occupancy.SmemLimitedSm90
+  9/154 Test   #9: Occupancy.SmemLimitedSm90 ....................................   Passed    0.00 sec
+        Start  10: Occupancy.WarpLimitedSm90
+ 10/154 Test  #10: Occupancy.WarpLimitedSm90 ....................................   Passed    0.00 sec
+        Start  11: Occupancy.BlockLimitedSm90
+ 11/154 Test  #11: Occupancy.BlockLimitedSm90 ...................................   Passed    0.00 sec
+        Start  12: Occupancy.MatmulKernelSm90
+ 12/154 Test  #12: Occupancy.MatmulKernelSm90 ...................................   Passed    0.00 sec
+        Start  13: Occupancy.ArchParseAndNames
+ 13/154 Test  #13: Occupancy.ArchParseAndNames ..................................   Passed    0.00 sec
+        Start  14: Roofline.LargeGemmIsComputeBound
+ 14/154 Test  #14: Roofline.LargeGemmIsComputeBound .............................   Passed    0.01 sec
+        Start  15: Roofline.SmallGemmIsMemoryBound
+ 15/154 Test  #15: Roofline.SmallGemmIsMemoryBound ..............................   Passed    0.01 sec
+        Start  16: Roofline.Matmul128CubeIsMemoryBound
+ 16/154 Test  #16: Roofline.Matmul128CubeIsMemoryBound ..........................   Passed    0.01 sec
+        Start  17: Roofline.Sm80RidgeClassification
+ 17/154 Test  #17: Roofline.Sm80RidgeClassification .............................   Passed    0.01 sec
+        Start  18: Roofline.BoundNames
+ 18/154 Test  #18: Roofline.BoundNames ..........................................   Passed    0.01 sec
+        Start  19: kernel_report.HighRegisterFiresReduceUnroll
+ 19/154 Test  #19: kernel_report.HighRegisterFiresReduceUnroll ..................   Passed    0.01 sec
+        Start  20: kernel_report.SpillsFireReduceRegisterPressure
+ 20/154 Test  #20: kernel_report.SpillsFireReduceRegisterPressure ...............   Passed    0.00 sec
+        Start  21: kernel_report.LowOccupancyFiresIncreaseOccupancy
+ 21/154 Test  #21: kernel_report.LowOccupancyFiresIncreaseOccupancy .............   Passed    0.01 sec
+        Start  22: kernel_report.MemoryBoundFiresVectorize
+ 22/154 Test  #22: kernel_report.MemoryBoundFiresVectorize ......................   Passed    0.01 sec
+        Start  23: kernel_report.CleanKernelHasNoFixes
+ 23/154 Test  #23: kernel_report.CleanKernelHasNoFixes ..........................   Passed    0.01 sec
+        Start  24: kernel_report.ToJsonEmitsContractHSchema
+ 24/154 Test  #24: kernel_report.ToJsonEmitsContractHSchema .....................   Passed    0.01 sec
+        Start  25: amd_isa.MatmulFixtureParses
+ 25/154 Test  #25: amd_isa.MatmulFixtureParses ..................................   Passed    0.01 sec
+        Start  26: amd_isa.MatmulFixtureNoSpills
+ 26/154 Test  #26: amd_isa.MatmulFixtureNoSpills ................................   Passed    0.01 sec
+        Start  27: amd_isa.SpillFixtureParses
+ 27/154 Test  #27: amd_isa.SpillFixtureParses ...................................   Passed    0.01 sec
+        Start  28: amd_isa.SpillFixtureDetected
+ 28/154 Test  #28: amd_isa.SpillFixtureDetected .................................   Passed    0.01 sec
+        Start  29: amd_isa.InlineMinimal
+ 29/154 Test  #29: amd_isa.InlineMinimal ........................................   Passed    0.01 sec
+        Start  30: amd_isa.GarbageInputIsError
+ 30/154 Test  #30: amd_isa.GarbageInputIsError ..................................   Passed    0.01 sec
+        Start  31: amd_isa.EmptyInputIsError
+ 31/154 Test  #31: amd_isa.EmptyInputIsError ....................................   Passed    0.01 sec
+        Start  32: amd_isa.OccupancyWaveLimited
+ 32/154 Test  #32: amd_isa.OccupancyWaveLimited .................................   Passed    0.01 sec
+        Start  33: amd_isa.OccupancyVgprLimited
+ 33/154 Test  #33: amd_isa.OccupancyVgprLimited .................................   Passed    0.02 sec
+        Start  34: amd_isa.OccupancyLdsLimited
+ 34/154 Test  #34: amd_isa.OccupancyLdsLimited ..................................   Passed    0.01 sec
+        Start  35: amd_isa.OccupancySgprLimited
+ 35/154 Test  #35: amd_isa.OccupancySgprLimited .................................   Passed    0.01 sec
+        Start  36: amd_isa.LimiterNames
+ 36/154 Test  #36: amd_isa.LimiterNames .........................................   Passed    0.01 sec
+        Start  37: amd_isa.LimiterContractHMapping
+ 37/154 Test  #37: amd_isa.LimiterContractHMapping ..............................   Passed    0.00 sec
+        Start  38: benchmark.GatePassesCorrectVariant
+ 38/154 Test  #38: benchmark.GatePassesCorrectVariant ...........................   Passed    0.01 sec
+        Start  39: benchmark.GateRejectsLowCosine
+ 39/154 Test  #39: benchmark.GateRejectsLowCosine ...............................   Passed    0.01 sec
+        Start  40: benchmark.GateRejectsLowPcc
+ 40/154 Test  #40: benchmark.GateRejectsLowPcc ..................................   Passed    0.01 sec
+        Start  41: benchmark.GateRejectsHighRelErrStrict
+ 41/154 Test  #41: benchmark.GateRejectsHighRelErrStrict ........................   Passed    0.01 sec
+        Start  42: benchmark.GateRejectsScaledWrongViaRelErr
+ 42/154 Test  #42: benchmark.GateRejectsScaledWrongViaRelErr ....................   Passed    0.01 sec
+        Start  43: benchmark.GateLargeKCalibratedCeiling
+ 43/154 Test  #43: benchmark.GateLargeKCalibratedCeiling ........................   Passed    0.01 sec
+        Start  44: benchmark.SelectEmptyHasNoBest
+ 44/154 Test  #44: benchmark.SelectEmptyHasNoBest ...............................   Passed    0.01 sec
+        Start  45: benchmark.SelectAllRejectedHasNoBest
+ 45/154 Test  #45: benchmark.SelectAllRejectedHasNoBest .........................   Passed    0.00 sec
+        Start  46: benchmark.SelectsFastestAmongValidated
+ 46/154 Test  #46: benchmark.SelectsFastestAmongValidated .......................   Passed    0.00 sec
+        Start  47: benchmark.NeverSelectsFasterButUnvalidated
+ 47/154 Test  #47: benchmark.NeverSelectsFasterButUnvalidated ...................   Passed    0.01 sec
+        Start  48: benchmark.DeterministicLowestIndexTieBreak
+ 48/154 Test  #48: benchmark.DeterministicLowestIndexTieBreak ...................   Passed    0.00 sec
+        Start  49: config_space.FullGridIsBounded4608
+ 49/154 Test  #49: config_space.FullGridIsBounded4608 ...........................   Passed    0.01 sec
+        Start  50: config_space.PrunedCountInBand
+ 50/154 Test  #50: config_space.PrunedCountInBand ...............................   Passed    0.01 sec
+        Start  51: config_space.DeterministicAndUnique
+ 51/154 Test  #51: config_space.DeterministicAndUnique ..........................   Passed    0.01 sec
+        Start  52: config_space.AllSurvivorsAdmissible
+ 52/154 Test  #52: config_space.AllSurvivorsAdmissible ..........................   Passed    0.01 sec
+        Start  53: config_space.ExcludesSmallTileWith8Warps
+ 53/154 Test  #53: config_space.ExcludesSmallTileWith8Warps .....................   Passed    0.00 sec
+        Start  54: config_space.ExcludesSmemOverBudgetStages
+ 54/154 Test  #54: config_space.ExcludesSmemOverBudgetStages ....................   Passed    0.00 sec
+        Start  55: config_space.VectorizationClosure
+ 55/154 Test  #55: config_space.VectorizationClosure ............................   Passed    0.00 sec
+        Start  56: config_space.SpecificInvalidConfigsRejected
+ 56/154 Test  #56: config_space.SpecificInvalidConfigsRejected ..................   Passed    0.00 sec
+        Start  57: config_space.KnownGoodConfigAdmitted
+ 57/154 Test  #57: config_space.KnownGoodConfigAdmitted .........................   Passed    0.00 sec
+        Start  58: tuning_cache.RoundTrip
+ 58/154 Test  #58: tuning_cache.RoundTrip .......................................   Passed    0.01 sec
+        Start  59: tuning_cache.NullTimeMsPreserved
+ 59/154 Test  #59: tuning_cache.NullTimeMsPreserved .............................   Passed    0.00 sec
+        Start  60: tuning_cache.MeasuredTimeIsNumber
+ 60/154 Test  #60: tuning_cache.MeasuredTimeIsNumber ............................   Passed    0.00 sec
+        Start  61: tuning_cache.ValidDocumentParses
+ 61/154 Test  #61: tuning_cache.ValidDocumentParses .............................   Passed    0.00 sec
+        Start  62: tuning_cache.MissingScoredByRejected
+ 62/154 Test  #62: tuning_cache.MissingScoredByRejected .........................   Passed    0.00 sec
+        Start  63: tuning_cache.MissingCorrectnessCosineRejected
+ 63/154 Test  #63: tuning_cache.MissingCorrectnessCosineRejected ................   Passed    0.00 sec
+        Start  64: tuning_cache.MissingTimeMsKeyRejected
+ 64/154 Test  #64: tuning_cache.MissingTimeMsKeyRejected ........................   Passed    0.00 sec
+        Start  65: tuning_cache.WrongTypeRejected
+ 65/154 Test  #65: tuning_cache.WrongTypeRejected ...............................   Passed    0.00 sec
+        Start  66: tuning_cache.WrongVersionRejected
+ 66/154 Test  #66: tuning_cache.WrongVersionRejected ............................   Passed    0.01 sec
+        Start  67: tuning_cache.MalformedJsonRejected
+ 67/154 Test  #67: tuning_cache.MalformedJsonRejected ...........................   Passed    0.01 sec
+        Start  68: amd_tuning_db.RoundTrip
+ 68/154 Test  #68: amd_tuning_db.RoundTrip ......................................   Passed    0.02 sec
+        Start  69: amd_tuning_db.NamespaceIsolation
+ 69/154 Test  #69: amd_tuning_db.NamespaceIsolation .............................   Passed    0.01 sec
+        Start  70: amd_tuning_db.GetAbsentIsNullopt
+ 70/154 Test  #70: amd_tuning_db.GetAbsentIsNullopt .............................   Passed    0.01 sec
+        Start  71: amd_tuning_db.SerializeNamespaceIsPartitioned
+ 71/154 Test  #71: amd_tuning_db.SerializeNamespaceIsPartitioned ................   Passed    0.01 sec
+        Start  72: amd_tuning_db.NamespacesSorted
+ 72/154 Test  #72: amd_tuning_db.NamespacesSorted ...............................   Passed    0.01 sec
+        Start  73: amd_tuning_db.LastWriterWins
+ 73/154 Test  #73: amd_tuning_db.LastWriterWins .................................   Passed    0.00 sec
+        Start  74: amd_tuning_db.PutEmptyGpuRejected
+ 74/154 Test  #74: amd_tuning_db.PutEmptyGpuRejected ............................   Passed    0.01 sec
+        Start  75: amd_tuning_db.ParseEmptyGpuRejected
+ 75/154 Test  #75: amd_tuning_db.ParseEmptyGpuRejected ..........................   Passed    0.05 sec
+        Start  76: amd_tuning_db.ParseSchemaErrorPropagates
+ 76/154 Test  #76: amd_tuning_db.ParseSchemaErrorPropagates .....................   Passed    0.01 sec
+        Start  77: quantize.int8_emits_complete_portable_kernel
+ 77/154 Test  #77: quantize.int8_emits_complete_portable_kernel .................   Passed    0.01 sec
+        Start  78: quantize.int8_dispatch_is_byte_identical_to_direct_emitter
+ 78/154 Test  #78: quantize.int8_dispatch_is_byte_identical_to_direct_emitter ...   Passed    0.01 sec
+        Start  79: quantize.fp8_sim_paths_are_labeled_simulation_not_hardware
+ 79/154 Test  #79: quantize.fp8_sim_paths_are_labeled_simulation_not_hardware ...   Passed    0.01 sec
+        Start  80: quantize.path_names_are_stable_contract_h_annotations
+ 80/154 Test  #80: quantize.path_names_are_stable_contract_h_annotations ........   Passed    0.01 sec
+        Start  81: router.FivePorts32bLinkSingleCycleHop
+ 81/154 Test  #81: router.FivePorts32bLinkSingleCycleHop ........................   Passed    0.02 sec
+        Start  82: router.UnicastTx
+ 82/154 Test  #82: router.UnicastTx .............................................   Passed    0.01 sec
+        Start  83: router.MulticastTx
+ 83/154 Test  #83: router.MulticastTx ...........................................   Passed    0.01 sec
+        Start  84: router.LosslessBackpressure
+ 84/154 Test  #84: router.LosslessBackpressure ..................................   Passed    0.01 sec
+        Start  85: router.MulticastIsAllOrNothing
+ 85/154 Test  #85: router.MulticastIsAllOrNothing ...............................   Passed    0.01 sec
+        Start  86: router.ColorIsolationOnSharedLink
+ 86/154 Test  #86: router.ColorIsolationOnSharedLink ............................   Passed    0.00 sec
+        Start  87: router.RxBackpressure
+ 87/154 Test  #87: router.RxBackpressure ........................................   Passed    0.00 sec
+        Start  88: router.FabinFaboutDsd
+ 88/154 Test  #88: router.FabinFaboutDsd ........................................   Passed    0.00 sec
+        Start  89: router.SetColorConfigRxTx
+ 89/154 Test  #89: router.SetColorConfigRxTx ....................................   Passed    0.00 sec
+        Start  90: router.ApplyForwardingHonorsConfig
+ 90/154 Test  #90: router.ApplyForwardingHonorsConfig ...........................   Passed    0.00 sec
+        Start  91: color.FiveBitTagTwentyFourRoutable
+ 91/154 Test  #91: color.FiveBitTagTwentyFourRoutable ...........................   Passed    0.01 sec
+        Start  92: color.RoutableRange
+ 92/154 Test  #92: color.RoutableRange ..........................................   Passed    0.01 sec
+        Start  93: color.DirMaskAndNames
+ 93/154 Test  #93: color.DirMaskAndNames ........................................   Passed    0.01 sec
+        Start  94: color.SetColorConfigRxTx
+ 94/154 Test  #94: color.SetColorConfigRxTx .....................................   Passed    0.00 sec
+        Start  95: color.TwentyFourColorIsolation
+ 95/154 Test  #95: color.TwentyFourColorIsolation ...............................   Passed    0.00 sec
+        Start  96: color.PairwiseIsolation
+ 96/154 Test  #96: color.PairwiseIsolation ......................................   Passed    0.00 sec
+        Start  97: grid.DefaultMeshIs64x64
+ 97/154 Test  #97: grid.DefaultMeshIs64x64 ......................................   Passed    0.56 sec
+        Start  98: grid.PeBundlesCeSramRouter
+ 98/154 Test  #98: grid.PeBundlesCeSramRouter ...................................   Passed    0.74 sec
+        Start  99: grid.SingleCycleHop
+ 99/154 Test  #99: grid.SingleCycleHop ..........................................   Passed    0.61 sec
+        Start 100: grid.HopIsExactlyOnePerCycle
+100/154 Test #100: grid.HopIsExactlyOnePerCycle .................................   Passed    0.54 sec
+        Start 101: grid.MulticastAcrossMesh
+101/154 Test #101: grid.MulticastAcrossMesh .....................................   Passed    0.71 sec
+        Start 102: grid.OffGridEastIsDroppedNotCrash
+102/154 Test #102: grid.OffGridEastIsDroppedNotCrash ............................   Passed    0.61 sec
+        Start 103: grid.AllBoundaryDirectionsAreSafe
+103/154 Test #103: grid.AllBoundaryDirectionsAreSafe ............................   Passed    0.70 sec
+        Start 104: grid.TraverseThenDropOffEdge
+104/154 Test #104: grid.TraverseThenDropOffEdge .................................   Passed    0.89 sec
+        Start 105: grid.SramBankModel
+105/154 Test #105: grid.SramBankModel ...........................................   Passed    0.60 sec
+        Start 106: grid.CeFmacFusedMultiplyAdd
+106/154 Test #106: grid.CeFmacFusedMultiplyAdd ..................................   Passed    0.59 sec
+        Start 107: scheduler.ThreeTaskTypes
+107/154 Test #107: scheduler.ThreeTaskTypes .....................................   Passed    0.01 sec
+        Start 108: scheduler.ComputeTaskFiresOnlyAfterBothInputsArrive
+108/154 Test #108: scheduler.ComputeTaskFiresOnlyAfterBothInputsArrive ..........   Passed    0.04 sec
+        Start 109: scheduler.BlockedTaskDoesNotFireUntilUnblocked
+109/154 Test #109: scheduler.BlockedTaskDoesNotFireUntilUnblocked ...............   Passed    0.03 sec
+        Start 110: scheduler.DataTaskFiresOnWaveletArrival
+110/154 Test #110: scheduler.DataTaskFiresOnWaveletArrival ......................   Passed    0.03 sec
+        Start 111: scheduler.DataTaskFiresOnWaveletArrivalViaGrid
+111/154 Test #111: scheduler.DataTaskFiresOnWaveletArrivalViaGrid ...............   Passed    0.72 sec
+        Start 112: scheduler.LocalTaskFiresOnActivate
+112/154 Test #112: scheduler.LocalTaskFiresOnActivate ...........................   Passed    0.00 sec
+        Start 113: scheduler.ControlTaskGatedByRendezvous
+113/154 Test #113: scheduler.ControlTaskGatedByRendezvous .......................   Passed    0.01 sec
+        Start 114: scheduler.TaskPickerSelectsActivatedAndUnblocked
+114/154 Test #114: scheduler.TaskPickerSelectsActivatedAndUnblocked .............   Passed    0.01 sec
+        Start 115: scheduler.ActivateBlockUnblockRendezvous
+115/154 Test #115: scheduler.ActivateBlockUnblockRendezvous .....................   Passed    0.01 sec
+        Start 116: scheduler.PickerSelectsLowestIdFirst
+116/154 Test #116: scheduler.PickerSelectsLowestIdFirst .........................   Passed    0.01 sec
+        Start 117: summa.LoweringMapsMatmulOntoSummaSchedule
+117/154 Test #117: summa.LoweringMapsMatmulOntoSummaSchedule ....................   Passed    0.02 sec
+        Start 118: summa.LoweringMapsFusedMatmulOntoSameSchedule
+118/154 Test #118: summa.LoweringMapsFusedMatmulOntoSameSchedule ................   Passed    0.01 sec
+        Start 119: summa.PingPongTwoColorsPerAxis
+119/154 Test #119: summa.PingPongTwoColorsPerAxis ...............................   Passed    0.01 sec
+        Start 120: summa.RoutingPatternAEastBSouth
+120/154 Test #120: summa.RoutingPatternAEastBSouth ..............................   Passed    0.01 sec
+        Start 121: summa.RendezvousComputeFiresOnlyAfterBothPanels
+121/154 Test #121: summa.RendezvousComputeFiresOnlyAfterBothPanels ..............   Passed    0.01 sec
+        Start 122: summa.RunSummaTinyMatchesReference
+122/154 Test #122: summa.RunSummaTinyMatchesReference ...........................   Passed    0.01 sec
+        Start 123: dataflow_correctness.SimulatorExecutedMatmulMatchesGolden
+123/154 Test #123: dataflow_correctness.SimulatorExecutedMatmulMatchesGolden ....   Passed    0.01 sec
+        Start 124: dataflow_correctness.OutputStationaryAccumulateIsExact
+124/154 Test #124: dataflow_correctness.OutputStationaryAccumulateIsExact .......   Passed    0.01 sec
+        Start 125: dataflow_correctness.BrokenRendezvousFailsGolden
+125/154 Test #125: dataflow_correctness.BrokenRendezvousFailsGolden .............   Passed    0.02 sec
+        Start 126: metrics.HandComputed4x4UtilizationSramMessagesHops
+126/154 Test #126: metrics.HandComputed4x4UtilizationSramMessagesHops ...........   Passed    0.01 sec
+        Start 127: metrics.HandComputed4x4CriticalPathAndBottleneck
+127/154 Test #127: metrics.HandComputed4x4CriticalPathAndBottleneck .............   Passed    0.01 sec
+        Start 128: metrics.HandComputed4x4FusionTrafficReduction
+128/154 Test #128: metrics.HandComputed4x4FusionTrafficReduction ................   Passed    0.02 sec
+        Start 129: metrics.ResidentBytesIsPureFunctionOfPlan
+129/154 Test #129: metrics.ResidentBytesIsPureFunctionOfPlan ....................   Passed    0.00 sec
+        Start 130: metrics.SramOverSubscriptionFlaggedAsBottleneck
+130/154 Test #130: metrics.SramOverSubscriptionFlaggedAsBottleneck ..............   Passed    0.03 sec
+        Start 131: device_detect.ParseGcnArchNameStripsFeatureFlags
+131/154 Test #131: device_detect.ParseGcnArchNameStripsFeatureFlags .............   Passed    0.04 sec
+        Start 132: device_detect.ParseGcnArchNameBareToken
+132/154 Test #132: device_detect.ParseGcnArchNameBareToken ......................   Passed    0.08 sec
+        Start 133: device_detect.ParseGcnArchNameAbsentIsEmpty
+133/154 Test #133: device_detect.ParseGcnArchNameAbsentIsEmpty ..................   Passed    0.13 sec
+        Start 134: device_detect.SmArchFromComputeCapability
+134/154 Test #134: device_detect.SmArchFromComputeCapability ....................   Passed    0.09 sec
+        Start 135: device_detect.FixedArchDetectorReturnsInjectedArch
+135/154 Test #135: device_detect.FixedArchDetectorReturnsInjectedArch ...........   Passed    0.05 sec
+        Start 136: device_detect.FixedArchDetectorOrdinalIndependent
+136/154 Test #136: device_detect.FixedArchDetectorOrdinalIndependent ............   Passed    0.05 sec
+        Start 137: device_detect.HipDeviceDetectorConstructibleWithoutGpu
+137/154 Test #137: device_detect.HipDeviceDetectorConstructibleWithoutGpu .......   Passed    0.05 sec
+        Start 138: runtime.SelectionPicksDetectedArch
+138/154 Test #138: runtime.SelectionPicksDetectedArch ...........................   Passed    0.05 sec
+        Start 139: runtime.RunServesSelectedVariant
+139/154 Test #139: runtime.RunServesSelectedVariant .............................   Passed    0.05 sec
+        Start 140: runtime.MissReturnsClearErrorAndDoesNotServe
+140/154 Test #140: runtime.MissReturnsClearErrorAndDoesNotServe .................   Passed    0.07 sec
+        Start 141: runtime.MissOnUntunedShape
+141/154 Test #141: runtime.MissOnUntunedShape ...................................   Passed    0.05 sec
+        Start 142: runtime.UnvalidatedEntryIsNotServed
+142/154 Test #142: runtime.UnvalidatedEntryIsNotServed ..........................   Passed    0.04 sec
+        Start 143: runtime.LoadTuningCacheJsonThenSelect
+143/154 Test #143: runtime.LoadTuningCacheJsonThenSelect ........................   Passed    0.04 sec
+        Start 144: runtime.LoadTuningCacheRejectsMalformed
+144/154 Test #144: runtime.LoadTuningCacheRejectsMalformed ......................   Passed    0.05 sec
+        Start 145: runtime.MissingLauncherIsClearError
+145/154 Test #145: runtime.MissingLauncherIsClearError ..........................   Passed    0.04 sec
+        Start 146: runtime.LaunchFailurePropagates
+146/154 Test #146: runtime.LaunchFailurePropagates ..............................   Passed    0.07 sec
+        Start 147: kernel_cache_persist.PersistThenReloadAcrossRuns
+147/154 Test #147: kernel_cache_persist.PersistThenReloadAcrossRuns .............   Passed    0.09 sec
+        Start 148: kernel_cache_persist.MultiGpuSelectsBestPerGpu
+148/154 Test #148: kernel_cache_persist.MultiGpuSelectsBestPerGpu ...............   Passed    0.08 sec
+        Start 149: kernel_cache_persist.ReloadedCacheSelectsPerGpu
+149/154 Test #149: kernel_cache_persist.ReloadedCacheSelectsPerGpu ..............   Passed    0.06 sec
+        Start 150: kernel_cache_persist.StaleBinaryInvalidatedFallsBackToMiss
+150/154 Test #150: kernel_cache_persist.StaleBinaryInvalidatedFallsBackToMiss ...   Passed    0.04 sec
+        Start 151: kernel_cache_persist.MissingBinaryInvalidated
+151/154 Test #151: kernel_cache_persist.MissingBinaryInvalidated ................   Passed    0.04 sec
+        Start 152: kernel_cache_persist.FreshBinaryNotInvalidated
+152/154 Test #152: kernel_cache_persist.FreshBinaryNotInvalidated ...............   Passed    0.04 sec
+        Start 153: kernel_cache_persist.LoadPersistedRejectsMalformedBinaries
+153/154 Test #153: kernel_cache_persist.LoadPersistedRejectsMalformedBinaries ...   Passed    0.04 sec
+        Start 154: kernel_cache_persist.HashFileMissingFileIsError
+154/154 Test #154: kernel_cache_persist.HashFileMissingFileIsError ..............   Passed    0.04 sec
+
+100% tests passed, 0 tests failed out of 154
+
+Total Test time (real) =   9.85 sec
+=== GATE GREEN ===

@@ -3,9 +3,9 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
-    # devenv 2.x flakes integration (devenv.lib.mkShell). Pin to v2.1.2 (the
-    # currently installed CLI) so it is current with nixpkgs-unstable.
-    devenv.url = "github:cachix/devenv/v2.1.2";
+    # devenv 2.x flakes integration (devenv.lib.mkShell). Pin to v2.2.2 (the
+    # latest release, 2026-08-13) so it is current with nixpkgs-unstable.
+    devenv.url = "github:cachix/devenv/v2.2.2";
     devenv.inputs.nixpkgs.follows = "nixpkgs";
   };
 
