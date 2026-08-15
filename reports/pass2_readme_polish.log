@@ -1,0 +1,56 @@
+polykernel pass-2 README polish QA: 2026-08-15T15:51:17Z
+
+-- grep '<!--' (expect 0 matches, exit 1):
+0
+0 matches (exit 1)
+
+-- grep '13 tests' (expect 0):
+0
+0 matches (exit 1)
+
+-- grep PROJECTED adjacent to Ada row/numbers (expect no Ada-as-PROJECTED):
+56:| Compile + PTX + GPU-free analysis for CUDA (sm_80/89/90); the runtime-validation harness (`cuda_run_main.cpp` + MMA kernel) is **runtime-validated on the RTX 6000 Ada (sm_89) pod: 0 failed correctness**; H100/A100 numbers are owner-gated **PROJECTED** | Running NVIDIA kernels locally (this machine has no NVIDIA GPU; the kernels are validated on the remote RTX 6000 Ada pod) |
+
+-- grep 'PROJECTED' all hits (context check):
+56:| Compile + PTX + GPU-free analysis for CUDA (sm_80/89/90); the runtime-validation harness (`cuda_run_main.cpp` + MMA kernel) is **runtime-validated on the RTX 6000 Ada (sm_89) pod: 0 failed correctness**; H100/A100 numbers are owner-gated **PROJECTED** | Running NVIDIA kernels locally (this machine has no NVIDIA GPU; the kernels are validated on the remote RTX 6000 Ada pod) |
+118:(1.000×/0.838×/0.857×); H100/A100/MI300 speedups are **PROJECTED** (roofline + analytic
+137:golden, independently of any GPU. H100/A100/MI300 speedups remain **PROJECTED** (see
+159:  caveat, confirmed). H100/A100/MI300 remain **PROJECTED**.
+
+-- grep SOTA / beat vLLM (expect only negation):
+54:| A compiler/runtime **machinery** demonstration | A claim to **beat vLLM** or any production stack |
+
+-- grep measured numbers (expect present):
+118:(1.000×/0.838×/0.857×); H100/A100/MI300 speedups are **PROJECTED** (roofline + analytic
+
+-- grep measured numbers per-section:
+118:(1.000×/0.838×/0.857×); H100/A100/MI300 speedups are **PROJECTED** (roofline + analytic
+157:  RTX 6000 Ada (sm_89) row as **MEASURED**: unfused 1.000× / fused 0.838× / autotuned
+
+-- grep lit count (expect 14):
+85:# configure + build + run the lit suite (14 tests)
+160:- **Lit:** 14/14 `.mlir` tests green (`check-polykernel`).
+
+-- grep 'no NVIDIA GPU' (expect only local-machine nuance):
+56:| Compile + PTX + GPU-free analysis for CUDA (sm_80/89/90); the runtime-validation harness (`cuda_run_main.cpp` + MMA kernel) is **runtime-validated on the RTX 6000 Ada (sm_89) pod: 0 failed correctness**; H100/A100 numbers are owner-gated **PROJECTED** | Running NVIDIA kernels locally (this machine has no NVIDIA GPU; the kernels are validated on the remote RTX 6000 Ada pod) |
+
+-- grep runtime-validated on RTX 6000 Ada (expect present):
+3
+
+-- grep d85866a / 18/18 / 75/75 / 5/5 (expect present):
+135:corruption on sm_89 and a gelu erf precision loss (commit `d85866a`), with no HIP
+26:  correctness (18/18 golden)**. Tensor-core variants come from the same template on both
+28:  `matmul_mma.cu` (`nvcuda::wmma` m16n16k16 bf16, validated 5/5 on the pod); both are
+129:(scalar + WMMA bf16) golden-validated on the local RX 7800 XT: **75/75 tests passed**.
+133:correctness, 18/18 golden, cosine == pcc == 1.0** (the MMA kernel separately 5/5 on the
+
+-- grep pod terminated story:
+154:  `reports/pass2_ada_cuda_run.log`). The validation ran on the pod (216.81.200.13, user
+155:  ubuntu) provisioned after the original 65.109.75.15 was terminated by the user; the pod
+156:  has since been terminated. The dashboard (`reports/benchmark_report.md`) carries the
+
+-- grep Resume bullets + Documentation sections:
+15:## Resume bullets
+124:## Correctness
+141:## Status
+162:## Documentation
