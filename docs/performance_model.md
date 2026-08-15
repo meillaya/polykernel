@@ -1,13 +1,20 @@
 # PolyKernel Performance Model + Projections
 
 > **Real vs projected.** The H100/A100/MI300 speedups in the benchmark reports are
-> **PROJECTED — NOT MEASURED**. No GPU was rented; no pod was provisioned; no money was
+> **PROJECTED, NOT MEASURED**. No GPU was rented; no RunPod was provisioned; no money was
 > spent. They are derived from a compile-time **roofline model** + analytic memory traffic,
-> not from a rented-GPU run. Real numbers require the opt-in RunPod rental (below). Every
-> projected figure carries its status (`status: "PROJECTED"`, `projected: true`,
-> `measured: false` in the bench JSONs; the `scored_by` tuning-cache field distinguishes
-> `compile-time-model` from `real-benchmark`). **No SOTA-performance claim is made** — the
-> goal is the compiler/runtime machinery, not beating vLLM.
+> not from a rented-GPU run. The **RTX 6000 Ada (sm_89)** pod instance is the first arch
+> targeted for **real measurement**: the CUDA runtime-validation harness
+> (`lib/Runtime/cuda_run_main.cpp`) and the MMA tensor-core kernel
+> (`kernels/generated/matmul_mma.cu`) are built and compile-validated for sm_80/89/90,
+> but the on-GPU run is **PENDING pod-key authorization** (the pass-2 pod gate was SKIPPED
+> with `Permission denied (publickey)`, `reports/pod_env.log`). **No measured sm_89
+> numbers exist yet**, so no speedup is reported as real. Real H100/A100 numbers still
+> require the opt-in RunPod rental (below). Every projected figure carries its status
+> (`status: "PROJECTED"`, `projected: true`, `measured: false` in the bench JSONs; the
+> `scored_by` tuning-cache field distinguishes `compile-time-model` from
+> `real-benchmark`). **No SOTA-performance claim is made**: the goal is the
+> compiler/runtime machinery, not beating vLLM.
 
 ## The roofline model
 
@@ -34,7 +41,18 @@ An op is **compute-bound** if `AI > ridge` (the roofline ridge point), else
 |---|---|---|---|
 | NVIDIA H100 (SXM5, sm_90) | 989 | 3350 | 295.2 |
 | NVIDIA A100 (80GB, sm_80) | 312 | 1555 | 200.6 |
+| NVIDIA RTX 6000 Ada (sm_89) | 91.1 | 960 | 94.9 |
 | AMD Instinct MI300X (gfx942) | 1307.4 | 5300 | 246.7 |
+
+**Roofline-convention note (load-bearing, do not conflate):** the H100/A100
+**989/312 TFLOPS entries are the TENSOR-core dense-FP16 rates**, whereas the sm_89
+**91.1 TFLOPS is the SCALAR bf16 rate** (per the CUDA C++ BPG "native arithmetic
+throughput" table: sm_89 bf16 = 128 results/clk/SM = 1× FP32; fp16-half2 ≈ 182 and
+tensor-core dense FP16 ≈ 364.25 are the tensor rates). This project's portable **scalar**
+kernels run their FMAs on the FP32 pipes, so the sm_89 entry is the honest comparison
+point for them; the H100/A100 tensor rates are a different convention and must not be
+compared against 91.1 directly. The datasheet's 1457 (FP8-with-sparsity) is never used
+raw. (Sources: `lib/Analysis/Roofline.cpp` + `roofline_test.cpp`.)
 
 **Attainment assumptions (documented modeling knobs, not measured efficiencies):**
 scalar GEMM `η = 0.12`, autotuned vectorized/WMMA `η = 0.35`, elementwise `η = 0.8`. These
@@ -90,10 +108,22 @@ broadcast. Both stem from the same fusion (`fused_rmsnorm_matmul` eliminating
 - The generated **fused kernel recomputes the per-row RMS in every output tile**, so the
   *real* fusion speedup is shape-dependent — verified on the local gfx1101, where fused can
   be *slower* at small, compute-light shapes.
-- The CUDA-specific tensor-core paths are **compile-validated locally; runtime-validated on
-  rental** (see [`cuda_backend.md`](cuda_backend.md)).
+- The CUDA tensor-core path (`matmul_mma.cu`) and the runtime launcher
+  (`cuda_run_main.cpp`) are **built + compile-validated locally** (sm_80/89/90); the on-GPU
+  run on the RTX 6000 Ada (sm_89) pod is **PENDING pod-key authorization** (pod gate
+  SKIPPED, `reports/pod_env.log`), so **no CUDA number is reported as measured yet** (see
+  [`cuda_backend.md`](cuda_backend.md)).
 
 ## Getting REAL numbers (opt-in, owner-gated)
+
+The **first real-validation target is the RTX 6000 Ada (sm_89) pod instance**: the CUDA
+runtime-validation harness (`lib/Runtime/cuda_run_main.cpp` + `tests/kernels/test_mma.py`)
+is built and compile-validated locally and only needs the pod's SSH key authorized to run
+the correctness-gated launches on the actual GPU (the pass-2 pod gate was SKIPPED with
+`Permission denied (publickey)`, `reports/pod_env.log`). Until that lands, no CUDA number
+is real; the docs say so explicitly.
+
+The H100/A100/MI300 real runs remain the opt-in RunPod rental:
 
 ```bash
 export RUNPOD_API_KEY=<your-key>          # ~$50-100 ceiling, enforced by the script

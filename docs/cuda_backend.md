@@ -1,10 +1,14 @@
 # PolyKernel CUDA Backend + GPU-Free Analyzer
 
 The CUDA backend (C3a) generates CUDA kernels for the `polykernel` ops, compiles them to
-PTX for **sm_80** (A100) and **sm_90** (H100), and — the heart of the backend — analyzes
-them **entirely at compile time, with no NVIDIA GPU present**. There is no local NVIDIA
-GPU; real H100/A100 *runtime* numbers come only from an owner-gated RunPod rental, and
-until then are clearly-labeled **projections** (see [`performance_model.md`](performance_model.md)).
+PTX for **sm_80** (A100), **sm_89** (RTX 6000 Ada) and **sm_90** (H100), and analyzes them
+**entirely at compile time, with no device attached to the analysis** (the heart of the
+backend). The local dev machine has **no NVIDIA GPU**; the CUDA runtime-validation
+target is the **remote RTX 6000 Ada (sm_89) pod instance**, and the on-GPU run there is
+**PENDING pod-key authorization** (the pass-2 pod gate was SKIPPED with
+`Permission denied (publickey)`, `reports/pod_env.log`). Real H100/A100 *runtime*
+numbers would come only from an owner-gated RunPod rental, and until then stay
+clearly-labeled **projections** (see [`performance_model.md`](performance_model.md)).
 
 ## The portable kernel template
 
@@ -28,7 +32,8 @@ the backend-specific primitives through `#ifdef`:
 The compute logic is written **once** against these macros. The `POLYKERNEL_CUDA` /
 `POLYKERNEL_HIP` define is a **driver** concern (applied by `nvcc`/`hipcc`), never an
 emitter concern. This is what lets the HIP build run on the local RX 7800 XT and validate
-the *shared* compute logic for both backends (the no-NVIDIA-GPU correctness story).
+the *shared* compute logic for both backends (the shared-logic correctness story; the
+CUDA-only runtime story is covered in the correctness section below).
 
 ## Generated kernels
 
@@ -42,23 +47,34 @@ the *shared* compute logic for both backends (the no-NVIDIA-GPU correctness stor
 | `softmax.cu` | online (safe) softmax with warp/block reduction |
 | `fused_rmsnorm_matmul.cu` | prologue fusion: RMS computed on-the-fly as the matmul A-operand loads |
 | `fused_matmul_bias_gelu.cu` | epilogue fusion: bias+GELU applied in-register before the store (eliminates the intermediate global write/read) |
-| `matmul_wmma.cu` | additive tensor-core variant (WMMA/MMA path) |
+| `matmul_mma.cu` | CUDA tensor-core variant: `nvcuda::wmma` m16n16k16 bf16 (sm_80+; RTX 6000 Ada target = sm_89), additive + correctness-gated, `path=mma` |
 
-The scalar/tiled matmul is the **correctness anchor**; the WMMA/MMA path is an additive,
-correctness-gated variant the autotuner may select.
+`matmul_wmma.cu` also lives in `kernels/generated/` but is the **HIP/RDNA3 sibling** (the
+`v_wmma_f32_16x16x16_bf16` WMMA path), **not** a CUDA kernel; its own header and the
+`-DPOLYKERNEL_HIP` guards make it HIP-only by design (see
+[`hip_backend.md`](hip_backend.md)). The table above is the CUDA view: the scalar/tiled
+`matmul.cu` is the **correctness anchor**; `matmul_mma.cu` is an additive,
+correctness-gated tensor-core variant the autotuner may select.
 
-## Compile + PTX (no GPU)
+## Compile + PTX (no GPU needed)
 
 `tools/polykernel-bench/nvcc_driver.py` drives the compile:
 
 ```bash
 nvcc -arch=sm_80 -DPOLYKERNEL_CUDA -ptx kernels/generated/matmul.cu   # PTX for A100
+nvcc -arch=sm_89 -DPOLYKERNEL_CUDA -ptx kernels/generated/matmul.cu   # PTX for RTX 6000 Ada
 nvcc -arch=sm_90 -DPOLYKERNEL_CUDA -ptx kernels/generated/matmul.cu   # PTX for H100
 ptxas -v matmul.ptx                                                    # registers/smem/spills
 ```
 
-`nvcc` compiling clean for **both** sm_80 and sm_90 + PTX emitting + `ptxas -v` parsing is
+`nvcc` compiling clean for **sm_80 / sm_89 / sm_90** + PTX emitting + `ptxas -v` parsing is
 the CUDA *compile* acceptance gate (Pinned contract G). It needs no device.
+
+The **runtime-validation harness** `lib/Runtime/cuda_run_main.cpp` (the CUDA twin of
+`hip_run_main`) links clean for the same three archs (build `build/cuda_run/cuda_run_{sm_80,
+sm_89,sm_90}`) and includes a `dev` probe that prints `DEVICE <name> COMPUTE_CAPABILITY
+<major>.<minor>`. It is built and compile-validated locally; launching it on the RTX 6000
+Ada pod is pending pod-key authorization.
 
 ## The GPU-free compile-time analyzer
 
@@ -71,13 +87,16 @@ the CUDA *compile* acceptance gate (Pinned contract G). It needs no device.
   spill stores/loads, stack frame, and gmem. Malformed input yields an explicit parse
   error, never silent zeros.
 - **`Occupancy.cpp`** — computes occupancy from the arch constants table. sm_80:
-  smem/SM = 164 KB; sm_90: smem/SM = 228 KB; both: 65536 regs/SM, 255 regs/thread,
-  64 warps/SM, 32 blocks/SM, 2048 threads/SM, warp = 32. `blocks = min(reg_limit,
-  smem_limit, warp_limit, 32)`; `occupancy = active_warps / 64`. Unit-tested against
-  **hand-computed** values (e.g. regs=128, threads=256, smem=32 KB on sm_90).
+  smem/SM = 164 KB; sm_90: smem/SM = 228 KB; both share 65536 regs/SM, 255 regs/thread,
+  64 warps/SM, 32 blocks/SM, 2048 threads/SM, warp = 32. **sm_89 (RTX 6000 Ada) differs on
+  every parallelism dimension**: 48 warps / 24 blocks / 1536 threads per SM, 100 KB
+  smem/SM (99 KB/block max). `blocks = min(reg_limit, smem_limit, warp_limit, 32)` (24 for
+  sm_89); `occupancy = active_warps / warps_per_sm`. Unit-tested against **hand-computed**
+  values (e.g. regs=128, threads=256, smem=32 KB on sm_90; warp-limited on sm_89).
 - **`Roofline.cpp`** — `bytes = (M·K + K·N + M·N)·dtype_bytes`, `flops = 2·M·N·K`,
   `AI = flops/bytes`, ridge = peak_flop/peak_bw (H100: 989 TFLOPS / 3.35 TB/s ≈ 295
-  flop/byte). Classifies each op `compute-bound` (AI > ridge) or `memory-bound`.
+  flop/byte; RTX 6000 Ada sm_89: scalar bf16 91.1 TFLOPS / 960 GB/s ≈ 95 flop/byte).
+  Classifies each op `compute-bound` (AI > ridge) or `memory-bound`.
 - **`KernelReport.cpp`** — assembles the **contract-H** per-kernel report (below).
 
 ## The contract-H per-kernel report
@@ -108,15 +127,52 @@ occupancy < 50% → smaller tile / fewer registers; memory-bound → wider vecto
 or fusion. The example kernel above is compute-bound at 100% occupancy with no spills, so
 `suggested_fixes` is empty.
 
+## CUDA tensor-core path (sm_89)
+
+`kernels/generated/matmul_mma.cu` is the CUDA tensor-core matmul (added in pass 2, todo
+10). It closes the old gap where CUDA had only the scalar baseline, and is the CUDA twin
+of the HIP/RDNA3 WMMA path:
+
+- **API / instruction:** `nvcuda::wmma` from `<mma.h>` driving
+  `mma.sync.aligned.m16n16k16.f32.bf16.bf16.f32` on sm_80+; the RTX 6000 Ada target is
+  **sm_89**. One warp (32 lanes) computes one 16×16 fp32 output tile; K is reduced in
+  16-wide WMMA tiles staged through shared memory.
+- **Fragments:** `matrix_a` 16×16×16 bf16 **row-major**, `matrix_b` 16×16×16 bf16
+  **col-major** (so the shared B tile is staged transposed, `Bs[n][k] = B[k0+k][n0+n]`),
+  `accumulator` 16×16×16 **fp32**. This is the one deliberate staging deviation from
+  `matmul_wmma.cu`: staging B naturally with a `col_major` fragment would transpose the
+  operand and fail the golden.
+- **Rounding contract:** bf16 RNE inputs, fp32 accumulate, bf16 RNE store, the same
+  golden contract as the scalar baseline and the HIP WMMA path. The fp32 accumulation
+  order differs from NumPy, so at large K an isolated element can land 1 bf16 ULP off at
+  small magnitude (the same documented reduction-order class as the scalar baseline).
+- **Additive + correctness-gated:** the scalar `matmul.cu` remains the correctness anchor;
+  MMA is a candidate the autotuner may select (`path=mma`, a report annotation, contract
+  H). A bad variant (the `BadStore` negative path) swaps `mem_row_major` for
+  `mem_col_major`, transposing C; it fails the golden decisively and is discarded
+  (`validated=false`) while the scalar baseline still passes, proving MMA is safely
+  additive.
+- **HIP guard:** under `-DPOLYKERNEL_HIP` the file is a hard `#error`; the HIP tensor-core
+  sibling is `matmul_wmma.cu`.
+- **Status:** built + compile-validated locally (nvcc sm_80/89/90, PTX contains the real
+  `mma.sync` instruction, `ptxas -v` parses, 0 spills). The on-GPU runtime validation on
+  the RTX 6000 Ada (sm_89) pod is **PENDING pod-key authorization** (pod gate SKIPPED,
+  `reports/pod_env.log`); the harness (`lib/Runtime/cuda_run_main.cpp` +
+  `tests/kernels/test_mma.py`) is ready to run once the key is authorized.
+
 ## Correctness model
 
 - The **shared** compute logic is validated by running the HIP build (and the CPU-reference
-  build, `kernels/cpu/`) on the RX 7800 XT against the golden — this validates the
+  build, `kernels/cpu/`) on the RX 7800 XT against the golden, which validates the
   algorithmic core for *both* backends.
-- CUDA-specific tensor-core paths (WMMA/MMA, CUDA-only launch config) are
-  **compile-validated** locally (nvcc clean for sm_80/sm_90, PTX emits, `ptxas -v` parses)
-  and **fully validated on rented H100/A100** (owner-gated). Until then they are marked
-  "compile-validated; runtime-validated on rental".
+- CUDA-specific paths (the MMA tensor-core kernel `matmul_mma.cu` and the runtime launcher
+  `lib/Runtime/cuda_run_main.cpp`) are **built and compile-validated locally**: nvcc links
+  clean for sm_80/sm_89/sm_90, the PTX contains the real
+  `mma.sync.aligned.m16n16k16.f32.bf16.bf16.f32` instruction, and `ptxas -v` parses. The
+  **on-GPU runtime validation on the RTX 6000 Ada (sm_89) pod is PENDING pod-key
+  authorization** (the pass-2 pod gate was SKIPPED, `reports/pod_env.log`); the harness
+  is ready and will run on the pod once the SSH key is authorized. H100/A100 runtime
+  numbers remain **projected** (owner-gated RunPod rental).
 
 ## See also
 

@@ -1,0 +1,70 @@
+### pass2 docs claim-audit HAPPY sweep (final, post-fix) — 2026-08-15
+### Pod gate status at audit time: reports/pod_env.log GATE VERDICT: SKIPPED
+### (SSH key rejected: Permission denied (publickey)); no pod-validation commit in git log.
+
+== 1. 'fully validated on rented H100/A100' -> must be gone ==
+  (clean)
+
+== 2. 'runtime-validated on rental' -> must be gone ==
+  (clean)
+
+== 3. '13 tests' in README/docs -> must be gone (lit count now 14) ==
+  (clean)
+
+== 4. 'no NVIDIA GPU' hits are ONLY accurate local-machine nuances (pod is remote) ==
+docs/architecture.md:116:CUDA kernels cannot run on the local dev machine (it has no NVIDIA GPU), so correctness
+docs/cuda_backend.md:6:backend). The local dev machine has **no NVIDIA GPU**; the CUDA runtime-validation
+docs/upstream_pr.md:329:  (PolyKernel builds CUDA kernels but the local dev machine has no NVIDIA GPU: its
+
+== 5. README/compiler_pipeline lit count = 14 ==
+README.md:50:# configure + build + run the lit suite (14 tests)
+docs/compiler_pipeline.md:384:  # the whole lit suite (14 tests)
+
+== 6. matmul_mma.cu documented + matches the actual kernel ==
+50:| `matmul_mma.cu` | CUDA tensor-core variant: `nvcuda::wmma` m16n16k16 bf16 (sm_80+; RTX 6000 Ada target = sm_89), additive + correctness-gated, `path=mma` |
+137:  `mma.sync.aligned.m16n16k16.f32.bf16.bf16.f32` on sm_80+; the RTX 6000 Ada target is
+141:  **col-major** (so the shared B tile is staged transposed, `Bs[n][k] = B[k0+k][n0+n]`),
+150:  MMA is a candidate the autotuner may select (`path=mma`, a report annotation, contract
+171:  `mma.sync.aligned.m16n16k16.f32.bf16.bf16.f32` instruction, and `ptxas -v` parses. The
+
+== 7. matmul_wmma.cu explicitly HIP/RDNA3-only in cuda_backend.md ==
+52:`matmul_wmma.cu` also lives in `kernels/generated/` but is the **HIP/RDNA3 sibling** (the
+53:`v_wmma_f32_16x16x16_bf16` WMMA path), **not** a CUDA kernel; its own header and the
+54:`-DPOLYKERNEL_HIP` guards make it HIP-only by design (see
+
+== 8. Every runtime-validated claim says PENDING (no false 'validated on RTX 6000') ==
+docs/architecture.md:101:Ada pod is **PENDING pod-key authorization** (pod gate SKIPPED, `reports/pod_env.log`).
+docs/architecture.md:122:the RTX 6000 Ada (sm_89) pod **PENDING pod-key authorization** (pod gate SKIPPED,
+docs/architecture.md:174:(sm_89) is the first real-validation target, currently **PENDING pod-key authorization**
+docs/architecture.md:175:(pod gate SKIPPED, `reports/pod_env.log`); the dataflow
+docs/cuda_backend.md:8:**PENDING pod-key authorization** (the pass-2 pod gate was SKIPPED with
+docs/cuda_backend.md:159:  the RTX 6000 Ada (sm_89) pod is **PENDING pod-key authorization** (pod gate SKIPPED,
+docs/cuda_backend.md:172:  **on-GPU runtime validation on the RTX 6000 Ada (sm_89) pod is PENDING pod-key
+docs/performance_model.md:10:> but the on-GPU run is **PENDING pod-key authorization** (the pass-2 pod gate was SKIPPED
+docs/performance_model.md:113:  run on the RTX 6000 Ada (sm_89) pod is **PENDING pod-key authorization** (pod gate
+README.md:113:  compile-validated locally** (sm_80/89/90). The **on-GPU run is PENDING pod-key
+README.md:114:  authorization** (pass-2 pod gate SKIPPED, `reports/pod_env.log`), so no CUDA number is
+  -- any affirmative 'runtime-validated on RTX 6000 Ada' / 'validated on the Ada'? --
+  (none: no runtime-validated claim asserted)
+
+== 9. sm_89 roofline row + tensor-vs-scalar convention note ==
+44:| NVIDIA RTX 6000 Ada (sm_89) | 91.1 | 960 | 94.9 |
+47:**Roofline-convention note (load-bearing, do not conflate):** the H100/A100
+49:**91.1 TFLOPS is the SCALAR bf16 rate** (per the CUDA C++ BPG "native arithmetic
+
+== 10. SOTA/vLLM language only in negated contexts ==
+docs/architecture.md:27:  machinery, not SOTA). A real Cerebras toolchain (the dataflow backend is a
+docs/performance_model.md:16:> `real-benchmark`). **No SOTA-performance claim is made**: the goal is the
+docs/performance_model.md:17:> compiler/runtime machinery, not beating vLLM.
+
+== 11. hip_backend.md rental wording accurate for HIP gfx942/MI300 (compile-only; runtime on rental) ==
+193:**compile-only locally** (no MI300 hardware); runtime is on rental (Wave 5). hipcc compiles
+
+== 12. git: THIS todo changed docs only (no code files) ==
+My edits: README.md, docs/{cuda_backend,performance_model,architecture,compiler_pipeline,upstream_pr}.md.
+The .cu/.cpp/.h/.py files in the working tree (benchmarks/run_bench_suite.py,
+include/PolyKernel/Autotune/TuningCache.h, tools/polykernel-bench/*.py,
+tools/polykernel-report/dashboard.py) were modified by CONCURRENT todos T6/T8,
+NOT by this docs audit (git status was clean at task start, 2026-08-15).
+
+RESULT: PASS. All sweeps clean; claims match post-pass reality (pod gate SKIPPED).

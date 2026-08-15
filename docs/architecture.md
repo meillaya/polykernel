@@ -41,9 +41,10 @@ This document is the map. The depth lives in the per-area docs:
                         │                           │
         ┌───────────────┴───────────┐   ┌───────────┴────────────────┐
         │  CUDA backend (C3a)        │   │  HIP/ROCm backend (C3b)     │
-        │  nvcc sm_80/sm_90 + PTX    │   │  hipcc gfx1101 (local run)  │
+        │  nvcc sm_80/89/90 + PTX    │   │  hipcc gfx1101 (local run)  │
         │  GPU-free ptxas analyzer   │   │  gfx942 (MI300 cross-compile)│
         │  (regs/smem/occ/roofline)  │   │  AMDGPU ISA + WMMA bf16     │
+        │  + sm_89 runtime launcher  │   │  (WMMA bf16 runs on 7800 XT)│
         └───────────────┬───────────┘   └───────────┬────────────────┘
                         │   shared portable kernel template          │
                         │   (#ifdef POLYKERNEL_CUDA / POLYKERNEL_HIP) │
@@ -88,13 +89,17 @@ per-kernel / dashboard reports), `polykernel-analyze` (standalone compile-time a
 ## The CUDA backend + analyzer (C3a)
 
 Generated kernels (RMSNorm, GELU/SiLU, MatMul, Softmax, fused RMSNorm+MatMul, fused
-MatMul+Bias+GELU, + a WMMA variant) use shared-memory tiling, vectorized loads, warp
-reductions, and occupancy-aware block sizing. `nvcc` compiles for **sm_80** (A100) and
-**sm_90** (H100) and emits PTX. The **compile-time analyzer** (`lib/Analysis/`:
-`PtxasParser`, `Occupancy`, `Roofline`, `KernelReport`) parses `ptxas -v`
-(registers/smem/spills), computes occupancy from the sm_80/sm_90 constants table, and
-classifies the roofline — **all with no NVIDIA GPU present**. Detail in
-[`cuda_backend.md`](cuda_backend.md).
+MatMul+Bias+GELU, + the CUDA MMA tensor-core variant `matmul_mma.cu`) use shared-memory
+tiling, vectorized loads, warp reductions, and occupancy-aware block sizing. `nvcc`
+compiles for **sm_80** (A100), **sm_89** (RTX 6000 Ada) and **sm_90** (H100) and emits
+PTX. The **compile-time analyzer** (`lib/Analysis/`: `PtxasParser`, `Occupancy`,
+`Roofline`, `KernelReport`) parses `ptxas -v` (registers/smem/spills), computes occupancy
+from the sm_80/sm_89/sm_90 constants table, and classifies the roofline, all with no
+device attached to the analysis. The **CUDA runtime-validation harness**
+(`lib/Runtime/cuda_run_main.cpp`) is built and compile-validated for sm_80/89/90 (with a
+`dev` probe that prints the device + compute capability); the on-GPU run on the RTX 6000
+Ada pod is **PENDING pod-key authorization** (pod gate SKIPPED, `reports/pod_env.log`).
+Detail in [`cuda_backend.md`](cuda_backend.md).
 
 ## The HIP/ROCm backend (C3b)
 
@@ -106,14 +111,17 @@ extracts VGPR/SGPR/LDS/scratch + gfx1101 occupancy; a WMMA bf16 tensor path
 (MI300) is a compile-only cross-compile target for the reports. Detail in
 [`hip_backend.md`](hip_backend.md).
 
-## Correctness (the no-NVIDIA-GPU story)
+## Correctness (the CUDA validation story)
 
-CUDA kernels cannot run locally, so correctness is established three ways: (1) the CUDA
-and HIP backends share **one** portable template, so the shared compute logic is
-validated by running the HIP build (and the CPU-reference build) on the RX 7800 XT
-against the golden; (2) CUDA-specific tensor-core paths are compile-validated locally
-and fully validated on rented H100/A100; (3) the dataflow simulator **functionally
-executes** the scheduled tile program and is compared to the same golden. The golden
+CUDA kernels cannot run on the local dev machine (it has no NVIDIA GPU), so correctness
+is established three ways: (1) the CUDA and HIP backends share **one** portable template,
+so the shared compute logic is validated by running the HIP build (and the CPU-reference
+build) on the RX 7800 XT against the golden; (2) CUDA-specific paths, the MMA tensor-core
+kernel `matmul_mma.cu` and the runtime launcher `cuda_run_main.cpp`, are **built and
+compile-validated locally** (nvcc sm_80/89/90, PTX, `ptxas -v`), with the on-GPU run on
+the RTX 6000 Ada (sm_89) pod **PENDING pod-key authorization** (pod gate SKIPPED,
+`reports/pod_env.log`); (3) the dataflow simulator **functionally executes** the scheduled
+tile program and is compared to the same golden. The golden
 (`tests/golden/`) uses NumPy + `ml_dtypes.bfloat16` only, with the pinned rounding
 contract (bf16 RNE inputs, fp32 accumulate, bf16 output) and thresholds. The end-to-end
 harness `tests/e2e/test_mlp_correctness.py` reports `N failed / M ops` and is the source
@@ -162,7 +170,9 @@ stats (passes / generated kernels / validated / **failed correctness**) into
 `reports/benchmark_report.{md,html}` and the per-backend `reports/h100_report.html` /
 `reports/mi300_report.html`. Every HTML page is **static + self-contained** (inline
 CSS/JS, no external dependencies, renders offline). The H100/A100/MI300 speedups are
-**PROJECTED** (roofline + analytic traffic) unless a RunPod rental ran; the dataflow
+**PROJECTED** (roofline + analytic traffic) unless a RunPod rental ran; the RTX 6000 Ada
+(sm_89) is the first real-validation target, currently **PENDING pod-key authorization**
+(pod gate SKIPPED, `reports/pod_env.log`); the dataflow
 figures are the simulator's model. See [`performance_model.md`](performance_model.md).
 
 ## Directory layout

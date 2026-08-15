@@ -1,0 +1,43 @@
+### pass2 docs claim-audit NEGATIVE sweep (pre-fix state) — 2026-08-15
+### Purpose: catch every stale/false claim the docs audit must fix.
+
+== grep -rn 'fully validated on rented H100/A100' docs/ README.md ==
+docs/architecture.md:115:and fully validated on rented H100/A100; (3) the dataflow simulator **functionally
+docs/cuda_backend.md:118:  and **fully validated on rented H100/A100** (owner-gated). Until then they are marked
+
+== grep -rn 'runtime-validated on rental' docs/ README.md ==
+docs/cuda_backend.md:119:  "compile-validated; runtime-validated on rental".
+
+== grep -rn 'compile-validated; runtime-validated on rental' docs/ ==
+docs/cuda_backend.md:119:  "compile-validated; runtime-validated on rental".
+
+== grep -n '13 tests' README.md docs/ ==
+README.md:49:# configure + build + run the lit suite (13 tests)
+docs/compiler_pipeline.md:384:  # the whole lit suite (13 tests)
+
+== grep -rn 'no NVIDIA GPU' docs/ README.md ==
+docs/architecture.md:96:classifies the roofline — **all with no NVIDIA GPU present**. Detail in
+docs/cuda_backend.md:5:them **entirely at compile time, with no NVIDIA GPU present**. There is no local NVIDIA
+README.md:21:| Compile + PTX + GPU-free analysis for CUDA; real H100/A100 numbers from owner-gated rental | Running NVIDIA kernels locally (no NVIDIA GPU) |
+
+== grep -rn 'matmul_wmma.cu' docs/cuda_backend.md (row must be HIP-only) ==
+45:| `matmul_wmma.cu` | additive tensor-core variant (WMMA/MMA path) |
+
+== grep -rn 'matmul_mma.cu' docs/ (CUDA MMA kernel must be documented) ==
+
+== grep -rn 'sm_89' README.md docs/architecture.md (RTX 6000 Ada target) ==
+
+== STALE CLAIMS FOUND (fix list) ==
+  cuda_backend.md L45: matmul_wmma.cu listed under CUDA generated kernels (HIP-only)
+  cuda_backend.md L118-119: 'fully validated on rented H100/A100' (false; pod gate SKIPPED)
+  cuda_backend.md L5-6: 'no NVIDIA GPU present' (nuance: local yes, remote pod target pending)
+  architecture.md L96: 'no NVIDIA GPU present'
+  architecture.md L114-115: 'compile-validated locally and fully validated on rented H100/A100'
+  README.md L21: 'Running NVIDIA kernels locally (no NVIDIA GPU)' row
+  README.md L91-93: 'no local NVIDIA GPU ... full validation on rental'
+  README.md L49: 'lit suite (13 tests)' -> 14
+  README.md: no Status section (Wave 8+ + this pass)
+  compiler_pipeline.md L384/389: '13 tests' -> 14
+  performance_model.md L93-94: 'compile-validated locally; runtime-validated on rental'
+  performance_model.md: no sm_89 roofline row + no tensor-vs-scalar convention note
+  performance_model.md: no RTX 6000 Ada real-vs-projected entry

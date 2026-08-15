@@ -381,13 +381,13 @@ nix develop --impure --accept-flake-config -c bash -c '
       --fuse-rmsnorm-matmul --fuse-matmul-bias-gelu \
       --infer-tile-layout --plan-memory \
       --lower-to-cuda --output-dir=kernels/generated
-  # the whole lit suite (13 tests)
+  # the whole lit suite (14 tests)
   cmake --build build --target check-polykernel
 '
 ```
 
-`check-polykernel` runs lit over `test/` (13 `.mlir` tests: smoke, op-set-closed,
-dialect round-trip, infer-shapes ± mismatch, canonicalize, the four fusion passes,
+`check-polykernel` runs lit over `test/` (14 `.mlir` tests: smoke, op-set-closed,
+dialect round-trip, infer-shapes ± mismatch, canonicalize, the five fusion passes,
 tile-layout, plan-memory, e2e-parse). The before/after fusion traffic report
 (`polykernel-report --traffic examples/mlp_block.mlir`) quantifies the global-memory
 reduction; for the MLP block fusion eliminates a 32 MiB intermediate round-trip

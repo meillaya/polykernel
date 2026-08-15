@@ -18,7 +18,7 @@ and Modal hire for.**
 |---|---|
 | A compiler/runtime **machinery** demonstration | A claim to **beat vLLM** or any production stack |
 | A Cerebras-style dataflow **simulator** (correct CSL terminology: CE+FMAC, `@set_color_config`, `fabin_dsd`/`fabout_dsd`) | Real CSL / `cslc` / **Cerebras hardware** |
-| Compile + PTX + GPU-free analysis for CUDA; real H100/A100 numbers from owner-gated rental | Running NVIDIA kernels locally (no NVIDIA GPU) |
+| Compile + PTX + GPU-free analysis for CUDA; a CUDA runtime-validation harness (`cuda_run_main.cpp` + the MMA tensor-core kernel) built and compile-validated for sm_80/89/90, on-GPU run on the RTX 6000 Ada pod pending pod-key authorization; real H100/A100 numbers from owner-gated rental | Running NVIDIA kernels locally (no local NVIDIA GPU; runtime validation targets the remote RTX 6000 Ada pod, currently pending key authorization) |
 | Hand-written `.mlir` input in the `polykernel` dialect | A full PyTorch/ONNX/StableHLO frontend |
 | Exactly the named ops + fused variants (closed op set) | An op zoo |
 
@@ -28,8 +28,9 @@ and Modal hire for.**
    .mlir (polykernel dialect)
         │  polykernel-opt · 11 passes
         ├──────────────────────────────┐
-   CUDA backend (sm_80/sm_90)     HIP/ROCm backend (gfx1101 local · gfx942)
+   CUDA backend (sm_80/sm_89/sm_90)     HIP/ROCm backend (gfx1101 local · gfx942)
    nvcc + PTX + GPU-free analyzer  hipcc + AMDGPU ISA + WMMA bf16 · runs on 7800 XT
+   + MMA kernel + runtime launcher  (CUDA twin: matmul_mma.cu · RTX 6000 Ada)
         └──────────────┬───────────────┘   ← one portable kernel template
         Autotuner (correctness-gated) + JSON cache + C++ runtime (detect → load → serve)
         ├──────────────────────────────┐
@@ -46,7 +47,7 @@ Full detail in [`docs/architecture.md`](docs/architecture.md).
 # enter the toolchain (LLVM/MLIR-21, CUDA 12.6, ROCm, python3 + numpy/ml_dtypes)
 nix develop --impure --accept-flake-config
 
-# configure + build + run the lit suite (13 tests)
+# configure + build + run the lit suite (14 tests)
 cmake -B build -G Ninja \
     -DMLIR_DIR="$(nix eval --raw --impure --expr '(builtins.getFlake "/home/mei/projects/polykernel").inputs.nixpkgs.legacyPackages.x86_64-linux.llvmPackages_21.mlir.dev.outPath')/lib/cmake/mlir" \
     -DLLVM_DIR="$(nix eval --raw --impure --expr '(builtins.getFlake "/home/mei/projects/polykernel").inputs.nixpkgs.legacyPackages.x86_64-linux.llvmPackages_21.llvm.dev.outPath')/lib/cmake/llvm" \
@@ -88,11 +89,31 @@ the report shows `failed correctness: N>0` prominently (`reports/w6_dashboard_ne
 
 A NumPy + `ml_dtypes.bfloat16` golden (bf16 round-to-nearest-even inputs, fp32 accumulate,
 bf16 output) is the single source of truth; thresholds are cosine ≥ 0.999, max relative
-error ≤ 1e-2, PCC ≥ 0.99. Because there is no local NVIDIA GPU, CUDA correctness rests on
-the **shared** portable template validated by running the HIP + CPU-reference builds on the
-RX 7800 XT, compile-validation of the CUDA tensor-core paths (full validation on rental),
-and the dataflow simulator's functional execution — all compared to the same golden.
-**0 failed correctness tests** is a success criterion.
+error ≤ 1e-2, PCC ≥ 0.99. CUDA correctness rests on the **shared** portable template
+validated by running the HIP + CPU-reference builds on the RX 7800 XT, the CUDA
+runtime-validation harness (`lib/Runtime/cuda_run_main.cpp` + the MMA kernel
+`kernels/generated/matmul_mma.cu`) which is built and compile-validated for sm_80/89/90
+with the on-GPU run on the RTX 6000 Ada pod **pending pod-key authorization** (pod gate
+SKIPPED), and the dataflow simulator's functional execution — all compared to the same
+golden. H100/A100/MI300 speedups remain **PROJECTED** (see
+[`docs/performance_model.md`](docs/performance_model.md)). **0 failed correctness tests**
+is a success criterion.
+
+## Status
+
+- **Waves 1-8 (MVP):** the closed `polykernel` dialect + 11-pass pipeline, portable
+  CUDA/HIP codegen, HIP runtime-validated on the local RX 7800 XT (scalar + WMMA bf16, 0
+  failed correctness), CUDA compile + PTX + GPU-free analysis, the Cerebras-style dataflow
+  simulator, the correctness-gated autotuner, the C++ runtime, Modal serving, and the
+  Wave 8 attention + quantization work: done and committed.
+- **Pass 2 (this pass):** the CUDA runtime-validation harness
+  (`lib/Runtime/cuda_run_main.cpp`), the CUDA MMA tensor-core kernel
+  (`kernels/generated/matmul_mma.cu`, nvcuda::wmma m16n16k16 bf16, additive +
+  correctness-gated), and sm_89 (RTX 6000 Ada) roofline/occupancy support: all **built +
+  compile-validated locally** (sm_80/89/90). The **on-GPU run is PENDING pod-key
+  authorization** (pass-2 pod gate SKIPPED, `reports/pod_env.log`), so no CUDA number is
+  claimed as measured. H100/A100/MI300 speedups remain **PROJECTED**.
+- **Lit:** 14/14 `.mlir` tests green (`check-polykernel`).
 
 <!--## Documentation
 
