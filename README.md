@@ -12,35 +12,6 @@ and Modal hire for.**
 
 ---
 
-## Resume bullets
-
-- **Out-of-tree C++/MLIR compiler** — a custom `polykernel` dialect (exactly the named
-  transformer-inference ops + fused variants) with **11 passes** (shape inference,
-  canonicalization, four operator-fusion passes, tile-layout, memory planning, CUDA/HIP
-  lowering, kernel-report emission), built against nixpkgs **LLVM/MLIR-21** with
-  `polykernel-opt` / `-translate` / `-bench` / `-report` / `-analyze` tools and a lit suite.
-- **Portable CUDA/HIP kernels from one template** — a single `#ifdef`-portable kernel
-  template compiles under `nvcc` for **sm_80/sm_90** (PTX emit) and under `hipcc` for
-  **gfx1101**, and **runs on a local AMD RX 7800 XT**, all golden-validated
-  (**0 failed correctness**); a WMMA bf16 tensor-core path is an additive variant.
-- **GPU-free compile-time analysis** — a `ptxas -v` parser (both formats) + occupancy model
-  (sm_80/sm_90 constants) + roofline classifier produce the full per-kernel report
-  (registers/smem/spills/occupancy/traffic/bottleneck/suggested-fixes) with **no NVIDIA GPU
-  present**; an AMDGPU ISA analyzer does the same for VGPR/SGPR/LDS/spills on gfx1101/gfx942.
-- **Correctness-gated autotuner + runtime** — a bounded config grid, benchmarked only after
-  passing the golden, writes a versioned JSON tuning cache keyed by (GPU, op, shape); a C++
-  runtime detects the GPU and loads the best cached kernel.
-- **Cerebras-style dataflow simulator** — a self-contained C++ **functional/cycle simulator**
-  of a 64×64 PE fabric (CE + FMAC, 48 KB SRAM/PE, wavelet/color routing, the **SUMMA**
-  matmul mapping) with seven metrics + a **self-contained HTML visualizer**, correctness-
-  validated against the same golden — independently of any GPU.
-- **Modal GPU deployment** — a CUDA-toolkit image compiling the engine, `fastapi_endpoint`
-  `/predict /benchmark /kernels /report`, cold-start measurement, and a GPU-aware kernel
-  cache reusing the runtime (cloud deploy owner-gated behind `MODAL_TOKEN`).
-- **Benchmark dashboard + docs** — `polykernel-report --dashboard` aggregates CUDA + AMD +
-  dataflow + compiler stats into static, self-contained HTML reports (no external
-  dependencies), with the roofline performance model and full architecture/backend docs.
-
 ## What it is — and is not
 
 | It is | It is not |
