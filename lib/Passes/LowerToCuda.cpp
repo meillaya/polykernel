@@ -179,7 +179,7 @@ void emitGeluCuda(raw_ostream &os) {
 //     y = 0.5 * x * (1 + erf(x / sqrt(2))).
 // bf16 in/out, fp32 compute (matches the golden rounding contract). Written
 // against the portable template (kernels/template/kernel_common.h) so it compiles
-// UNCHANGED under `nvcc -DPOLYKERNEL_CUDA` and `hipcc -DPOLYKERNEL_HIP` (erff is
+// UNCHANGED under `nvcc -DPOLYKERNEL_CUDA` and `hipcc -DPOLYKERNEL_HIP` (erf is
 // device math on both; everything else is behind pk_* / PK_* macros).
 //
 //===----------------------------------------------------------------------===//
@@ -191,9 +191,10 @@ namespace {
 constexpr int kBlockThreads = 256;
 constexpr int kMaxBlocks = 65535;
 constexpr float kInvSqrt2 = 0.70710678118654752440f; // 1 / sqrt(2)
+constexpr double kInvSqrt2D = 0.70710678118654752440; // 1 / sqrt(2), double
 
 PK_DEVICE_INLINE float gelu_one(float x) {
-  return 0.5f * x * (1.0f + erff(x * kInvSqrt2));
+  return 0.5f * x * (1.0f + static_cast<float>(erf(static_cast<double>(x) * kInvSqrt2D)));
 }
 
 // Flat elementwise GELU over `n` elements. Vectorized bf16x2 over the aligned
@@ -671,7 +672,7 @@ void emitFusedMatmulBiasGeluCuda(raw_ostream &os) {
 // bit-identical to running matmul -> bias -> gelu in sequence. Bounds checks handle
 // M/N/K that are not tile multiples. Written against the portable template
 // (kernels/template/kernel_common.h) so it compiles UNCHANGED under
-// `nvcc -DPOLYKERNEL_CUDA` and `hipcc -DPOLYKERNEL_HIP` (erff is device math on
+// `nvcc -DPOLYKERNEL_CUDA` and `hipcc -DPOLYKERNEL_HIP` (erf is device math on
 // both; everything else is behind pk_* / PK_* macros).
 //
 //===----------------------------------------------------------------------===//
@@ -687,10 +688,15 @@ constexpr int kBlockM = 16;
 constexpr int kBlockN = 16;
 constexpr int kBlockK = 16;
 constexpr float kInvSqrt2 = 0.70710678118654752440f; // 1 / sqrt(2)
+constexpr double kInvSqrt2D = 0.70710678118654752440; // 1 / sqrt(2), double
 
 // Exact erf-based GELU (mirrors gelu.cu): 0.5 * x * (1 + erf(x / sqrt(2))).
+// Mirrors tests/golden/golden.py's precision chain exactly (double erf -> fp32
+// round -> fp32 add/mul): a pure fp32 erff chain saturates to exactly 1.0 for
+// |x| >= ~3.5, flushing the (1.0 + erf) tail and bf16-mismatching the golden
+// at the tiny-result cancellation points (measured on sm_89/CUDA 12.2).
 PK_DEVICE_INLINE float gelu_one(float x) {
-  return 0.5f * x * (1.0f + erff(x * kInvSqrt2));
+  return 0.5f * x * (1.0f + static_cast<float>(erf(static_cast<double>(x) * kInvSqrt2D)));
 }
 
 PK_GLOBAL void fused_matmul_bias_gelu_kernel(const pk_bf16 *__restrict__ A,

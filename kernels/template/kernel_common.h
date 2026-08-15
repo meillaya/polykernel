@@ -101,7 +101,20 @@ PK_DEVICE_INLINE pk_bf16x2 pk_load_bf16x2(const pk_bf16 *p) {
   return r;
 }
 PK_DEVICE_INLINE void pk_store_bf16x2(pk_bf16 *p, pk_bf16x2 v) {
+#if defined(POLYKERNEL_CUDA)
+  // Materialize both halves to their canonical 16-bit patterns BEFORE the
+  // 4-byte store. On sm_80+ a __float2bfloat16 result may live in the TOP 16
+  // bits of a 32-bit register with undefined low bits, so memcpy'ing the
+  // {x, y} struct raw stores garbage in one half (observed on sm_89/CUDA 12.2:
+  // rmsnorm/gelu/silu outputs corrupted; __bfloat16_as_ushort forces the
+  // canonical pattern - verified against the golden on the RTX 6000 Ada).
+  const unsigned short lo = __bfloat16_as_ushort(v.x);
+  const unsigned short hi = __bfloat16_as_ushort(v.y);
+  const unsigned int w = (static_cast<unsigned int>(hi) << 16) | lo;
+  memcpy(p, &w, sizeof w);
+#else
   memcpy(p, &v, sizeof v);
+#endif
 }
 
 //===----------------------------------------------------------------------===//
