@@ -118,6 +118,7 @@ def cuda_run_exe() -> Path:
         "-include",
         "cstdio",
         f"-arch={_ARCH}",
+        "-std=c++20",
         "-Ikernels/template",
         "-Iinclude",
         "-Ikernels/cpu",
