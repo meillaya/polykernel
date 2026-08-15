@@ -1,0 +1,101 @@
+warning: Nix search path entry '/home/mei/.nix-defexpr/channels' does not exist, ignoring
+Running tasks     devenv:enterShell
+
+Running           devenv:files:cleanup
+Succeeded         devenv:files:cleanup (5.95ms)
+Running           devenv:enterShell
+Succeeded         devenv:enterShell (6.78ms)
+Running           devenv:enterTest
+No command        devenv:enterTest
+1 Skipped, 2 Succeeded
+PolyKernel dev shell (llvmPackages_21 MLIR / cudaPackages_12_6 / rocmPackages.clr)
+  CC/CXX:      /nix/store/m59w5gavjx8db0ay3m1yzbw02l54109b-clang-wrapper-21.1.8/bin/clang / /nix/store/m59w5gavjx8db0ay3m1yzbw02l54109b-clang-wrapper-21.1.8/bin/clang++
+  mlir-tblgen: LLVM (http://llvm.org/):
+  nvcc:        Cuda compilation tools, release 12.6, V12.6.85
+  hipcc:       HIP version: 7.2.53211-9999
+  cmake:       cmake version 4.1.2
+  clang:       clang version 21.1.8
+=== nvcc build arch=sm_80 ===
+=== nvcc build arch=sm_89 ===
+=== nvcc build arch=sm_90 ===
+=== all three archs linked OK ===
+-rwxr-xr-x 1 mei mei 1163816 Aug 15 09:32 cuda_run_sm_80
+-rwxr-xr-x 1 mei mei 1163816 Aug 15 09:33 cuda_run_sm_89
+-rwxr-xr-x 1 mei mei 1167912 Aug 15 09:33 cuda_run_sm_90
+warning: Nix search path entry '/home/mei/.nix-defexpr/channels' does not exist, ignoring
+Running tasks     devenv:enterShell
+
+Running           devenv:files:cleanup
+Succeeded         devenv:files:cleanup (7.12ms)
+Running           devenv:enterShell
+Succeeded         devenv:enterShell (6.41ms)
+Running           devenv:enterTest
+No command        devenv:enterTest
+1 Skipped, 2 Succeeded
+PolyKernel dev shell (llvmPackages_21 MLIR / cudaPackages_12_6 / rocmPackages.clr)
+  CC/CXX:      /nix/store/m59w5gavjx8db0ay3m1yzbw02l54109b-clang-wrapper-21.1.8/bin/clang / /nix/store/m59w5gavjx8db0ay3m1yzbw02l54109b-clang-wrapper-21.1.8/bin/clang++
+  mlir-tblgen: LLVM (http://llvm.org/):
+  nvcc:        Cuda compilation tools, release 12.6, V12.6.85
+  hipcc:       HIP version: 7.2.53211-9999
+  cmake:       cmake version 4.1.2
+  clang:       clang version 21.1.8
+=== ptxas -v spill check (nvcc_driver.py, sm_80,sm_89,sm_90) ===
+  [parsed] registers=38 smem=36B spill_stores=0B spill_loads=0B stack=0B cmem0=388B
+  [parsed] registers=38 smem=36B spill_stores=0B spill_loads=0B stack=0B cmem0=388B
+  [parsed] registers=32 smem=36B spill_stores=0B spill_loads=0B stack=0B cmem0=0B
+OK: compiled rmsnorm for sm_80, sm_89, sm_90; PTX emitted.
+  rmsnorm sm_80: spill_stores=0B spill_loads=0B
+  rmsnorm sm_89: spill_stores=0B spill_loads=0B
+  rmsnorm sm_90: spill_stores=0B spill_loads=0B
+  OK rmsnorm: 0 spill stores / 0 spill loads on sm_80/sm_89/sm_90
+  [parsed] registers=20 smem=0B spill_stores=0B spill_loads=0B stack=0B cmem0=372B
+  [parsed] registers=20 smem=0B spill_stores=0B spill_loads=0B stack=0B cmem0=372B
+  [parsed] registers=23 smem=0B spill_stores=0B spill_loads=0B stack=0B cmem0=0B
+OK: compiled gelu for sm_80, sm_89, sm_90; PTX emitted.
+  gelu sm_80: spill_stores=0B spill_loads=0B
+  gelu sm_89: spill_stores=0B spill_loads=0B
+  gelu sm_90: spill_stores=0B spill_loads=0B
+  OK gelu: 0 spill stores / 0 spill loads on sm_80/sm_89/sm_90
+  [parsed] registers=31 smem=1024B spill_stores=0B spill_loads=0B stack=0B cmem0=388B
+  [parsed] registers=34 smem=1024B spill_stores=0B spill_loads=0B stack=0B cmem0=388B
+  [parsed] registers=32 smem=1024B spill_stores=0B spill_loads=0B stack=0B cmem0=0B
+OK: compiled matmul for sm_80, sm_89, sm_90; PTX emitted.
+  matmul sm_80: spill_stores=0B spill_loads=0B
+  matmul sm_89: spill_stores=0B spill_loads=0B
+  matmul sm_90: spill_stores=0B spill_loads=0B
+  OK matmul: 0 spill stores / 0 spill loads on sm_80/sm_89/sm_90
+  [parsed] registers=28 smem=40B spill_stores=0B spill_loads=0B stack=0B cmem0=372B
+  [parsed] registers=28 smem=40B spill_stores=0B spill_loads=0B stack=0B cmem0=372B
+  [parsed] registers=28 smem=40B spill_stores=0B spill_loads=0B stack=0B cmem0=0B
+OK: compiled softmax for sm_80, sm_89, sm_90; PTX emitted.
+  softmax sm_80: spill_stores=0B spill_loads=0B
+  softmax sm_89: spill_stores=0B spill_loads=0B
+  softmax sm_90: spill_stores=0B spill_loads=0B
+  OK softmax: 0 spill stores / 0 spill loads on sm_80/sm_89/sm_90
+  [parsed] registers=31 smem=1024B spill_stores=0B spill_loads=0B stack=0B cmem0=392B
+  [parsed] registers=34 smem=1024B spill_stores=0B spill_loads=0B stack=0B cmem0=392B
+  [parsed] registers=31 smem=1024B spill_stores=0B spill_loads=0B stack=0B cmem0=0B
+OK: compiled fused_rmsnorm_matmul for sm_80, sm_89, sm_90; PTX emitted.
+  fused_rmsnorm_matmul sm_80: spill_stores=0B spill_loads=0B
+  fused_rmsnorm_matmul sm_89: spill_stores=0B spill_loads=0B
+  fused_rmsnorm_matmul sm_90: spill_stores=0B spill_loads=0B
+  OK fused_rmsnorm_matmul: 0 spill stores / 0 spill loads on sm_80/sm_89/sm_90
+  [parsed] registers=31 smem=1024B spill_stores=0B spill_loads=0B stack=0B cmem0=396B
+  [parsed] registers=34 smem=1024B spill_stores=0B spill_loads=0B stack=0B cmem0=396B
+  [parsed] registers=32 smem=1024B spill_stores=0B spill_loads=0B stack=0B cmem0=0B
+OK: compiled fused_matmul_bias_gelu for sm_80, sm_89, sm_90; PTX emitted.
+  fused_matmul_bias_gelu sm_80: spill_stores=0B spill_loads=0B
+  fused_matmul_bias_gelu sm_89: spill_stores=0B spill_loads=0B
+  fused_matmul_bias_gelu sm_90: spill_stores=0B spill_loads=0B
+  OK fused_matmul_bias_gelu: 0 spill stores / 0 spill loads on sm_80/sm_89/sm_90
+=== local runtime probe (no NVIDIA GPU on this machine) ===
+-- cuda_run_sm_89 dev --
+[polykernel-cuda] dev: no CUDA device (count=0, CUDA driver version is insufficient for CUDA runtime version)
+dev exit=1
+-- cuda_run_sm_89 neg --
+[polykernel-cuda] neg: cudaMalloc failed: CUDA driver version is insufficient for CUDA runtime version
+neg exit=1
+-- cuda_run_sm_89 bogus --
+usage: cuda_run <op> ...
+  unknown op
+bogus exit=2
