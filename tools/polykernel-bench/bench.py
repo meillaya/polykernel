@@ -7,28 +7,33 @@ max_rel_err <= ceiling, pcc >= 0.99). Failing variants are discarded + logged wi
 validated:false and are NEVER "best". The gate, not the timing, decides the winner.
 
 Pipeline for `--autotune --op <op> --shape M,N,K --dtype bf16 --backend hip
---arch gfx1101`:
+--arch gfx1101` (or `--backend cuda --arch sm_89`):
 
-  1. Build the C++ bench driver (lib/Autotune/Benchmark.cpp) with hipcc for the
-     target arch - exactly as tests/kernels/test_hip_run.py builds the Todo 20
-     hip_run launcher - linking the generated matmul-family kernels, the .npy
-     bridge, the HIP runtime, the Todo 24 ConfigSpace + TuningCache (via the
-     monolithic libLLVM), and a generated broken-kernel variant for the negative
-     path.
-  2. Enumerate a BOUNDED prefix of pruned variants from the Todo 24 ConfigSpace
+  1. Build the C++ bench driver (lib/Autotune/Benchmark.cpp) with hipcc
+     `--offload-arch=<arch>` or nvcc `-arch=<arch>` for the target arch -
+     exactly as tests/kernels/test_hip_run.py / test_cuda_run.py build their
+     launchers - linking the generated matmul-family kernels, the .npy bridge,
+     the HIP runtime (HIP build only; the CUDA build calls the CUDA runtime API
+     directly), the Todo 24 ConfigSpace + TuningCache (via the monolithic
+     libLLVM), and a generated broken-kernel variant for the negative path. The
+     driver lands at a per-backend path (polykernel-bench-driver-{hip,cuda}) so
+     both builds coexist.
+  2. Probe the backend device (`driver dev`); a no-device machine degrades with
+     a clear SKIPPED error instead of a mid-sweep allocation crash.
+  3. Enumerate a BOUNDED prefix of pruned variants from the Todo 24 ConfigSpace
      (the driver's `enumerate` mode calls ConfigSpace::Enumerate(); we do NOT
      compile all ~141 configs). Each candidate config is REALIZED by the available
      kernel implementation for the op (the scalar/fused kernel today; the WMMA
      kernel of Todo 22 becomes a second realization when present) - so every
      candidate runs the same correct kernel and the correctness gate is the real
-     discriminator while per-config timings are a genuine (if near-tied) HIP-event
-     measurement.
-  3. For EACH variant: run it once (driver `run`) -> compare the GPU output to the
+     discriminator while per-config timings are a genuine (if near-tied)
+     backend-event measurement.
+  4. For EACH variant: run it once (driver `run`) -> compare the GPU output to the
      NumPy golden (tests/golden) -> compute cosine/max_rel_err/pcc -> driver `time`
      evaluates the C++ gate on those metrics and ONLY times the variant if it
      passes (golden BEFORE timing, enforced inside C++). A failed gate logs a
      rejection and records validated:false with NO time.
-  4. Select the FASTEST VALIDATED variant (smallest measured median among those
+  5. Select the FASTEST VALIDATED variant (smallest measured median among those
      that passed; an unvalidated variant is never selected) and write it to the
      Todo 24 TuningCache via the driver's `write-cache` mode (SerializeTuningCache;
      contract H is reused, never redefined) with validated:true.
@@ -40,15 +45,18 @@ a variant that would otherwise WIN a timing-only race.
 Usage:
     polykernel-bench --autotune --op fused_matmul_bias_gelu \
         --shape 2048,4096,11008 --dtype bf16 --backend hip --arch gfx1101
+    polykernel-bench --autotune --op fused_matmul_bias_gelu \
+        --shape 2048,4096,11008 --dtype bf16 --backend cuda --arch sm_89
 """
 
 from __future__ import annotations
 
 # allow: SIZE_OK - one cohesive CLI orchestrator for the correctness-gated bench:
-# driver build + ConfigSpace enumeration + per-op .npy I/O + golden gate + HIP-event
-# timing + contract-H cache write. The bulk is the embedded broken-variant CUDA
-# template (broken_kernels_source) and the closed 3-op I/O dispatch; the deliverable
-# constrains this tool to a single file (tools/polykernel-bench/bench.py).
+# driver build + ConfigSpace enumeration + per-op .npy I/O + golden gate +
+# backend-event timing + contract-H cache write. The bulk is the embedded
+# broken-variant CUDA template (broken_kernels_source) and the closed 3-op I/O
+# dispatch; the deliverable constrains this tool to a single file
+# (tools/polykernel-bench/bench.py).
 import argparse
 import shutil
 import subprocess
@@ -70,8 +78,13 @@ from metrics import cosine, max_rel_err, pcc  # noqa: E402
 _BF16 = ml_dtypes.bfloat16
 SEED = 0xC0FFEE  # fixed seed -> identical tensors every run (defeats flake).
 _DRIVER_DIR = _PROJECT_ROOT / "build" / "polykernel-bench"
-_DRIVER = _DRIVER_DIR / "polykernel-bench-driver"
 _BROKEN_CU = _DRIVER_DIR / "broken_kernels.cu"
+
+
+def driver_path(backend: str) -> Path:
+    """Per-backend driver binary, so a hip build and a cuda build coexist without
+    clobbering each other's cached binary."""
+    return _DRIVER_DIR / f"polykernel-bench-driver-{backend}"
 
 # The matmul-family ops the autotuner tunes (the ConfigSpace is a matmul tile
 # space). The acceptance op fused_matmul_bias_gelu is one of these.
@@ -93,7 +106,8 @@ def find_tool(name: str) -> Path:
     if path is None:
         raise SystemExit(
             f"error: '{name}' not found on PATH. Run inside `nix develop` "
-            f"(rocmPackages.clr provides hipcc; llvmPackages_21 provides llvm-config)."
+            f"(rocmPackages.clr provides hipcc; cuda_nvcc provides nvcc; "
+            f"llvmPackages_21 provides llvm-config)."
         )
     return Path(path)
 
@@ -138,15 +152,30 @@ void launch_fused_matmul_bias_gelu_broken(const pk_bf16 *, const pk_bf16 *,
 '''
 
 
-def build_driver(arch: str, timeout: int, rebuild: bool = False) -> Path:
-    """Compile the bench driver with hipcc for `arch` (once; cached). Mirrors the
-    Todo 20 hip_run build: hipcc -DPOLYKERNEL_HIP --offload-arch + the generated
-    kernels + the .npy bridge + HipRuntime, plus Benchmark.cpp (the gate + HIP
-    timer + driver), ConfigSpace.cpp (the enumerator) and TuningCache.cpp (the
-    contract-H serializer, resolved against the monolithic libLLVM)."""
-    if _DRIVER.exists() and not rebuild:
-        return _DRIVER
-    hipcc = find_tool("hipcc")
+def build_driver(arch: str, timeout: int, rebuild: bool = False,
+                 backend: str = "hip") -> Path:
+    """Compile the bench driver for `backend` (hipcc or nvcc) for `arch` (once;
+    cached per backend).
+
+    HIP: one hipcc command (Todo 20 pattern) - hipcc's clang handles every TU
+    including TuningCache.cpp's LLVM headers.
+
+    CUDA: a three-phase build, because nvcc's bundled host compiler (gcc-13.4)
+    cannot compile LLVM 21's headers and nvcc's `-x` flag applies to EVERY input:
+      1. the pure-host sources (ConfigSpace/TuningCache/npy_io; backend-agnostic)
+         compile with the project's clang++ into .o;
+      2. the kernel_common.h-including sources (Benchmark.cpp + the generated /
+         broken kernels) compile with nvcc -x cu (device intrinsics such as
+         __syncthreads are only declared for CUDA TUs; the -include cstdio
+         force-include covers kernel_common.h's PK_CHECK's un-included <cstdio>);
+      3. nvcc links all objects against the monolithic libLLVM.
+    The driver shim calls the CUDA runtime API directly, so HipRuntime.cpp is NOT
+    in the CUDA source set (it is only for the HIP build)."""
+    out = driver_path(backend)
+    if out.exists() and not rebuild:
+        return out
+    compiler = find_tool("hipcc" if backend == "hip" else "nvcc")
+    host_cc = find_tool("clang++")
     llvm_config = find_tool("llvm-config")
     _DRIVER_DIR.mkdir(parents=True, exist_ok=True)
     _BROKEN_CU.write_text(broken_kernels_source())
@@ -156,31 +185,61 @@ def build_driver(arch: str, timeout: int, rebuild: bool = False) -> Path:
     llvm_lib = subprocess.run([str(llvm_config), "--libdir"],
                               capture_output=True, text=True, check=True).stdout.strip()
 
-    sources = [
-        "lib/Autotune/Benchmark.cpp",
-        "lib/Autotune/ConfigSpace.cpp",
-        "lib/Autotune/TuningCache.cpp",
-        "lib/Runtime/HipRuntime.cpp",
-        "kernels/cpu/npy_io.cpp",
-        *(f"kernels/generated/{op}.cu" for op in MATMUL_FAMILY),
-        str(_BROKEN_CU),
-    ]
-    cmd = [
-        str(hipcc), f"--offload-arch={arch}", "-std=c++20",
-        "-DPOLYKERNEL_HIP", "-DPOLYKERNEL_BENCH_DRIVER", "-O2",
-        "-Ikernels/template", "-Iinclude", "-Ikernels/cpu", f"-I{llvm_inc}",
-        *sources, f"-L{llvm_lib}", "-lLLVM-21",
-        "-o", str(_DRIVER),
-    ]
-    print(f"[bench] building driver: {' '.join(cmd)}", file=sys.stderr)
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout,
-                          cwd=_PROJECT_ROOT)
-    if proc.returncode != 0:
-        raise SystemExit(
-            f"error: hipcc failed to build the bench driver (exit {proc.returncode}):\n"
-            f"{proc.stderr}"
-        )
-    return _DRIVER
+    common_incs = ["-Ikernels/template", "-Iinclude", "-Ikernels/cpu", f"-I{llvm_inc}"]
+
+    if backend == "hip":
+        sources = [
+            "lib/Autotune/Benchmark.cpp",
+            "lib/Autotune/ConfigSpace.cpp",
+            "lib/Autotune/TuningCache.cpp",
+            "lib/Runtime/HipRuntime.cpp",
+            "kernels/cpu/npy_io.cpp",
+            *(f"kernels/generated/{op}.cu" for op in MATMUL_FAMILY),
+            str(_BROKEN_CU),
+        ]
+        cmd = [str(compiler), f"--offload-arch={arch}", "-std=c++20",
+               "-DPOLYKERNEL_HIP", "-DPOLYKERNEL_BENCH_DRIVER", "-O2", *common_incs,
+               *sources, f"-L{llvm_lib}", "-lLLVM-21", "-o", str(out)]
+        print(f"[bench] building driver: {' '.join(cmd)}", file=sys.stderr)
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout,
+                              cwd=_PROJECT_ROOT)
+        if proc.returncode != 0:
+            raise SystemExit(
+                f"error: hipcc failed to build the bench driver "
+                f"(exit {proc.returncode}):\n{proc.stderr}")
+        return out
+
+    obj_dir = _DRIVER_DIR / "cuda_obj"
+    obj_dir.mkdir(parents=True, exist_ok=True)
+
+    def run_or_raise(cmd: list[str], what: str) -> None:
+        print(f"[bench] {what}: {' '.join(cmd)}", file=sys.stderr)
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout,
+                              cwd=_PROJECT_ROOT)
+        if proc.returncode != 0:
+            raise SystemExit(
+                f"error: {what} failed (exit {proc.returncode}):\n{proc.stderr}")
+
+    objects: list[str] = []
+    for src in ["lib/Autotune/ConfigSpace.cpp", "lib/Autotune/TuningCache.cpp",
+                "kernels/cpu/npy_io.cpp"]:
+        obj = obj_dir / f"{Path(src).name}.o"
+        run_or_raise([str(host_cc), "-std=c++20", "-O2", "-Iinclude", "-Ikernels/cpu",
+                      f"-I{llvm_inc}", "-c", src, "-o", str(obj)], "host compile")
+        objects.append(str(obj))
+    cu_sources = ["lib/Autotune/Benchmark.cpp",
+                  *(f"kernels/generated/{op}.cu" for op in MATMUL_FAMILY),
+                  str(_BROKEN_CU)]
+    for src in cu_sources:
+        obj = obj_dir / f"{Path(src).stem}.cu.o"
+        run_or_raise([str(compiler), "-x", "cu", f"-arch={arch}", "-DPOLYKERNEL_CUDA",
+                      "-include", "cstdio", "-std=c++20", "-DPOLYKERNEL_BENCH_DRIVER",
+                      "-O2", *common_incs, "-c", src, "-o", str(obj)],
+                     "cuda compile")
+        objects.append(str(obj))
+    run_or_raise([str(compiler), *objects, f"-L{llvm_lib}", "-lLLVM-21",
+                  "-o", str(out)], "link")
+    return out
 
 
 def enumerate_configs(driver: Path, limit: int) -> list[tuple[int, ...]]:
@@ -195,6 +254,23 @@ def enumerate_configs(driver: Path, limit: int) -> list[tuple[int, ...]]:
             continue
         configs.append(tuple(int(x) for x in line.split()))
     return configs
+
+
+def probe_device(driver: Path, backend: str) -> None:
+    """No-device SKIPPED gate: `driver dev` exits 0 iff a usable backend device
+    exists. On a no-device machine the sweep degrades with a clear SKIPPED error
+    BEFORE any enumerate/run/time work (never a mid-sweep allocation crash, never
+    a wrong result - the gate, not the timing, still decides on a device)."""
+    proc = subprocess.run([str(driver), "dev"], capture_output=True, text=True,
+                          timeout=60)
+    if proc.returncode != 0:
+        log = (proc.stdout + proc.stderr).strip()
+        # Keep the phrase "no device" (tests/autotune/conftest.py's skip detector
+        # matches the substring to degrade to SKIPPED instead of FAILED).
+        raise SystemExit(
+            f"SKIPPED: no device on this machine (backend={backend}) - the "
+            f"correctness-gated sweep cannot run.\n{log}"
+        )
 
 
 def make_inputs(op: str, shape: tuple[int, int, int]) -> tuple[list[np.ndarray], np.ndarray]:
@@ -242,8 +318,8 @@ class Variant:
 @dataclass(frozen=True)
 class VariantOutcome:
     """A variant's gated result: golden correctness, whether it PASSED the gate
-    (validated), and - only if validated - its HIP-event min/median time. time is
-    None precisely when the gate rejected it (it was never timed)."""
+    (validated), and - only if validated - its backend-event min/median time.
+    time is None precisely when the gate rejected it (it was never timed)."""
     variant: Variant
     corr: tuple[float, float, float]
     validated: bool
@@ -319,7 +395,7 @@ def main() -> None:
     ap.add_argument("--op", default="fused_matmul_bias_gelu", choices=MATMUL_FAMILY)
     ap.add_argument("--shape", default="2048,4096,11008", help="GEMM shape M,N,K")
     ap.add_argument("--dtype", default="bf16")
-    ap.add_argument("--backend", default="hip", choices=["hip"])
+    ap.add_argument("--backend", default="hip", choices=["hip", "cuda"])
     ap.add_argument("--arch", default="gfx1101")
     ap.add_argument("--variants", type=int, default=4, help="bounded prefix of pruned ConfigSpace configs to race")
     ap.add_argument("--warmup", type=int, default=3)
@@ -340,7 +416,8 @@ def main() -> None:
     m, n, k = args.shape
     ceiling = rel_ceiling(args.op, k, args.rel_ceiling)
 
-    driver = build_driver(args.arch, args.timeout, args.rebuild)
+    driver = build_driver(args.arch, args.timeout, args.rebuild, args.backend)
+    probe_device(driver, args.backend)
     configs = enumerate_configs(driver, args.variants)
     print(f"[bench] op={args.op} shape=M={m},N={n},K={k} dtype={args.dtype} "
           f"arch={args.arch} rel_ceiling={ceiling:.0e}")

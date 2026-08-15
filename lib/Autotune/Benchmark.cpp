@@ -7,8 +7,9 @@
 //
 // allow: SIZE_OK - this translation unit deliberately bundles three cohesive
 // pieces of ONE benchmarking core: (1) the GPU-free correctness-gate + selection
-// logic (the gtest-tested source of truth), (2) the HIP-event timer, and (3) the
-// hipcc-built launch+timing driver. The driver is a per-op .npy launch bridge -
+// logic (the gtest-tested source of truth), (2) the backend-event timer
+// (HipEventTimer / CudaEventTimer twins, Layer 2), and (3) the hipcc- or
+// nvcc-built launch+timing driver. The driver is a per-op .npy launch bridge -
 // the same inherently single-responsibility shape as the accepted Todo 20
 // lib/Runtime/hip_run_main.cpp (337 LOC) - and is compiled ONLY under
 // -DPOLYKERNEL_BENCH_DRIVER (so the GPU-free autotuner lib builds just (1)+(2)).
@@ -53,7 +54,9 @@ SelectBestValidated(const std::vector<VariantResult> &results) {
 } // namespace polykernel::autotune
 
 //===----------------------------------------------------------------------===//
-// Layer 2: HIP-event timing + launch driver (only under -DPOLYKERNEL_HIP).
+// Layer 2: backend-event timing + launch driver (only under -DPOLYKERNEL_HIP or
+// -DPOLYKERNEL_CUDA). The HIP + CUDA twins are mutually exclusive via the same
+// backend macro the generated kernels use.
 //===----------------------------------------------------------------------===//
 
 #ifdef POLYKERNEL_HIP
@@ -96,18 +99,74 @@ float HipEventTimer::ElapsedMs() {
 
 #endif // POLYKERNEL_HIP
 
+#ifdef POLYKERNEL_CUDA
+
+#include <cstdio>
+#include <cstdlib>
+
+// Abort-on-failure CUDA runtime check (the CUDA twin of PK_HIP_CHECK). The
+// portable kernel_common.h PK_CHECK only prints, so the host timer + driver
+// need their own abort-style guard - exactly like todo 7's cuda_run_main.cpp.
+#define PK_CUDA_CHECK(call)                                                     \
+  do {                                                                          \
+    cudaError_t pk_cuda_err__ = (call);                                         \
+    if (pk_cuda_err__ != cudaSuccess) {                                         \
+      std::fprintf(stderr, "[polykernel-cuda] %s failed at %s:%d: %s\n", #call, \
+                   __FILE__, __LINE__, cudaGetErrorString(pk_cuda_err__));      \
+      std::exit(EXIT_FAILURE);                                                  \
+    }                                                                           \
+  } while (0)
+
+namespace polykernel::autotune {
+
+CudaEventTimer::CudaEventTimer() {
+  PK_CUDA_CHECK(cudaEventCreate(&start_));
+  PK_CUDA_CHECK(cudaEventCreate(&stop_));
+}
+
+CudaEventTimer::~CudaEventTimer() {
+  if (start_)
+    (void)cudaEventDestroy(start_);
+  if (stop_)
+    (void)cudaEventDestroy(stop_);
+}
+
+CudaEventTimer::CudaEventTimer(CudaEventTimer &&o) noexcept
+    : start_(o.start_), stop_(o.stop_) {
+  o.start_ = nullptr;
+  o.stop_ = nullptr;
+}
+
+void CudaEventTimer::Start(cudaStream_t s) {
+  PK_CUDA_CHECK(cudaEventRecord(start_, s));
+}
+void CudaEventTimer::Stop(cudaStream_t s) {
+  PK_CUDA_CHECK(cudaEventRecord(stop_, s));
+}
+
+float CudaEventTimer::ElapsedMs() {
+  PK_CUDA_CHECK(cudaEventSynchronize(stop_));
+  float ms = 0.0F;
+  PK_CUDA_CHECK(cudaEventElapsedTime(&ms, start_, stop_));
+  return ms;
+}
+
+} // namespace polykernel::autotune
+
+#endif // POLYKERNEL_CUDA
+
 //===----------------------------------------------------------------------===//
 // Layer 3: the polykernel-bench host driver (only under -DPOLYKERNEL_BENCH_DRIVER,
-// which the Python CLI compiles with hipcc together with the generated kernels +
-// the .npy bridge + HipRuntime). Modes:
+// which the Python CLI compiles with hipcc or nvcc together with the generated
+// kernels + the .npy bridge + (HIP only) HipRuntime). Modes:
 //   run        <op> <variant> <inputs...> --out OUT.npy
 //              launch the variant ONCE, sync, write the bf16 .npy output (the
 //              Python side compares it to the NumPy golden for correctness).
 //   time       <op> <variant> <inputs...> --cosine C --rel R --pcc P
 //              --ceiling X --warmup W --iters N
 //              FIRST evaluate the C++ gate on the caller-supplied metrics; ONLY
-//              if it passes, warm up + time N launches with HIP events and print
-//              "VALIDATED min_ms=.. median_ms=..". A failed gate prints
+//              if it passes, warm up + time N launches with backend events and
+//              print "VALIDATED min_ms=.. median_ms=..". A failed gate prints
 //              "REJECTED .." and exits non-zero WITHOUT timing (golden before
 //              timing, enforced here in C++).
 //   write-cache --gpu G --op O --M M --N N --K K --dtype D --config "bm bn bk nw
@@ -115,11 +174,14 @@ float HipEventTimer::ElapsedMs() {
 //              --validated {true|false} --out FILE
 //              build a contract-H CacheEntry and SerializeTuningCache it to FILE
 //              (reusing the Todo 24 serializer; the schema is NOT redefined).
+//   dev        report the backend's device count; exit 1 with a clear message on
+//              no device (the bench probes this BEFORE any sweep work, so a
+//              no-device machine SKIPs cleanly instead of failing mid-sweep).
 //===----------------------------------------------------------------------===//
 
 #ifdef POLYKERNEL_BENCH_DRIVER
 
-#include "kernel_common.h" // pk_bf16, pk_stream_t (-DPOLYKERNEL_HIP)
+#include "kernel_common.h" // pk_bf16, pk_stream_t (one of -DPOLYKERNEL_HIP/-DPOLYKERNEL_CUDA)
 #include "npy_io.h"
 
 #include <algorithm>
@@ -132,15 +194,53 @@ float HipEventTimer::ElapsedMs() {
 #include <vector>
 
 namespace cpu = polykernel::cpu;
-namespace runtime = polykernel::runtime;
 using polykernel::autotune::CacheEntry;
 using polykernel::autotune::Config;
 using polykernel::autotune::Correctness;
-using polykernel::autotune::HipEventTimer;
 using polykernel::autotune::PassesCorrectnessGate;
 using polykernel::autotune::SerializeTuningCache;
 using polykernel::autotune::Shape;
 using polykernel::autotune::TuningCache;
+
+// The driver's timing primitive: CudaEventTimer under POLYKERNEL_CUDA,
+// HipEventTimer otherwise (Layer 2's HIP block is excluded under CUDA, so the
+// plain `using ...HipEventTimer` would not compile there).
+#ifdef POLYKERNEL_CUDA
+using Timer = polykernel::autotune::CudaEventTimer;
+#else
+using Timer = polykernel::autotune::HipEventTimer;
+#endif
+
+// Device-runtime shim: the driver's alloc/copy/sync/free surface, selected by
+// the same backend macro as the kernels. HIP -> the checked HipRuntime layer
+// (lib/Runtime/HipRuntime.cpp); CUDA -> the raw CUDA runtime API through the
+// abort-on-failure PK_CUDA_CHECK. Every Hip* call in the driver routes through
+// here, so -DPOLYKERNEL_CUDA -DPOLYKERNEL_BENCH_DRIVER compiles the same TU.
+#ifdef POLYKERNEL_CUDA
+inline void DeviceMalloc(void **p, std::size_t bytes) {
+  PK_CUDA_CHECK(cudaMalloc(p, bytes));
+}
+inline void DeviceFree(void *p) { PK_CUDA_CHECK(cudaFree(p)); }
+inline void DeviceCopyH2D(void *dst, const void *src, std::size_t bytes) {
+  PK_CUDA_CHECK(cudaMemcpy(dst, src, bytes, cudaMemcpyHostToDevice));
+}
+inline void DeviceCopyD2H(void *dst, const void *src, std::size_t bytes) {
+  PK_CUDA_CHECK(cudaMemcpy(dst, src, bytes, cudaMemcpyDeviceToHost));
+}
+inline void DeviceSync() { PK_CUDA_CHECK(cudaDeviceSynchronize()); }
+#else
+inline void DeviceMalloc(void **p, std::size_t bytes) {
+  polykernel::runtime::HipMalloc(p, bytes);
+}
+inline void DeviceFree(void *p) { polykernel::runtime::HipFree(p); }
+inline void DeviceCopyH2D(void *dst, const void *src, std::size_t bytes) {
+  polykernel::runtime::HipCopyH2D(dst, src, bytes);
+}
+inline void DeviceCopyD2H(void *dst, const void *src, std::size_t bytes) {
+  polykernel::runtime::HipCopyD2H(dst, src, bytes);
+}
+inline void DeviceSync() { polykernel::runtime::HipSync(); }
+#endif
 
 static_assert(sizeof(pk_bf16) == 2, "pk_bf16 must be 2 bytes (bf16)");
 
@@ -167,7 +267,7 @@ extern void launch_fused_matmul_bias_gelu_broken(const pk_bf16 *, const pk_bf16 
 namespace {
 
 int usage(const char *msg) {
-  std::fprintf(stderr, "usage: polykernel-bench-driver <run|time|enumerate|write-cache> ...\n"
+  std::fprintf(stderr, "usage: polykernel-bench-driver <run|time|enumerate|write-cache|dev> ...\n"
                        "  %s\n", msg);
   return 2;
 }
@@ -179,17 +279,17 @@ struct DevBuf {
   DevBuf() = default; ///< null buffer (no allocation).
   explicit DevBuf(std::size_t bytes) {
     if (bytes)
-      runtime::HipMalloc(&p, bytes);
+      DeviceMalloc(&p, bytes);
   }
   ~DevBuf() {
     if (p)
-      runtime::HipFree(p);
+      DeviceFree(p);
   }
   DevBuf(DevBuf &&o) noexcept : p(o.p) { o.p = nullptr; }
   DevBuf &operator=(DevBuf &&o) noexcept {
     if (this != &o) {
       if (p)
-        runtime::HipFree(p);
+        DeviceFree(p);
       p = o.p;
       o.p = nullptr;
     }
@@ -203,7 +303,7 @@ struct DevBuf {
 /// Upload a loaded .npy tensor's bf16 payload host->device.
 DevBuf upload(const cpu::NpyArray &arr) {
   DevBuf d(arr.data.size() * sizeof(uint16_t));
-  runtime::HipCopyH2D(d.p, arr.data.data(), arr.data.size() * sizeof(uint16_t));
+  DeviceCopyH2D(d.p, arr.data.data(), arr.data.size() * sizeof(uint16_t));
   return d;
 }
 
@@ -322,7 +422,7 @@ void download_write(const DevBuf &d, const std::vector<int64_t> &shape,
   for (int64_t x : shape)
     n *= x;
   std::vector<uint16_t> host(static_cast<std::size_t>(n));
-  runtime::HipCopyD2H(host.data(), d.p, host.size() * sizeof(uint16_t));
+  DeviceCopyD2H(host.data(), d.p, host.size() * sizeof(uint16_t));
   cpu::write_npy_bf16(path, shape, host);
 }
 
@@ -368,7 +468,7 @@ int run_run(int argc, char **argv) {
     return usage("run: --out OUT.npy is required");
   OpInstance io = setup_op(op, variant, collect_inputs(argc, argv, 4));
   io.launch(nullptr);
-  runtime::HipSync();
+  DeviceSync();
   download_write(io.out, io.out_shape, out);
   return 0;
 }
@@ -406,13 +506,13 @@ int run_time(int argc, char **argv) {
 
   for (int i = 0; i < warmup; ++i) {
     io.launch(nullptr);
-    runtime::HipSync();
+    DeviceSync();
   }
 
   std::vector<float> times;
   times.reserve(iters);
   for (int i = 0; i < iters; ++i) {
-    HipEventTimer t;
+    Timer t;
     t.Start(nullptr);
     io.launch(nullptr);
     t.Stop(nullptr);
@@ -487,11 +587,40 @@ int run_write_cache(int argc, char **argv) {
   return 0;
 }
 
+int run_dev() {
+  // dev : report the backend's device count; exit 1 with a clear message on no
+  // device. The bench probes this BEFORE any sweep work, so a no-device machine
+  // SKIPs cleanly (never a wrong result / never a mid-sweep cudaMalloc crash).
+#ifdef POLYKERNEL_CUDA
+  int ndev = 0;
+  cudaError_t err = cudaGetDeviceCount(&ndev);
+  if (err != cudaSuccess || ndev == 0) {
+    std::fprintf(stderr,
+                 "[polykernel-bench] dev: no CUDA device (count=%d, %s)\n",
+                 ndev, cudaGetErrorString(err));
+    return 1;
+  }
+  std::printf("DEVICE_COUNT %d\n", ndev);
+  return 0;
+#else
+  int ndev = 0;
+  hipError_t err = hipGetDeviceCount(&ndev);
+  if (err != hipSuccess || ndev == 0) {
+    std::fprintf(stderr,
+                 "[polykernel-bench] dev: no HIP device (count=%d, %s)\n",
+                 ndev, polykernel::runtime::HipErrorString(err));
+    return 1;
+  }
+  std::printf("DEVICE_COUNT %d\n", ndev);
+  return 0;
+#endif
+}
+
 } // namespace
 
 int main(int argc, char **argv) {
   if (argc < 2)
-    return usage("<run|time|write-cache> ...");
+    return usage("<run|time|enumerate|write-cache|dev> ...");
   const std::string mode = argv[1];
   try {
     if (mode == "run")
@@ -500,6 +629,8 @@ int main(int argc, char **argv) {
       return run_time(argc, argv);
     if (mode == "enumerate")
       return run_enumerate(argc, argv);
+    if (mode == "dev")
+      return run_dev();
     if (mode == "write-cache")
       return run_write_cache(argc, argv);
   } catch (const std::exception &e) {

@@ -1,0 +1,60 @@
+############################################################
+# pass2_bench_cuda_gate_neg.log - CUDA gate negative QA     
+# Todo 13: CudaEventTimer + nvcc driver build               
+# Pod gate: SKIPPED (pod rejects private_key.pem) - the     
+# on-pod injected-broken REJECTION is deferred to todo 15.  
+############################################################
+
+=== 0. Precondition: the CUDA driver exists (built by bench.py) ===
+-rwxr-xr-x 1 mei mei 1179704 Aug 15 10:10 build/polykernel-bench/polykernel-bench-driver-cuda
+build/polykernel-bench/polykernel-bench-driver-cuda: ELF 64-bit LSB pie executable, x86-64, version 
+
+=== 1. Existing gtest gate (benchmark_test.cpp) - the SAME
+===    PassesCorrectnessGate the CUDA driver calls ================
+Running main() from /build/source/googletest/src/gtest_main.cc
+Note: Google Test filter = benchmark.Gate*:benchmark.NeverSelectsFasterButUnvalidated
+[==========] Running 7 tests from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 7 tests from benchmark
+[ RUN      ] benchmark.GatePassesCorrectVariant
+[       OK ] benchmark.GatePassesCorrectVariant (0 ms)
+[ RUN      ] benchmark.GateRejectsLowCosine
+[       OK ] benchmark.GateRejectsLowCosine (0 ms)
+[ RUN      ] benchmark.GateRejectsLowPcc
+[       OK ] benchmark.GateRejectsLowPcc (0 ms)
+[ RUN      ] benchmark.GateRejectsHighRelErrStrict
+[       OK ] benchmark.GateRejectsHighRelErrStrict (0 ms)
+[ RUN      ] benchmark.GateRejectsScaledWrongViaRelErr
+[       OK ] benchmark.GateRejectsScaledWrongViaRelErr (0 ms)
+[ RUN      ] benchmark.GateLargeKCalibratedCeiling
+[       OK ] benchmark.GateLargeKCalibratedCeiling (0 ms)
+[ RUN      ] benchmark.NeverSelectsFasterButUnvalidated
+[       OK ] benchmark.NeverSelectsFasterButUnvalidated (0 ms)
+[----------] 7 tests from benchmark (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 7 tests from 1 test suite ran. (0 ms total)
+[  PASSED  ] 7 tests.
+gtest_exit=0
+
+=== 2. CUDA driver 'time' with the INJECTED-BROKEN variant's metrics ===
+===    (constant-fill kernel => cosine=0.564, max_rel_err=1.0, pcc=0.0). ===
+===    Gate runs BEFORE any device work => GPU-free REJECT, exit 3,     ===
+===    'never best' - the gate, not the timing, decides.                ===
+REJECTED fused_matmul_bias_gelu/broken: correctness gate FAILED (cosine=0.564000 max_rel_err=1.000000e+00 pcc=0.000000 ceiling=inf) - excluded, NOT timed, never best
+time_broken_exit=3
+
+=== 3. Positive control: the SAME driver accepts a correct variant ===
+===    (gate passes, so it proceeds to the device path; on this      ===
+===    no-device machine the failure is then the device, not the gate) ===
+wrote /tmp/opencode/neg_in{0,1}.npy (4x4 bf16)
+[polykernel-cuda] cudaMalloc(p, bytes) failed at lib/Autotune/Benchmark.cpp:221: CUDA driver version is insufficient for CUDA runtime version
+time_good_exit=1 (gate PASSED -> device path -> cudaMalloc fails only because
+this machine has no CUDA device; on the pod this path times the variant)
+
+=== VERDICT ===
+The CUDA driver rejects the fast-but-wrong variant (exit 3, REJECTED,
+'excluded, NOT timed, never best') with cosine=0.564/pcc=0.0 BEFORE any
+timing - identical to the HIP path. The gtest above locks the same gate
+function. The on-pod injected-broken rejection (real kernel run vs golden)
+is deferred to todo 15 (pod SKIPPED).

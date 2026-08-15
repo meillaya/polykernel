@@ -22,10 +22,13 @@
 //     the contract-H `Correctness` metrics type from TuningCache.h) and builds
 //     under the project's plain clang++ with NO HIP on the include path.
 //
-//  2. HIP-event timing + a small host driver (compiled ONLY under
-//     -DPOLYKERNEL_HIP; the driver main ONLY under -DPOLYKERNEL_BENCH_DRIVER):
-//       - HipEventTimer: RAII over hipEventCreate / hipEventRecord /
-//         hipEventSynchronize / hipEventElapsedTime / hipEventDestroy.
+//  2. Backend-event timing + a small host driver (compiled ONLY under
+//     -DPOLYKERNEL_HIP or -DPOLYKERNEL_CUDA; the driver main ONLY under
+//     -DPOLYKERNEL_BENCH_DRIVER):
+//       - HipEventTimer / CudaEventTimer: RAII over the backend's event-create /
+//         record / synchronize / elapsed-time / destroy API (hipEvent* /
+//         cudaEvent*), the latter the CUDA twin selected by the driver's `Timer`
+//         alias under POLYKERNEL_CUDA.
 //       - the driver main (Benchmark.cpp) reads bf16 .npy inputs, runs a named
 //         kernel variant, and in `time` mode FIRST evaluates the C++ gate on the
 //         caller-supplied correctness metrics and ONLY times the variant if it
@@ -33,12 +36,15 @@
 //         by convention in the Python orchestrator.
 //     The polykernel-bench Python CLI (tools/polykernel-bench/bench.py) compiles
 //     this driver with hipcc (exactly as tests/kernels/test_hip_run.py builds the
-//     Todo 20 hip_run launcher) and drives it through the .npy bridge; the Python
-//     side owns the NumPy golden + the correctness-metric computation, the C++
-//     side owns the gate + the HIP-event timing + the contract-H cache write.
+//     Todo 20 hip_run launcher) or nvcc (--backend cuda, dropping the HIP layer's
+//     HipRuntime.cpp and replacing its calls with the CUDA runtime API) and
+//     drives it through the .npy bridge; the Python side owns the NumPy golden +
+//     the correctness-metric computation, the C++ side owns the gate + the
+//     backend-event timing + the contract-H cache write.
 //
-// The HIP includes are fully preprocessed out unless POLYKERNEL_HIP is defined,
-// so the GPU-free autotuner lib + its gtest never need the ROCm headers.
+// The HIP/CUDA includes are fully preprocessed out unless POLYKERNEL_HIP or
+// POLYKERNEL_CUDA is defined, so the GPU-free autotuner lib + its gtest never
+// need the ROCm/CUDA headers.
 //
 //===----------------------------------------------------------------------===//
 
@@ -59,6 +65,12 @@
 // autotuner lib + its gtest never need the ROCm headers on the include path.
 #ifdef POLYKERNEL_HIP
 #include <hip/hip_runtime_api.h>
+#endif
+
+// The CUDA host API header is the twin include for CudaEventTimer; same rule
+// (file scope, preprocessed out unless POLYKERNEL_CUDA is defined).
+#ifdef POLYKERNEL_CUDA
+#include <cuda_runtime_api.h>
 #endif
 
 namespace polykernel::autotune {
@@ -139,6 +151,35 @@ private:
 };
 
 #endif // POLYKERNEL_HIP
+
+#ifdef POLYKERNEL_CUDA
+
+/// RAII CUDA-event timer: cudaEventCreate on construction, cudaEventDestroy on
+/// destruction. Start/Stop record events on a stream; ElapsedMs synchronizes the
+/// stop event and returns cudaEventElapsedTime in milliseconds. The CUDA twin of
+/// HipEventTimer (same shape, same semantics), selected by the bench driver's
+/// `Timer` alias under POLYKERNEL_CUDA. Movable, not copyable.
+class CudaEventTimer {
+public:
+  CudaEventTimer();
+  ~CudaEventTimer();
+  CudaEventTimer(CudaEventTimer &&o) noexcept;
+  CudaEventTimer(const CudaEventTimer &) = delete;
+  CudaEventTimer &operator=(const CudaEventTimer &) = delete;
+
+  /// Record the start event on `s` (call immediately before the launch).
+  void Start(cudaStream_t s);
+  /// Record the stop event on `s` (call immediately after the launch).
+  void Stop(cudaStream_t s);
+  /// cudaEventSynchronize(stop) then cudaEventElapsedTime(start, stop) in ms.
+  [[nodiscard]] float ElapsedMs();
+
+private:
+  cudaEvent_t start_ = nullptr;
+  cudaEvent_t stop_ = nullptr;
+};
+
+#endif // POLYKERNEL_CUDA
 
 } // namespace polykernel::autotune
 
