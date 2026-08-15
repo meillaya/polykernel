@@ -1,0 +1,68 @@
+# pass2_devenv_yaml_neg.log
+# Todo 1 (Wave 1, polykernel-pass2) - NEGATIVE path
+# Purpose: document WHY flake.nix config remains the operative path for `nix develop`
+# while the devenv.yaml `nixpkgs:` block matters ONLY for the standalone CLI mode.
+#
+# Procedure:
+#   1. Backed up the happy-state devenv.yaml (with the full flat nixpkgs block) to
+#      /tmp/opencode/devenv.yaml.happy.bak.
+#   2. TEMPORARILY removed the `nixpkgs:` block entirely (devenv.yaml left with only
+#      the `inputs:` section), mirroring a repo that has never had the block.
+#   3. Tested BOTH entry paths:
+#      (a) `nix develop --impure --accept-flake-config`  -> still ENTERS the shell
+#          (flake.nix L31-32 already sets allowUnfree/cudaSupport on its own pkgs).
+#      (b) CLI-mode eval through the devenv-generated NIXPKGS_CONFIG
+#          (.devenv/nixpkgs-config-<hash>.nix) -> unfree license ERROR without the
+#          block; INSTANTIATES fine with the block's allowUnfree=true.
+#   4. Restored devenv.yaml from the backup; verified byte-identical (cmp).
+
+echo "=========================================================="
+echo "STEP (a)  nix develop WITHOUT the devenv.yaml nixpkgs block"
+echo "=========================================================="
+nix develop --impure --accept-flake-config -c bash -c 'echo "ENTERED_OK via flake.nix config (devenv.yaml block removed)" && which nvcc >/dev/null && echo nvcc-on-path'
+# -> EXIT 0. The flake.nix `pkgs` (allowUnfree=true/cudaSupport=true) is what nix develop
+#    instantiates; devenv.yaml is NOT read by the flake-integration path.
+
+echo
+echo "=========================================================="
+echo "STEP (b)  CLI-mode eval WITHOUT the block  (cfg = {})"
+echo "=========================================================="
+echo "# .devenv/nixpkgs-config-<hash>.nix (generated config the standalone CLI feeds"
+echo "# to NIXPKGS_CONFIG) with the block removed had cfg = {}:"
+cat .devenv/nixpkgs-config-c46eff8321b73149.nix | head -8
+echo
+echo "# CLI-mode instantiation of an unfree package (unrar) -> HARD ERROR:"
+NIXPKGS_CONFIG=/tmp/opencode/nixpkgs-config-noblock.nix \
+  nix eval --impure --expr "let pkgs = import $NIXPKGS_PATH { system = \"x86_64-linux\"; }; in pkgs.unrar.drvPath" 2>&1 | grep -E 'error: devenv|allow_unfree' 
+echo "CLI_EVAL_EXIT=$?"
+
+echo
+echo "=========================================================="
+echo "STEP (c)  CLI-mode eval WITH the block  (cfg = { allowUnfree = true; })"
+echo "=========================================================="
+echo "# Same CLI-mode instantiation with the block's allowUnfree=true:"
+NIXPKGS_CONFIG=/tmp/opencode/nixpkgs-config-block.nix \
+  nix eval --impure --expr "let pkgs = import $NIXPKGS_PATH { system = \"x86_64-linux\"; }; in pkgs.unrar.drvPath" 2>&1 | tail -2
+echo "CLI_EVAL_EXIT=$?"
+
+echo
+echo "=========================================================="
+echo "STEP (d)  restore + byte-identity check"
+echo "=========================================================="
+cp /tmp/opencode/devenv.yaml.happy.bak devenv.yaml
+cmp /tmp/opencode/devenv.yaml.happy.bak devenv.yaml && echo "RESTORED_OK: devenv.yaml byte-identical to the happy state"
+cat devenv.yaml
+
+echo
+echo "=========================================================="
+echo "CONCLUSION"
+echo "=========================================================="
+echo "nix develop          : driven by flake.nix pkgs config (allowUnfree/cudaSupport);
+                            UNCHANGED by the devenv.yaml block - proved by STEP (a)
+                            still entering with the block removed."
+echo "standalone CLI mode  : devenv generates .devenv/nixpkgs-config-<hash>.nix from the
+                            devenv.yaml `nixpkgs:` block and sets NIXPKGS_CONFIG; without
+                            the block cfg={} makes allowUnfreePredicate the error thrower
+                            (STEP b FAILS), with the block it is (_: true) (STEP c OK)."
+echo "=> BOTH entry paths need their config: flake.nix for `nix develop`, the flat
+     `nixpkgs:` block in devenv.yaml for the standalone devenv CLI."

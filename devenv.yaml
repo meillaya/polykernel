@@ -3,3 +3,5 @@ inputs:
     url: github:NixOS/nixpkgs/nixpkgs-unstable
 nixpkgs:
   allow_unfree: true
+  cuda_support: true
+  cuda_capabilities: ["8.0", "8.6", "8.9", "9.0"]
