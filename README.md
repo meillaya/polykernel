@@ -18,7 +18,7 @@ and Modal hire for.**
 |---|---|
 | A compiler/runtime **machinery** demonstration | A claim to **beat vLLM** or any production stack |
 | A Cerebras-style dataflow **simulator** (correct CSL terminology: CE+FMAC, `@set_color_config`, `fabin_dsd`/`fabout_dsd`) | Real CSL / `cslc` / **Cerebras hardware** |
-| Compile + PTX + GPU-free analysis for CUDA; a CUDA runtime-validation harness (`cuda_run_main.cpp` + the MMA tensor-core kernel) built and compile-validated for sm_80/89/90 and **runtime-validated on the RTX 6000 Ada pod** (0 failed correctness); H100/A100 numbers from owner-gated rental (still projected) | Running NVIDIA kernels locally (no local NVIDIA GPU; runtime validation runs on the remote RTX 6000 Ada pod, which has validated the kernels) |
+| Compile + PTX + GPU-free analysis for CUDA (sm_80/89/90); the runtime-validation harness (`cuda_run_main.cpp` + MMA kernel) is **runtime-validated on the RTX 6000 Ada (sm_89) pod: 0 failed correctness**; H100/A100 numbers are owner-gated **PROJECTED** | Running NVIDIA kernels locally (this machine has no NVIDIA GPU; the kernels are validated on the remote RTX 6000 Ada pod) |
 | Hand-written `.mlir` input in the `polykernel` dialect | A full PyTorch/ONNX/StableHLO frontend |
 | Exactly the named ops + fused variants (closed op set) | An op zoo |
 
@@ -27,16 +27,16 @@ and Modal hire for.**
 ```
    .mlir (polykernel dialect)
         │  polykernel-opt · 11 passes
-        ├──────────────────────────────┐
-   CUDA backend (sm_80/sm_89/sm_90)     HIP/ROCm backend (gfx1101 local · gfx942)
-   nvcc + PTX + GPU-free analyzer  hipcc + AMDGPU ISA + WMMA bf16 · runs on 7800 XT
-   + MMA kernel + runtime launcher  (CUDA twin: matmul_mma.cu · RTX 6000 Ada)
-        └──────────────┬───────────────┘   ← one portable kernel template
+        ├────────────────────────────────┐
+   CUDA backend (sm_80/sm_89/sm_90)      HIP/ROCm backend (gfx1101 local · gfx942)
+   nvcc + PTX + GPU-free analyzer        hipcc + AMDGPU ISA + WMMA bf16 · runs on 7800 XT
+   + MMA kernel + runtime launcher       (CUDA twin: matmul_mma.cu · RTX 6000 Ada)
+        └────────────────┬───────────────┘   ← one portable kernel template
         Autotuner (correctness-gated) + JSON cache + C++ runtime (detect → load → serve)
-        ├──────────────────────────────┐
-   Modal deployment                 Dataflow simulator (64×64 PE grid, SUMMA)
-   /predict /benchmark /kernels     metrics + self-contained HTML viz
-   /report · cold-start             (functional/cycle model — NOT Cerebras hardware)
+        ├────────────────────────────────┐
+   Modal deployment                      Dataflow simulator (64×64 PE grid, SUMMA)
+   /predict /benchmark /kernels          metrics + self-contained HTML viz
+   /report · cold-start                  (functional/cycle model, NOT Cerebras hardware)
 ```
 
 Full detail in [`docs/architecture.md`](docs/architecture.md).
@@ -88,17 +88,18 @@ the report shows `failed correctness: N>0` prominently (`reports/w6_dashboard_ne
 
 ## Correctness
 
-A NumPy + `ml_dtypes.bfloat16` golden (bf16 round-to-nearest-even inputs, fp32 accumulate,
-bf16 output) is the single source of truth; thresholds are cosine ≥ 0.999, max relative
-error ≤ 1e-2, PCC ≥ 0.99. CUDA correctness rests on the **shared** portable template
-validated by running the HIP + CPU-reference builds on the RX 7800 XT, the CUDA
-runtime-validation harness (`lib/Runtime/cuda_run_main.cpp` + the MMA kernel
-`kernels/generated/matmul_mma.cu`) which is built and compile-validated for sm_80/89/90
-and **runtime-validated on the RTX 6000 Ada (sm_89) pod: 0 failed correctness (18/18
-golden, cosine==pcc==1.0)**, the dataflow simulator's functional execution, all compared
-to the same golden. The first on-NVIDIA run exposed and fixed two real CUDA bugs (bf16x2
-store corruption, gelu erf precision, commit d85866a). H100/A100/MI300 speedups remain
-**PROJECTED** (see
+The single source of truth is a NumPy + `ml_dtypes.bfloat16` golden: bf16
+round-to-nearest-even inputs, fp32 accumulate, bf16 output, with thresholds of cosine ≥
+0.999, max relative error ≤ 1e-2, and PCC ≥ 0.99. HIP runs the shared portable template
+(scalar + WMMA bf16) golden-validated on the local RX 7800 XT: **75/75 tests passed**.
+CUDA correctness rests on the runtime-validation harness (`lib/Runtime/cuda_run_main.cpp`
++ the MMA kernel `kernels/generated/matmul_mma.cu`), built and compile-validated for
+sm_80/sm_89/sm_90 and **runtime-validated on the RTX 6000 Ada (sm_89) pod: 0 failed
+correctness, 18/18 golden, cosine == pcc == 1.0** (the MMA kernel separately 5/5 on the
+pod). The first on-NVIDIA run exposed and fixed two real CUDA bugs: a bf16x2 store
+corruption on sm_89 and a gelu erf precision loss (commit `d85866a`), with no HIP
+regression. The dataflow simulator's functional execution is checked against the same
+golden, independently of any GPU. H100/A100/MI300 speedups remain **PROJECTED** (see
 [`docs/performance_model.md`](docs/performance_model.md)). **0 failed correctness tests**
 is a success criterion.
 
@@ -111,17 +112,16 @@ is a success criterion.
   Wave 8 attention + quantization work: done and committed.
 - **Pass 2 (this pass):** the CUDA runtime-validation harness
   (`lib/Runtime/cuda_run_main.cpp`), the CUDA MMA tensor-core kernel
-  (`kernels/generated/matmul_mma.cu`, nvcuda::wmma m16n16k16 bf16, additive +
-  correctness-gated), and sm_89 (RTX 6000 Ada) support across the analyzer,
-  per-kernel report, bench suite, and dashboard: all **built +
-  compile-validated locally** (sm_80/89/90) and **runtime-validated on the RTX 6000
-  Ada pod** (0 failed correctness, `reports/pass2_ada_cuda_run.log`). The pod
-  (216.81.200.13, user ubuntu) ran the validation after the original 65.109.75.15 pod
-  was terminated by the user and this one was provisioned at the user's authorization.
-  The dashboard (`reports/benchmark_report.md`) now carries the RTX 6000 Ada (sm_89) row
-  as **MEASURED**: unfused 1.000× / fused 0.838× / autotuned 0.857× (fused is slower at
-  this compute-bound shape, the plan's shape-dependence caveat, confirmed).
-  H100/A100/MI300 remain **PROJECTED**.
+  (`kernels/generated/matmul_mma.cu`, `nvcuda::wmma` m16n16k16 bf16, additive +
+  correctness-gated), and sm_89 (RTX 6000 Ada) support across the analyzer, per-kernel
+  report, bench suite, and dashboard: **built + compile-validated locally** (sm_80/89/90)
+  and **runtime-validated on the RTX 6000 Ada pod** (0 failed correctness,
+  `reports/pass2_ada_cuda_run.log`). The validation ran on the pod (216.81.200.13, user
+  ubuntu) provisioned after the original 65.109.75.15 was terminated by the user; the pod
+  has since been terminated. The dashboard (`reports/benchmark_report.md`) carries the
+  RTX 6000 Ada (sm_89) row as **MEASURED**: unfused 1.000× / fused 0.838× / autotuned
+  0.857× (fused is slower at this compute-bound shape, the plan's shape-dependence
+  caveat, confirmed). H100/A100/MI300 remain **PROJECTED**.
 - **Lit:** 14/14 `.mlir` tests green (`check-polykernel`).
 
 <!--## Documentation
