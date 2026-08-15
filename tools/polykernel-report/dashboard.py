@@ -89,6 +89,25 @@ def load_model() -> dict:
     """Assemble the aggregated dashboard model from the committed reports."""
     cuda = _load_json("reports/h100_bench.json")
     amd = _load_json("reports/mi300_bench.json")
+    # RTX 6000 Ada (sm_89) is its OWN committed bench report
+    # (reports/ada6000_bench.json, written PROJECTED by run_bench_suite.py; a
+    # todo-14 MEASURED run would override it). Fold its archs into the CUDA
+    # section so the dashboard surfaces the sm_89 row next to H100/A100. If the
+    # file is missing the row degrades to an explicit SKIPPED note (never a
+    # fabricated MEASURED claim).
+    ada6000 = _load_json("reports/ada6000_bench.json")
+    cuda_archs = dict(cuda.get("archs", {}))
+    ada_archs = dict(ada6000.get("archs", {}))
+    if ada_archs:
+        cuda_archs.update(ada_archs)
+    else:
+        cuda_archs["ada6000"] = {
+            "arch": "sm_89", "backend": "cuda",
+            "label": "NVIDIA RTX 6000 Ada (sm_89)",
+            "missing_note": ("reports/ada6000_bench.json missing - no pod gate "
+                             "run, no sm_89 numbers on disk"),
+        }
+    cuda = {**cuda, "archs": cuda_archs}
     fragment = cuda.get("fragment") or amd.get("fragment") or (
         "MLP block (examples/mlp_block.mlir): rmsnorm+matmul+gelu+matmul+add")
     return {
@@ -201,12 +220,22 @@ def _arch_speedup_rows(report: dict) -> list[tuple[str, str, str, str, str]]:
     """(label, backend, unfused, fused, autotuned) rows from a bench JSON."""
     rows = []
     for arch in report.get("archs", {}).values():
+        backend = f'{arch.get("backend", "?")} ({arch.get("arch", "?")})'
+        if arch.get("missing_note"):
+            rows.append((arch.get("label", "?"), backend,
+                         "SKIPPED", "n/a", "n/a"))
+            continue
         sp = arch.get("speedup", {})
-        rows.append((arch.get("label", "?"), f'{arch.get("backend", "?")} '
-                     f'({arch.get("arch", "?")})',
+        rows.append((arch.get("label", "?"), backend,
                      f'{sp.get("unfused", 0):.3f}x', f'{sp.get("fused", 0):.3f}x',
                      f'{sp.get("autotuned", 0):.3f}x'))
     return rows
+
+
+def _missing_notes(report: dict) -> list[str]:
+    """Notes for arch rows whose committed bench JSON is absent (degraded, not faked)."""
+    return [a["missing_note"] for a in report.get("archs", {}).values()
+            if a.get("missing_note")]
 
 
 def render_markdown(model: dict, stats: dict) -> str:
@@ -250,6 +279,8 @@ def render_markdown(model: dict, stats: dict) -> str:
               "|---|---|---|---|---|"]
     for row in _arch_speedup_rows(model["cuda"]):
         lines.append(f"| {row[0]} | {row[1]} | {row[2]} | {row[3]} | {row[4]} |")
+    for note in _missing_notes(model["cuda"]):
+        lines.append(f"> {note}")
     lines += ["", "## AMD speedups (unfused = 1.00x baseline)", "",
               f"> {_status_label(model['amd'])}: {model['amd'].get('banner', '')}",
               "", "| arch | backend | unfused | fused | autotuned |",
@@ -286,11 +317,11 @@ def render_markdown(model: dict, stats: dict) -> str:
               "- reports/h100_report.html (CUDA H100/A100 detail, self-contained)",
               "- reports/mi300_report.html (AMD MI300 detail, self-contained)",
               "- reports/dataflow_report.html (dataflow viz, Todo 39)",
-              "", "## Caveats", "",
-              "- H100/A100/MI300 speedups are PROJECTED (roofline + analytic "
-              "traffic), not measured on rented hardware.",
-              "- The dataflow backend is a functional/cycle SIMULATOR (NOT real "
-              "CSL, NOT Cerebras hardware).",
+               "", "## Caveats", "",
+               "- H100/A100/MI300/RTX 6000 Ada (sm_89) speedups are PROJECTED "
+               "(roofline + analytic traffic), not measured on rented hardware.",
+               "- The dataflow backend is a functional/cycle SIMULATOR (NOT real "
+               "CSL, NOT Cerebras hardware).",
               "- No SOTA-performance claim: the goal is the compiler/runtime "
               "machinery, not beating vLLM.",
               "",
@@ -451,6 +482,14 @@ def _speedup_panel(report: dict, anchor: str) -> str:
     pill = _pill(label, "proj" if "PROJECTED" in label else "good")
     parts = [f"<p>{pill} &nbsp; {_esc(report.get('banner', ''))}</p>"]
     for arch in archs.values():
+        if arch.get("missing_note"):
+            parts.append(
+                f'<h3>{_esc(arch.get("label", "?"))} &mdash; '
+                f'{_esc(arch.get("backend", "?"))} ({_esc(arch.get("arch", "?"))})'
+                f'</h3><div class="panel"><p class="legend">'
+                f'{_esc(arch["missing_note"])} &mdash; no speedup bars to draw '
+                f'(never a fabricated MEASURED row).</p></div>')
+            continue
         sp = arch.get("speedup", {})
         mx = max(sp.get("autotuned", 1.0), sp.get("fused", 1.0), 1.0)
         bars = (
@@ -592,9 +631,10 @@ def _kernel_report_section(report: dict) -> str:
 _DISCLAIMER = (
     "STATIC + SELF-CONTAINED: inline CSS + inline JS + an embedded JSON payload; no "
     "external dependencies, no network fetch, no framework; renders fully offline. "
-    "H100/A100/MI300 speedups are PROJECTED (roofline + analytic traffic, not measured "
-    "on rented hardware). The dataflow backend is a functional/cycle SIMULATOR (NOT "
-    "real CSL, NOT Cerebras hardware). No SOTA-performance claim.")
+    "H100/A100/MI300/RTX 6000 Ada (sm_89) speedups are PROJECTED (roofline + analytic "
+    "traffic, not measured on rented hardware). The dataflow backend is a "
+    "functional/cycle SIMULATOR (NOT real CSL, NOT Cerebras hardware). No SOTA-"
+    "performance claim.")
 
 
 def _meta(model: dict, stats: dict) -> str:
@@ -655,6 +695,8 @@ def render_arch_html(model: dict, stats: dict, source_key: str, title: str,
         _speedup_panel(report, f"{source_key}-speedup"),
     ]
     for arch in report.get("archs", {}).values():
+        if not arch.get("per_op_unfused"):
+            continue  # bench JSON absent: no per-op roofline rows to render
         sections.append(
             f'<section><h2>Per-op roofline &mdash; {_esc(arch.get("label", "?"))} '
             f'(unfused)</h2><div class="panel">{_per_op_table(report, arch)}</div>'

@@ -1,6 +1,28 @@
+warning: Nix search path entry '/home/mei/.nix-defexpr/channels' does not exist, ignoring
+Running tasks     devenv:enterShell
+
+Running           devenv:files:cleanup
+Succeeded         devenv:files:cleanup (15.52ms)
+Running           devenv:enterShell
+Succeeded         devenv:enterShell (6.77ms)
+Running           devenv:enterTest
+No command        devenv:enterTest
+1 Skipped, 2 Succeeded
+PolyKernel dev shell (llvmPackages_21 MLIR / cudaPackages_12_6 / rocmPackages.clr)
+  CC/CXX:      /nix/store/m59w5gavjx8db0ay3m1yzbw02l54109b-clang-wrapper-21.1.8/bin/clang / /nix/store/m59w5gavjx8db0ay3m1yzbw02l54109b-clang-wrapper-21.1.8/bin/clang++
+  mlir-tblgen: LLVM (http://llvm.org/):
+  nvcc:        Cuda compilation tools, release 12.6, V12.6.85
+  hipcc:       HIP version: 7.2.53211-9999
+  cmake:       cmake version 4.1.2
+  clang:       clang version 21.1.8
+wrote /tmp/opencode/neg_reports/benchmark_report.md
+wrote /tmp/opencode/neg_reports/benchmark_report.html
+wrote /tmp/opencode/neg_reports/h100_report.html
+wrote /tmp/opencode/neg_reports/mi300_report.html
+dashboard: failed correctness: 0 (10/10 ops validated against golden contract C); self-contained HTML (no external dependencies)
 # PolyKernel benchmark dashboard (Todo 34 / Wave 6)
 
-Generated: 2026-08-15T14:04:09Z by `tools/polykernel-report/dashboard.py --dashboard`.
+Generated: 2026-08-15T14:04:34Z by `tools/polykernel-report/dashboard.py --dashboard`.
 
 ## Model fragment
 
@@ -29,7 +51,8 @@ Generated: 2026-08-15T14:04:09Z by `tools/polykernel-report/dashboard.py --dashb
 |---|---|---|---|---|
 | NVIDIA H100 (SXM5, sm_90) | cuda (sm_90) | 1.000x | 1.004x | 2.838x |
 | NVIDIA A100 (80GB, sm_80) | cuda (sm_80) | 1.000x | 1.003x | 2.862x |
-| NVIDIA RTX 6000 Ada (sm_89) | cuda (sm_89) | 1.000x | 1.001x | 2.891x |
+| NVIDIA RTX 6000 Ada (sm_89) | cuda (sm_89) | SKIPPED | n/a | n/a |
+> reports/ada6000_bench.json missing - no pod gate run, no sm_89 numbers on disk
 
 ## AMD speedups (unfused = 1.00x baseline)
 
@@ -73,3 +96,4 @@ Generated: 2026-08-15T14:04:09Z by `tools/polykernel-report/dashboard.py --dashb
 - H100/A100/MI300/RTX 6000 Ada (sm_89) speedups are PROJECTED (roofline + analytic traffic), not measured on rented hardware.
 - The dataflow backend is a functional/cycle SIMULATOR (NOT real CSL, NOT Cerebras hardware).
 - No SOTA-performance claim: the goal is the compiler/runtime machinery, not beating vLLM.
+

@@ -1,3 +1,15 @@
+PolyKernel dev shell (llvmPackages_21 MLIR / cudaPackages_12_6 / rocmPackages.clr)
+  CC/CXX:      /nix/store/m59w5gavjx8db0ay3m1yzbw02l54109b-clang-wrapper-21.1.8/bin/clang / /nix/store/m59w5gavjx8db0ay3m1yzbw02l54109b-clang-wrapper-21.1.8/bin/clang++
+  mlir-tblgen: LLVM (http://llvm.org/):
+  nvcc:        Cuda compilation tools, release 12.6, V12.6.85
+  hipcc:       HIP version: 7.2.53211-9999
+  cmake:       cmake version 4.1.2
+  clang:       clang version 21.1.8
+wrote /home/mei/projects/polykernel/reports/benchmark_report.md
+wrote /home/mei/projects/polykernel/reports/benchmark_report.html
+wrote /home/mei/projects/polykernel/reports/h100_report.html
+wrote /home/mei/projects/polykernel/reports/mi300_report.html
+dashboard: failed correctness: 0 (10/10 ops validated against golden contract C); self-contained HTML (no external dependencies)
 # PolyKernel benchmark dashboard (Todo 34 / Wave 6)
 
 Generated: 2026-08-15T14:04:09Z by `tools/polykernel-report/dashboard.py --dashboard`.
@@ -73,3 +85,4 @@ Generated: 2026-08-15T14:04:09Z by `tools/polykernel-report/dashboard.py --dashb
 - H100/A100/MI300/RTX 6000 Ada (sm_89) speedups are PROJECTED (roofline + analytic traffic), not measured on rented hardware.
 - The dataflow backend is a functional/cycle SIMULATOR (NOT real CSL, NOT Cerebras hardware).
 - No SOTA-performance claim: the goal is the compiler/runtime machinery, not beating vLLM.
+
