@@ -1,0 +1,23 @@
+=== polykernel-pass2 Todo 11 QA failure (ON THE POD, real RTX 6000 Ada GPU) ===
+date: 2026-08-15 (UTC); runner: /home/ubuntu/polykernel/build/mma_run/mma_run
+
+(A) 128x128x128 (fixed seed 0xC0FFEE, identical inputs):
+    stderr: [polykernel-mma] path=mma_bad M=128 N=128 K=128
+    (1) mma_bad: assert_correct RAISES as required (variant excluded)
+    metrics: cosine=0.049743 pcc=0.049496 max_rel_err=9.324e+03 bit_exact=0.063354
+    -> cosine < 0.999 and pcc < 0.99: variant would be validated=false / EXCLUDED
+    stderr: [polykernel-mma] path=scalar M=128 N=128 K=128
+    (2) scalar baseline: assert_correct PASSES; metrics: cosine=1.000000 pcc=1.000000 max_rel_err=0.000e+00 bit_exact=1.000000
+
+(B) K=130 (non-16-multiple K; M=N=128 are 16-multiples):
+    stderr: [polykernel-mma] path=mma M=128 N=128 K=130
+    (1) mma  K=130: metrics: cosine=1.000000 pcc=1.000000 max_rel_err=3.984e-03 bit_exact=0.999939
+    VERDICT (golden): CORRECT via the zeroed-tail path (K padded to 160 in shared memory, OOB K-tile reads 0)
+    note: kernel stages numKTiles=(K+15)/16=9 tiles; last tile k_base=128 reads K=128,129 real and K=130..143 as 0
+    stderr: [polykernel-mma] path=scalar M=128 N=128 K=130
+    (2) scalar K=130 control: assert_correct PASSES; bit_exact=1.000000
+
+=== VERDICT ===
+bad MMA variant EXCLUDED (fails golden decisively on the GPU); scalar baseline STANDS bit-exact -> MMA is safely additive + correctness-gated.
+K=130: CORRECT via the zeroed-tail path (K padded to 160 in shared memory, OOB K-tile reads 0)
+All evidence captured from the REAL RTX 6000 Ada (sm_89) GPU.

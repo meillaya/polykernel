@@ -1,0 +1,35 @@
+.....                                                                    [100%]
+==================================== PASSES ====================================
+____________________________ test_mma_matmul_square ____________________________
+----------------------------- Captured stdout call -----------------------------
+
+[MMA 128x128x128] path=mma validated=true {'cosine': 1.0, 'pcc': 0.9999999403953552, 'max_rel_err': 0.0, 'bit_exact': 1.0}
+_________________________ test_mma_matmul_rectangular __________________________
+----------------------------- Captured stdout call -----------------------------
+
+[MMA 256x128x256] path=mma validated=true {'cosine': 1.0, 'pcc': 1.0, 'max_rel_err': 0.004761902149766684, 'bit_exact': 0.999969482421875}
+_____________________ test_mma_matmul_non_square_multiple ______________________
+----------------------------- Captured stdout call -----------------------------
+
+[MMA 192x160x224] path=mma validated=true {'cosine': 1.0, 'pcc': 1.0000001192092896, 'max_rel_err': 0.0, 'bit_exact': 1.0}
+___________________ test_mma_matmul_large_k_reduction_order ____________________
+----------------------------- Captured stdout call -----------------------------
+
+[MMA 256x256x256 large-K] path=mma validated=true {'cosine': 1.0, 'pcc': 1.0, 'max_rel_err': 0.010096056386828423, 'bit_exact': 0.9998626708984375}
+______________ test_mma_negative_bad_store_excluded_scalar_stands ______________
+----------------------------- Captured stdout call -----------------------------
+
+[NEG] mma_bad  validated=False {'cosine': 0.04750850796699524, 'pcc': 0.04750814661383629, 'max_rel_err': 2416.422607421875, 'bit_exact': 0.0633544921875}
+[NEG] scalar   validated=True {'cosine': 1.0, 'pcc': 0.9999999403953552, 'max_rel_err': 0.0, 'bit_exact': 1.0}
+[NEG] bad MMA variant EXCLUDED (fails golden); scalar baseline STANDS -> MMA is safely additive
+=========================== short test summary info ============================
+PASSED tests/kernels/test_mma.py::test_mma_matmul_square
+PASSED tests/kernels/test_mma.py::test_mma_matmul_rectangular
+PASSED tests/kernels/test_mma.py::test_mma_matmul_non_square_multiple
+PASSED tests/kernels/test_mma.py::test_mma_matmul_large_k_reduction_order
+PASSED tests/kernels/test_mma.py::test_mma_negative_bad_store_excluded_scalar_stands
+5 passed in 5.08s
+
+=== direct driver annotation (verbatim stderr, 16x16) ===
+NVIDIA RTX 6000 Ada Generation, 8.9, 580.126.09
+[polykernel-mma] path=mma M=16 N=16 K=16
