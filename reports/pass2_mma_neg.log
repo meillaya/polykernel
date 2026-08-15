@@ -1,0 +1,27 @@
+=== polykernel-pass2 Todo 10 QA failure: bad-store MMA variant FAILS golden, scalar STANDS ===
+date: 2026-08-15T13:42:34Z
+
+CONTEXT: no usable CUDA driver on this machine (probe: cudaMalloc -> insufficient driver),
+so the GPU negative run in test_mma.py is SKIPPED here and runs on the pod (Todo 11).
+The negative semantics are demonstrated at the metrics level EXACTLY as the test
+computes them:
+  - the mma_bad variant stores the C accumulator tile with wmma::mem_col_major (the
+    deliberate bug: element (m,n) lands at Cs[n][m]) -> the whole C tile comes out
+    TRANSPOSED, so out_bad == golden.T
+  - assert_correct(out_bad, ref) must RAISE; cosine/pcc must be < 0.999
+  - the UNCHANGED scalar baseline must still PASS golden on the identical inputs
+    (here driven through the REAL CPU-ref scalar matmul build/kernels/cpu_ref_matmul;
+    on the pod the negative test runs launch_matmul on the Ada and it passes the same).
+
+=== evidence (fixed-seed 128x128x128, SEED=0xC0FFEE, identical inputs) ===
+(1) mma_bad: assert_correct RAISES as required:
+    golden assert_correct FAILED: cosine=0.015646 (need >= 0.999), max_rel_err=2.931022e+03 (need <= 1e-02), pcc=0.015646 (need >= 0.99)
+    metrics: cosine=0.015646 pcc=0.015646 max_rel_err=2.931e+03 bit_exact=0.009277
+    -> cosine 0.0156 < 0.999 and pcc 0.0156 < 0.99: variant would be validated=false / EXCLUDED
+
+(2) scalar baseline (matmul.cu CPU-ref path): assert_correct PASSES
+    metrics: cosine=1.000000 pcc=1.000000 max_rel_err=0.000e+00 bit_exact=1.000000
+    -> scalar validated=true STANDS (identical inputs)
+
+VERDICT: bad MMA variant EXCLUDED (fails golden decisively); scalar baseline STANDS
+-> MMA is safely additive + correctness-gated (GPU run repeats on the pod, Todo 11)

@@ -1,0 +1,71 @@
+=== polykernel-pass2 Todo 10 QA happy: CUDA MMA bf16 tensor-core (nvcuda::wmma m16n16k16) ===
+date: 2026-08-15T13:43:26Z
+
+=== 1. nvcc_driver.py --kernel matmul_mma --arch sm_80,sm_89,sm_90 --ptx ===
+kernel: kernels/generated/matmul_mma.cu
+archs:  sm_80, sm_89, sm_90
+nvcc:   /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/nvcc
+ptxas:  /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/ptxas
+========================================================================
+[nvcc] /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/nvcc -arch=sm_80 -DPOLYKERNEL_CUDA -Ikernels/template --ptx kernels/generated/matmul_mma.cu -o build/nvcc/matmul_mma_sm_80.ptx
+[ptxas] /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/ptxas -v -arch=sm_80 build/nvcc/matmul_mma_sm_80.ptx -o build/nvcc/matmul_mma_sm_80.cubin
+--- ptxas -v (sm_80) ---
+  ptxas info    : 0 bytes gmem
+  ptxas info    : Compiling entry function '_ZN46_GLOBAL__N__04fd7ab0_13_matmul_mma_cu_7fbdd66417matmul_mma_kernelILb1EEEvPK13__nv_bfloat16S3_PS1_iii' for 'sm_80'
+  ptxas info    : Function properties for _ZN46_GLOBAL__N__04fd7ab0_13_matmul_mma_cu_7fbdd66417matmul_mma_kernelILb1EEEvPK13__nv_bfloat16S3_PS1_iii
+  ptxas info    : Used 40 registers, used 1 barriers, 2048 bytes smem, 388 bytes cmem[0]
+  ptxas info    : Compiling entry function '_ZN46_GLOBAL__N__04fd7ab0_13_matmul_mma_cu_7fbdd66417matmul_mma_kernelILb0EEEvPK13__nv_bfloat16S3_PS1_iii' for 'sm_80'
+  ptxas info    : Function properties for _ZN46_GLOBAL__N__04fd7ab0_13_matmul_mma_cu_7fbdd66417matmul_mma_kernelILb0EEEvPK13__nv_bfloat16S3_PS1_iii
+  ptxas info    : Used 40 registers, used 1 barriers, 2048 bytes smem, 388 bytes cmem[0]
+  [parsed] registers=40 smem=2048B spill_stores=0B spill_loads=0B stack=0B cmem0=388B
+  PTX: build/nvcc/matmul_mma_sm_80.ptx
+========================================================================
+[nvcc] /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/nvcc -arch=sm_89 -DPOLYKERNEL_CUDA -Ikernels/template --ptx kernels/generated/matmul_mma.cu -o build/nvcc/matmul_mma_sm_89.ptx
+[ptxas] /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/ptxas -v -arch=sm_89 build/nvcc/matmul_mma_sm_89.ptx -o build/nvcc/matmul_mma_sm_89.cubin
+--- ptxas -v (sm_89) ---
+  ptxas info    : 0 bytes gmem
+  ptxas info    : Compiling entry function '_ZN46_GLOBAL__N__04fd7ab0_13_matmul_mma_cu_7fbdd66417matmul_mma_kernelILb1EEEvPK13__nv_bfloat16S3_PS1_iii' for 'sm_89'
+  ptxas info    : Function properties for _ZN46_GLOBAL__N__04fd7ab0_13_matmul_mma_cu_7fbdd66417matmul_mma_kernelILb1EEEvPK13__nv_bfloat16S3_PS1_iii
+  ptxas info    : Used 48 registers, used 1 barriers, 2048 bytes smem, 388 bytes cmem[0]
+  ptxas info    : Compiling entry function '_ZN46_GLOBAL__N__04fd7ab0_13_matmul_mma_cu_7fbdd66417matmul_mma_kernelILb0EEEvPK13__nv_bfloat16S3_PS1_iii' for 'sm_89'
+  ptxas info    : Function properties for _ZN46_GLOBAL__N__04fd7ab0_13_matmul_mma_cu_7fbdd66417matmul_mma_kernelILb0EEEvPK13__nv_bfloat16S3_PS1_iii
+  ptxas info    : Used 48 registers, used 1 barriers, 2048 bytes smem, 388 bytes cmem[0]
+  [parsed] registers=48 smem=2048B spill_stores=0B spill_loads=0B stack=0B cmem0=388B
+  PTX: build/nvcc/matmul_mma_sm_89.ptx
+========================================================================
+[nvcc] /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/nvcc -arch=sm_90 -DPOLYKERNEL_CUDA -Ikernels/template --ptx kernels/generated/matmul_mma.cu -o build/nvcc/matmul_mma_sm_90.ptx
+[ptxas] /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/ptxas -v -arch=sm_90 build/nvcc/matmul_mma_sm_90.ptx -o build/nvcc/matmul_mma_sm_90.cubin
+--- ptxas -v (sm_90) ---
+  ptxas info    : 0 bytes gmem
+  ptxas info    : Compiling entry function '_ZN46_GLOBAL__N__04fd7ab0_13_matmul_mma_cu_7fbdd66417matmul_mma_kernelILb1EEEvPK13__nv_bfloat16S3_PS1_iii' for 'sm_90'
+  ptxas info    : Function properties for _ZN46_GLOBAL__N__04fd7ab0_13_matmul_mma_cu_7fbdd66417matmul_mma_kernelILb1EEEvPK13__nv_bfloat16S3_PS1_iii
+  ptxas info    : Used 48 registers, used 1 barriers, 2048 bytes smem
+  ptxas info    : Compiling entry function '_ZN46_GLOBAL__N__04fd7ab0_13_matmul_mma_cu_7fbdd66417matmul_mma_kernelILb0EEEvPK13__nv_bfloat16S3_PS1_iii' for 'sm_90'
+  ptxas info    : Function properties for _ZN46_GLOBAL__N__04fd7ab0_13_matmul_mma_cu_7fbdd66417matmul_mma_kernelILb0EEEvPK13__nv_bfloat16S3_PS1_iii
+  ptxas info    : Used 48 registers, used 1 barriers, 2048 bytes smem
+  [parsed] registers=48 smem=2048B spill_stores=0B spill_loads=0B stack=0B cmem0=0B
+  PTX: build/nvcc/matmul_mma_sm_90.ptx
+========================================================================
+OK: compiled matmul_mma for sm_80, sm_89, sm_90; PTX emitted.
+
+=== 2. tensor-core proof: mma.sync in emitted PTX ===
+mma.sync.aligned.row.col.m16n16k16.f32.bf16.bf16.f32
+
+=== 3. HIP guard: hard #error under -DPOLYKERNEL_HIP (mirror of WMMA inverse guard) ===
+kernels/generated/matmul_mma.cu:63:2: error: "matmul_mma.cu is the CUDA nvcuda::wmma MMA variant; compile with nvcc -DPOLYKERNEL_CUDA. The portable scalar baseline is kernels/generated/matmul.cu (and the RDNA3 tensor-core sibling is matmul_wmma.cu, HIP-only)."
+
+=== 4. pytest tests/kernels/test_mma.py -v (nvcc sm_89 compile + skip-on-no-device) ===
+============================= test session starts ==============================
+platform linux -- Python 3.14.6, pytest-9.0.3, pluggy-1.6.0 -- /nix/store/jxyrvv4gbpnp3ap5iy7wxwl1sg4x2x88-python3-3.14.6/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/mei/projects/polykernel
+plugins: anyio-4.14.1
+collecting ... collected 5 items
+
+tests/kernels/test_mma.py::test_mma_matmul_square SKIPPED (no usable...) [ 20%]
+tests/kernels/test_mma.py::test_mma_matmul_rectangular SKIPPED (no u...) [ 40%]
+tests/kernels/test_mma.py::test_mma_matmul_non_square_multiple SKIPPED   [ 60%]
+tests/kernels/test_mma.py::test_mma_matmul_large_k_reduction_order SKIPPED [ 80%]
+tests/kernels/test_mma.py::test_mma_negative_bad_store_excluded_scalar_stands SKIPPED [100%]
+
+============================== 5 skipped in 3.96s ==============================
