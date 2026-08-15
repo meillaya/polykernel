@@ -73,9 +73,16 @@ ARCHS: dict[str, dict] = {
              "peak_bw_gbps": 1555.0, "label": "NVIDIA A100 (80GB, sm_80)"},
     "mi300": {"arch": "gfx942", "backend": "hip", "peak_tflops": 1307.4,
               "peak_bw_gbps": 5300.0, "label": "AMD Instinct MI300X (gfx942)"},
+    # sm_89 peak = the todo-5 VERIFIED scalar-bf16 figure (91.1) + datasheet BW
+    # (960). This row is a PROJECTION; todo 14's MEASURED section (measured:true
+    # ada6000_bench.json) overrides it on the real RTX 6000 Ada.
+    "ada6000": {"arch": "sm_89", "backend": "cuda", "peak_tflops": 91.1,
+                "peak_bw_gbps": 960.0, "label": "NVIDIA RTX 6000 Ada (sm_89)"},
 }
-# reports/{h100,mi300}_bench: the headline NVIDIA report carries H100 + A100.
-REPORT_ARCHS = {"h100": ["h100", "a100"], "mi300": ["mi300"]}
+# reports/{h100,mi300,ada6000}_bench: the headline NVIDIA report carries H100 +
+# A100; ada6000 is its own report (PROJECTED here, MEASURED after todo 14).
+REPORT_ARCHS = {"h100": ["h100", "a100"], "mi300": ["mi300"],
+                "ada6000": ["ada6000"]}
 
 # --- Documented attainment assumptions (the projection's modeling knobs).      ---
 ETA_COMPUTE_BASE = 0.12   # scalar 16x16x16 tiled GEMM, no tensor cores.

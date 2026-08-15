@@ -1,0 +1,40 @@
+=== QA failure: report.py --arch sm_88 (typo arch must be rejected, no silent default) ===
+--- attempt 1: bare typo arch through the full report.py path ---
+SM88_EXIT=1
+--- stdout (must be EMPTY - report never emitted) ---
+PolyKernel dev shell (llvmPackages_21 MLIR / cudaPackages_12_6 / rocmPackages.clr)
+  CC/CXX:      /nix/store/m59w5gavjx8db0ay3m1yzbw02l54109b-clang-wrapper-21.1.8/bin/clang / /nix/store/m59w5gavjx8db0ay3m1yzbw02l54109b-clang-wrapper-21.1.8/bin/clang++
+  mlir-tblgen: LLVM (http://llvm.org/):
+  nvcc:        Cuda compilation tools, release 12.6, V12.6.85
+  hipcc:       HIP version: 7.2.53211-9999
+  cmake:       cmake version 4.1.2
+  clang:       clang version 21.1.8
+--- stderr (the rejection source) ---
+warning: Nix search path entry '/home/mei/.nix-defexpr/channels' does not exist, ignoring
+Running tasks     devenv:enterShell
+
+Running           devenv:files:cleanup
+Succeeded         devenv:files:cleanup (16.70ms)
+Running           devenv:enterShell
+Succeeded         devenv:enterShell (7.87ms)
+Running           devenv:enterTest
+No command        devenv:enterTest
+1 Skipped, 2 Succeeded
+[nvcc] /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/nvcc -arch=sm_88 -DPOLYKERNEL_CUDA -Ikernels/template --ptx kernels/generated/fused_rmsnorm_matmul.cu -o build/nvcc/fused_rmsnorm_matmul_sm_88.ptx
+nvcc fatal   : Value 'sm_88' is not defined for option 'gpu-architecture'
+error: nvcc failed for sm_88 (exit 1)
+
+--- attempt 2: analyze.py rejects sm_88 UP FRONT via validate_arch (before nvcc runs) ---
+
+error: unsupported --arch 'sm_88' for backend cuda (known: sm_80, sm_89, sm_90)
+ANALYZE_SM88_EXIT=1
+
+--- attempt 3: analyze.py default arch is now sm_89 (no --arch passed) ---
+
+[nvcc] /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/nvcc -arch=sm_89 -DPOLYKERNEL_CUDA -Ikernels/template --ptx kernels/generated/matmul.cu -o build/nvcc/matmul_sm_89.ptx
+[ptxas] /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/ptxas -v -arch=sm_89 build/nvcc/matmul_sm_89.ptx -o build/nvcc/matmul_sm_89.cubin
+[analyze] /home/mei/projects/polykernel/build/tools/polykernel-analyze/polykernel-analyze --kernel matmul --backend cuda --arch sm_89 --shape 128,128,128 --dtype-bytes 2 --threads-per-block 256 --path scalar --ptxas-log - --format json
+  "arch": "sm_89",
+  "registers_per_thread": 34,
+  "occupancy": {
+ANALYZE_DEFAULT_EXIT=0

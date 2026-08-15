@@ -108,9 +108,9 @@ def load_model() -> dict:
 # Backends-enabled is structural facts about the implemented system (Waves 1-7),
 # not a regenerated metric - documented inline so the dashboard states them.
 _BACKENDS = [
-    {"name": "CUDA", "archs": "sm_80 (A100), sm_90 (H100)",
+    {"name": "CUDA", "archs": "sm_80 (A100), sm_89 (RTX 6000 Ada), sm_90 (H100)",
      "status": "compile + PTX + GPU-free compile-time analysis (no local NVIDIA "
-               "GPU); H100/A100 speedups PROJECTED"},
+               "GPU); H100/A100/RTX 6000 Ada speedups PROJECTED"},
     {"name": "HIP / ROCm", "archs": "gfx1101 (local RX 7800 XT), gfx942 (MI300)",
      "status": "runs locally on gfx1101 + WMMA bf16; MI300 cross-compile; MI300 "
                "speedups PROJECTED"},

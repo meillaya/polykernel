@@ -16,6 +16,11 @@
 //         "correctness": { "cosine": 0.9999, "max_rel_err": 1e-4,
 //                          "pcc": 0.999 } } ] }
 //
+// The `gpu` key is the cache-key GPU identity. Contract H documents the
+// supported set: gpu ∈ {gfx1101, gfx942, sm_80, sm_89, sm_90} (sm_89 = NVIDIA
+// RTX 6000 Ada). No enum is enforced - the value is a free-form identity string
+// that must round-trip through SerializeTuningCache unchanged.
+//
 // PARSE-DON'T-VALIDATE: ParseTuningCache returns a typed result. A missing or
 // wrong-typed required field (e.g. absent `scored_by`, absent
 // `correctness.cosine`) yields an explicit schema error naming the field -
@@ -72,7 +77,8 @@ struct Correctness {
 /// correctness metrics. `time_ms` is std::nullopt <=> JSON null (compile-time
 /// model); a measured entry carries a concrete number.
 struct CacheEntry {
-  std::string gpu;
+  std::string gpu;  ///< Cache-key GPU identity (contract H: {gfx1101, gfx942,
+                    ///< sm_80, sm_89, sm_90}; free-form string, not an enum).
   std::string op;
   Shape shape;
   Config best;

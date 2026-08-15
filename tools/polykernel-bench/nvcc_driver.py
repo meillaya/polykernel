@@ -7,7 +7,7 @@ nvcc (from the nix shell), emits PTX, and runs `ptxas -v` to capture
 register / shared-memory / spill usage — all GPU-FREE (compile + analyze only).
 
 Usage:
-    nvcc_driver.py --kernel rmsnorm --arch sm_80,sm_90 --ptx
+    nvcc_driver.py --kernel rmsnorm --arch sm_80,sm_89,sm_90 --ptx
 
 Output (per arch):
     <out-dir>/<kernel>_<arch>.ptx    the emitted PTX
@@ -122,7 +122,7 @@ def parse_ptxas_stats(stderr: str) -> PtxasStats:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--kernel", default="rmsnorm", help="kernel name (basename of the .cu)")
-    ap.add_argument("--arch", default="sm_80,sm_90", help="comma-separated arch list")
+    ap.add_argument("--arch", default="sm_80,sm_89,sm_90", help="comma-separated arch list")
     ap.add_argument("--ptx", action="store_true", help="emit + keep PTX (always on; accepted for CLI compat)")
     ap.add_argument("--kernel-dir", default="kernels/generated", help="dir holding <kernel>.cu")
     ap.add_argument("--include-dir", default="kernels/template", help="dir holding kernel_common.h")

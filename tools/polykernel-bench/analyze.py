@@ -27,6 +27,23 @@ import nvcc_driver  # noqa: E402
 
 DEFAULT_TIMEOUT_S = 180
 
+# Known CUDA archs (lib/Analysis/Occupancy.cpp ParseArch, pass-2 sm_89 wave).
+_CUDA_ARCHS = ("sm_80", "sm_89", "sm_90")
+
+
+def validate_arch(backend: str, arch: str) -> None:
+    """Reject an unknown CUDA arch UP FRONT (clear error, no silent default).
+
+    For backend=cuda the arch must be a ParseArch-known target; anything else
+    (e.g. a typo like 'sm_88') is rejected here instead of surfacing as a
+    mid-compile nvcc or ParseArch failure. HIP archs are left to hipcc.
+    """
+    if backend == "cuda" and arch not in _CUDA_ARCHS:
+        raise SystemExit(
+            f"error: unsupported --arch '{arch}' for backend cuda "
+            f"(known: {', '.join(_CUDA_ARCHS)})"
+        )
+
 
 def find_analyzer(explicit: str | None) -> Path:
     """Locate the polykernel-analyze binary (built by CMake under build/)."""
@@ -99,7 +116,7 @@ def main() -> None:
     ap.add_argument("--mode", default="analyze", help="only 'analyze' is supported")
     ap.add_argument("--kernel", default="matmul")
     ap.add_argument("--shape", default="128,128,128", help="GEMM shape M,N,K")
-    ap.add_argument("--arch", default="sm_90")
+    ap.add_argument("--arch", default="sm_89")
     ap.add_argument("--dtype-bytes", type=int, default=2, help="element width (bf16/fp16=2)")
     ap.add_argument("--threads-per-block", type=int, default=256)
     ap.add_argument("--path", default="scalar", choices=["scalar", "wmma", "mma"])
@@ -114,6 +131,8 @@ def main() -> None:
 
     if args.mode != "analyze":
         raise SystemExit(f"error: unsupported --mode '{args.mode}' (only 'analyze')")
+
+    validate_arch(args.backend, args.arch)
 
     analyzer = find_analyzer(args.analyzer)
     ptxas_log = capture_ptxas_log(

@@ -1,0 +1,24 @@
+{
+  "kernel": "fused_rmsnorm_matmul",
+  "backend": "cuda",
+  "arch": "sm_89",
+  "registers_per_thread": 34,
+  "smem_per_block_bytes": 1024,
+  "spill_stores_bytes": 0,
+  "spill_loads_bytes": 0,
+  "occupancy": {
+    "active_warps_per_sm": 48,
+    "max_warps_per_sm": 48,
+    "occupancy_pct": 100,
+    "limiter": "warps"
+  },
+  "traffic": {
+    "global_read_bytes": 106954752,
+    "global_write_bytes": 45088768,
+    "arithmetic_intensity_flop_per_byte": 1214.68,
+    "roofline": "compute-bound"
+  },
+  "bottleneck": "compute",
+  "suggested_fixes": [],
+  "path": "scalar"
+}

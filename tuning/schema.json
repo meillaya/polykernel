@@ -26,7 +26,7 @@
       "properties": {
         "gpu": {
           "type": "string",
-          "description": "Target GPU identity, part of the cache key (e.g. \"sm_90\", \"gfx942\")."
+          "description": "Target GPU identity, part of the cache key (contract H: gpu ∈ {gfx1101, gfx942, sm_80, sm_89, sm_90}; e.g. \"sm_89\" = NVIDIA RTX 6000 Ada)."
         },
         "op": {
           "type": "string",

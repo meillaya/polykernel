@@ -1,0 +1,227 @@
+=== QA happy: todo 6 sm_89 tools plumbing (2026-08-15T13:51:07Z) ===
+
+=== STEP 1: nvcc_driver.py --kernel matmul --arch sm_80,sm_89,sm_90 --ptx ===
+PolyKernel dev shell (llvmPackages_21 MLIR / cudaPackages_12_6 / rocmPackages.clr)
+  CC/CXX:      /nix/store/m59w5gavjx8db0ay3m1yzbw02l54109b-clang-wrapper-21.1.8/bin/clang / /nix/store/m59w5gavjx8db0ay3m1yzbw02l54109b-clang-wrapper-21.1.8/bin/clang++
+  mlir-tblgen: LLVM (http://llvm.org/):
+  nvcc:        Cuda compilation tools, release 12.6, V12.6.85
+  hipcc:       HIP version: 7.2.53211-9999
+  cmake:       cmake version 4.1.2
+  clang:       clang version 21.1.8
+kernel: kernels/generated/matmul.cu
+archs:  sm_80, sm_89, sm_90
+nvcc:   /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/nvcc
+ptxas:  /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/ptxas
+========================================================================
+[nvcc] /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/nvcc -arch=sm_80 -DPOLYKERNEL_CUDA -Ikernels/template --ptx kernels/generated/matmul.cu -o build/nvcc/matmul_sm_80.ptx
+[ptxas] /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/ptxas -v -arch=sm_80 build/nvcc/matmul_sm_80.ptx -o build/nvcc/matmul_sm_80.cubin
+--- ptxas -v (sm_80) ---
+  ptxas info    : 0 bytes gmem
+  ptxas info    : Compiling entry function '_ZN41_GLOBAL__N__d51d85d3_9_matmul_cu_87f56b2c13matmul_kernelEPK13__nv_bfloat16S2_PS0_iii' for 'sm_80'
+  ptxas info    : Function properties for _ZN41_GLOBAL__N__d51d85d3_9_matmul_cu_87f56b2c13matmul_kernelEPK13__nv_bfloat16S2_PS0_iii
+  ptxas info    : Used 31 registers, used 1 barriers, 1024 bytes smem, 388 bytes cmem[0]
+  [parsed] registers=31 smem=1024B spill_stores=0B spill_loads=0B stack=0B cmem0=388B
+  PTX: build/nvcc/matmul_sm_80.ptx
+========================================================================
+[nvcc] /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/nvcc -arch=sm_89 -DPOLYKERNEL_CUDA -Ikernels/template --ptx kernels/generated/matmul.cu -o build/nvcc/matmul_sm_89.ptx
+[ptxas] /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/ptxas -v -arch=sm_89 build/nvcc/matmul_sm_89.ptx -o build/nvcc/matmul_sm_89.cubin
+--- ptxas -v (sm_89) ---
+  ptxas info    : 0 bytes gmem
+  ptxas info    : Compiling entry function '_ZN41_GLOBAL__N__d51d85d3_9_matmul_cu_87f56b2c13matmul_kernelEPK13__nv_bfloat16S2_PS0_iii' for 'sm_89'
+  ptxas info    : Function properties for _ZN41_GLOBAL__N__d51d85d3_9_matmul_cu_87f56b2c13matmul_kernelEPK13__nv_bfloat16S2_PS0_iii
+  ptxas info    : Used 34 registers, used 1 barriers, 1024 bytes smem, 388 bytes cmem[0]
+  [parsed] registers=34 smem=1024B spill_stores=0B spill_loads=0B stack=0B cmem0=388B
+  PTX: build/nvcc/matmul_sm_89.ptx
+========================================================================
+[nvcc] /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/nvcc -arch=sm_90 -DPOLYKERNEL_CUDA -Ikernels/template --ptx kernels/generated/matmul.cu -o build/nvcc/matmul_sm_90.ptx
+[ptxas] /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/ptxas -v -arch=sm_90 build/nvcc/matmul_sm_90.ptx -o build/nvcc/matmul_sm_90.cubin
+--- ptxas -v (sm_90) ---
+  ptxas info    : 0 bytes gmem
+  ptxas info    : Compiling entry function '_ZN41_GLOBAL__N__d51d85d3_9_matmul_cu_87f56b2c13matmul_kernelEPK13__nv_bfloat16S2_PS0_iii' for 'sm_90'
+  ptxas info    : Function properties for _ZN41_GLOBAL__N__d51d85d3_9_matmul_cu_87f56b2c13matmul_kernelEPK13__nv_bfloat16S2_PS0_iii
+  ptxas info    : Used 32 registers, used 1 barriers, 1024 bytes smem
+  [parsed] registers=32 smem=1024B spill_stores=0B spill_loads=0B stack=0B cmem0=0B
+  PTX: build/nvcc/matmul_sm_90.ptx
+========================================================================
+OK: compiled matmul for sm_80, sm_89, sm_90; PTX emitted.
+STEP1_EXIT=0
+
+=== STEP 2: report.py --kernel fused_rmsnorm_matmul --backend cuda --arch sm_89 --shape 2048,11008,4096 ===
+warning: Nix search path entry '/home/mei/.nix-defexpr/channels' does not exist, ignoring
+Running tasks     devenv:enterShell
+
+Running           devenv:files:cleanup
+Succeeded         devenv:files:cleanup (8.23ms)
+Running           devenv:enterShell
+Succeeded         devenv:enterShell (6.50ms)
+Running           devenv:enterTest
+No command        devenv:enterTest
+1 Skipped, 2 Succeeded
+PolyKernel dev shell (llvmPackages_21 MLIR / cudaPackages_12_6 / rocmPackages.clr)
+  CC/CXX:      /nix/store/m59w5gavjx8db0ay3m1yzbw02l54109b-clang-wrapper-21.1.8/bin/clang / /nix/store/m59w5gavjx8db0ay3m1yzbw02l54109b-clang-wrapper-21.1.8/bin/clang++
+  mlir-tblgen: LLVM (http://llvm.org/):
+  nvcc:        Cuda compilation tools, release 12.6, V12.6.85
+  hipcc:       HIP version: 7.2.53211-9999
+  cmake:       cmake version 4.1.2
+  clang:       clang version 21.1.8
+[nvcc] /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/nvcc -arch=sm_89 -DPOLYKERNEL_CUDA -Ikernels/template --ptx kernels/generated/fused_rmsnorm_matmul.cu -o build/nvcc/fused_rmsnorm_matmul_sm_89.ptx
+[ptxas] /nix/store/crx0mnr4zgnkmvxbfghn5pab2kpzkqqz-cuda12.6-cuda_nvcc-12.6.85/bin/ptxas -v -arch=sm_89 build/nvcc/fused_rmsnorm_matmul_sm_89.ptx -o build/nvcc/fused_rmsnorm_matmul_sm_89.cubin
+[report] /home/mei/projects/polykernel/build/tools/polykernel-analyze/polykernel-analyze --kernel fused_rmsnorm_matmul --backend cuda --arch sm_89 --shape 2048,11008,4096 --dtype-bytes 2 --threads-per-block 256 --path scalar --ptxas-log - --format json
+[report] saved to reports/kernel_report_sm89.json
+{
+  "kernel": "fused_rmsnorm_matmul",
+  "backend": "cuda",
+  "arch": "sm_89",
+  "registers_per_thread": 34,
+  "smem_per_block_bytes": 1024,
+  "spill_stores_bytes": 0,
+  "spill_loads_bytes": 0,
+  "occupancy": {
+    "active_warps_per_sm": 48,
+    "max_warps_per_sm": 48,
+    "occupancy_pct": 100,
+    "limiter": "warps"
+  },
+  "traffic": {
+    "global_read_bytes": 106954752,
+    "global_write_bytes": 45088768,
+    "arithmetic_intensity_flop_per_byte": 1214.68,
+    "roofline": "compute-bound"
+  },
+  "bottleneck": "compute",
+  "suggested_fixes": [],
+  "path": "scalar"
+}
+STEP2_EXIT=0
+
+--- contract-H assertion on reports/kernel_report_sm89.json ---
+Traceback (most recent call last):
+  File "<stdin>", line 10, in <module>
+AssertionError: 1214.68
+STEP2_ASSERT_EXIT=1
+
+--- corrected contract-H assertion (spec's 'AI~1.2e6' was a typo; verified AI=1214.68, matching plan 'AI~1215 >> ridge' with ridge candidates 47.4/94.9/189.8) ---
+arch=sm_89 path=scalar regs=34 smem=1024B occ=100% warps=48/48 AI=1214.68 flop/byte roofline=compute-bound bottleneck=compute
+CONTRACT-H sm_89 ASSERTIONS PASS
+STEP2_ASSERT_EXIT=0
+
+=== STEP 3: benchmarks/run_bench_suite.py (produces ada6000 PROJECTED arch) ===
+warning: Nix search path entry '/home/mei/.nix-defexpr/channels' does not exist, ignoring
+Running tasks     devenv:enterShell
+
+Running           devenv:files:cleanup
+Succeeded         devenv:files:cleanup (6.15ms)
+Running           devenv:enterShell
+Succeeded         devenv:enterShell (6.60ms)
+Running           devenv:enterTest
+No command        devenv:enterTest
+1 Skipped, 2 Succeeded
+PolyKernel dev shell (llvmPackages_21 MLIR / cudaPackages_12_6 / rocmPackages.clr)
+  CC/CXX:      /nix/store/m59w5gavjx8db0ay3m1yzbw02l54109b-clang-wrapper-21.1.8/bin/clang / /nix/store/m59w5gavjx8db0ay3m1yzbw02l54109b-clang-wrapper-21.1.8/bin/clang++
+  mlir-tblgen: LLVM (http://llvm.org/):
+  nvcc:        Cuda compilation tools, release 12.6, V12.6.85
+  hipcc:       HIP version: 7.2.53211-9999
+  cmake:       cmake version 4.1.2
+  clang:       clang version 21.1.8
+SKIPPED: RUNPOD_API_KEY not set — opt-in rental documented (no spend).
+[bench-suite] RunPod credentials ABSENT (checked RUNPOD_API_KEY, RUNPOD_API_URL, ~/.runpod).
+[bench-suite] STATUS=SKIPPED (not FAILED); no pod provisioned, no RunPod API call, no spend.
+[bench-suite] PROJECTED reports written (roofline + Todo 17 traffic):
+  - reports/h100_bench.json
+  - reports/h100_bench.md
+  - reports/mi300_bench.json
+  - reports/mi300_bench.md
+  - reports/ada6000_bench.json
+  - reports/ada6000_bench.md
+[bench-suite] skip evidence: reports/w5_rent_skipped.log
+[bench-suite] H100 projected speedup (unfused=1.00x): fused=1.004x autotuned=2.838x  [PROJECTED]
+[bench-suite] OPT-IN real numbers: export RUNPOD_API_KEY=<key> && ./benchmarks/rent_runpod.sh --suite mlp
+STEP3_EXIT=0
+
+=== STEP 4: dashboard.py --dashboard --no-write (CUDA archs label must list sm_89) ===
+PolyKernel dev shell (llvmPackages_21 MLIR / cudaPackages_12_6 / rocmPackages.clr)
+  CC/CXX:      /nix/store/m59w5gavjx8db0ay3m1yzbw02l54109b-clang-wrapper-21.1.8/bin/clang / /nix/store/m59w5gavjx8db0ay3m1yzbw02l54109b-clang-wrapper-21.1.8/bin/clang++
+  mlir-tblgen: LLVM (http://llvm.org/):
+  nvcc:        Cuda compilation tools, release 12.6, V12.6.85
+  hipcc:       HIP version: 7.2.53211-9999
+  cmake:       cmake version 4.1.2
+  clang:       clang version 21.1.8
+# PolyKernel benchmark dashboard (Todo 34 / Wave 6)
+
+Generated: 2026-08-15T13:52:10Z by `tools/polykernel-report/dashboard.py --dashboard`.
+
+## Model fragment
+
+- **Fragment:** `MLP block (examples/mlp_block.mlir): rmsnorm+matmul+gelu+matmul+add`
+- **dtype / shape:** bf16, {"M": 2048, "N_up": 11008, "K": 4096, "N_dn": 4096}
+
+## Backends enabled
+
+| backend | archs | status |
+|---|---|---|
+| CUDA | sm_80 (A100), sm_89 (RTX 6000 Ada), sm_90 (H100) | compile + PTX + GPU-free compile-time analysis (no local NVIDIA GPU); H100/A100/RTX 6000 Ada speedups PROJECTED |
+| HIP / ROCm | gfx1101 (local RX 7800 XT), gfx942 (MI300) | runs locally on gfx1101 + WMMA bf16; MI300 cross-compile; MI300 speedups PROJECTED |
+| Dataflow | 64x64 PE grid (CE + FMAC, 48 KB SRAM/PE) | functional/cycle SIMULATOR (NOT real CSL, NOT Cerebras hardware) |
+
+## Correctness (golden contract C) — PASS
+
+- **failed correctness: 0**
+- validated: 10 / 10 ops pass the golden (cosine >= 0.999, max rel err <= 1e-2, PCC >= 0.99)
+- source: tests/e2e/test_mlp_correctness.py (CPU-ref vs golden, contract C)
+
+## CUDA speedups (unfused = 1.00x baseline)
+
+> PROJECTED (not measured): PROJECTED (no rental; run benchmarks/rent_runpod.sh with RUNPOD_API_KEY set for real measured numbers)
+
+| arch | backend | unfused | fused | autotuned |
+|---|---|---|---|---|
+| NVIDIA H100 (SXM5, sm_90) | cuda (sm_90) | 1.000x | 1.004x | 2.838x |
+| NVIDIA A100 (80GB, sm_80) | cuda (sm_80) | 1.000x | 1.003x | 2.862x |
+
+## AMD speedups (unfused = 1.00x baseline)
+
+> PROJECTED (not measured): PROJECTED (no rental; run benchmarks/rent_runpod.sh with RUNPOD_API_KEY set for real measured numbers)
+
+| arch | backend | unfused | fused | autotuned |
+|---|---|---|---|---|
+| AMD Instinct MI300X (gfx942) | hip (gfx942) | 1.000x | 1.003x | 2.850x |
+
+## Dataflow simulator metrics
+
+> PolyKernel dataflow simulator (functional/cycle model; NOT real CSL, NOT Cerebras hardware)
+
+- grid utilization: 100.00% (16/16 PEs)
+- SRAM pressure: 2.60%
+- messages sent: 2,048 wavelets
+- avg hop distance: 3.0
+- critical path: 7 cycles
+- bottleneck: active
+- fusion traffic reduction: 99.9878%
+- visualizer: reports/dataflow_report.html (Todo 39; linked, not regenerated here)
+
+## Compiler stats
+
+- passes: 12 (InferShapes, Canonicalize, LowerToCuda, LowerToHip, FuseRmsnormMatmul, FuseMatmulBiasGelu, FuseResidualRmsnorm, FuseSoftmaxMask, FuseKvAppendAttention, InferTileLayout, PlanMemory, EmitKernelReport)
+- generated kernels: 12 (attention_prefill.cu, fused_matmul_bias_gelu.cu, fused_rmsnorm_matmul.cu, gelu.cu, kv_cache_update.cu, matmul.cu, matmul_int8.cu, matmul_mma.cu, matmul_wmma.cu, rmsnorm.cu, silu.cu, softmax.cu)
+- dialect ops: 18 (closed set)
+- lit tests (check-polykernel): 14
+- validated kernels: 10
+- **failed correctness: 0**
+
+## Reports
+
+- reports/benchmark_report.html (this dashboard, self-contained)
+- reports/h100_report.html (CUDA H100/A100 detail, self-contained)
+- reports/mi300_report.html (AMD MI300 detail, self-contained)
+- reports/dataflow_report.html (dataflow viz, Todo 39)
+
+## Caveats
+
+- H100/A100/MI300 speedups are PROJECTED (roofline + analytic traffic), not measured on rented hardware.
+- The dataflow backend is a functional/cycle SIMULATOR (NOT real CSL, NOT Cerebras hardware).
+- No SOTA-performance claim: the goal is the compiler/runtime machinery, not beating vLLM.
+
+STEP4_EXIT=0
+--- CUDA archs label check ---
+--- no-write verification: no reports/*.html|*.md touched ---
+?? reports/pass2_docs_audit_neg.log
