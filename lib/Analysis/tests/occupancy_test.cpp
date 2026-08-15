@@ -6,6 +6,9 @@
 //
 // sm_90 (H100): smem/SM = 228 KB = 233472 B; regs/SM = 65536; warps/SM = 64;
 //               blocks/SM = 32; warp = 32.
+// sm_89 (RTX 6000 Ada): smem/SM = 100 KB = 102400 B (99 KB/block max);
+//               regs/SM = 65536; warps/SM = 48; blocks/SM = 24;
+//               threads/SM = 1536; warp = 32.
 //
 //===----------------------------------------------------------------------===//
 
@@ -94,11 +97,44 @@ TEST(Occupancy, MatmulKernelSm90) {
   EXPECT_EQ(occ.limiter, Limiter::registers);
 }
 
+// Hand computation (sm_89): warps/block = 256/32 = 8.
+//   blocks_by_regs  = 65536 / (128*256) = 65536/32768 = 2
+//   blocks_by_smem  = 102400 / 32768   = 3   (32 KB = 32768 B)
+//   blocks_by_warps = 48 / 8           = 6
+//   blocks_by_limit = 24
+//   blocks = min = 2 (registers); active_warps = 2*8 = 16;
+//   occ = 16/48 = 33.33%.
+TEST(Occupancy, HandComputedRegisterLimitedSm89) {
+  const auto occ = ComputeOccupancy(/*regs=*/128, /*smem=*/32 * 1024,
+                                    /*threads=*/256, Arch::sm_89);
+  EXPECT_EQ(occ.active_warps_per_sm, 16);
+  EXPECT_EQ(occ.max_warps_per_sm, 48);
+  EXPECT_DOUBLE_EQ(occ.occupancy_pct, 100.0 * 16.0 / 48.0);
+  EXPECT_EQ(occ.limiter, Limiter::registers);
+}
+
+// Warp-limited on sm_89, exercising the 48-warps/SM cap (sm_80/90 give 64):
+// threads=1024 -> warps/block = 32.
+//   blocks_by_regs  = 65536 / (16*1024) = 4
+//   blocks_by_smem  = unlimited (0 smem)
+//   blocks_by_warps = 48 / 32           = 1
+//   blocks = min = 1 (warps); active_warps = 32; occ = 32/48 = 66.67%.
+// (The same input on sm_90 yields blocks_by_warps = 64/32 = 2 -> 100% occ.)
+TEST(Occupancy, WarpLimitedSm89) {
+  const auto occ = ComputeOccupancy(/*regs=*/16, /*smem=*/0,
+                                    /*threads=*/1024, Arch::sm_89);
+  EXPECT_EQ(occ.active_warps_per_sm, 32);
+  EXPECT_DOUBLE_EQ(occ.occupancy_pct, 100.0 * 32.0 / 48.0);
+  EXPECT_EQ(occ.limiter, Limiter::warps);
+}
+
 TEST(Occupancy, ArchParseAndNames) {
   EXPECT_EQ(polykernel::analysis::ParseArch("sm_80"), Arch::sm_80);
+  EXPECT_EQ(polykernel::analysis::ParseArch("sm_89"), Arch::sm_89);
   EXPECT_EQ(polykernel::analysis::ParseArch("sm_90"), Arch::sm_90);
   EXPECT_FALSE(polykernel::analysis::ParseArch("gfx1101").has_value());
   EXPECT_EQ(polykernel::analysis::ArchName(Arch::sm_80), "sm_80");
+  EXPECT_EQ(polykernel::analysis::ArchName(Arch::sm_89), "sm_89");
   EXPECT_EQ(polykernel::analysis::LimiterName(Limiter::smem), "smem");
 }
 

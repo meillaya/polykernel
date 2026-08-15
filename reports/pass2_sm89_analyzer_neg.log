@@ -1,0 +1,30 @@
+# pass2_sm89_analyzer_neg.log - Todo 5 failure QA (Wave 2): sm_89 occupancy clamp
+# Date: 2026-08-15
+# Probe: ComputeOccupancy(regs=16, smem=0, threads=2048, Arch::sm_89).
+#   2048 threads/block > threads_per_sm=1536 on sm_89. The model must NOT crash
+#   and must return a sane bounded result (no negative occupancy).
+#   Hand math: warps/block = 2048/32 = 64; blocks_by_warps = 48/64 = 0 -> a
+#   2048-thread block can never be resident -> 0 resident blocks, occ 0%,
+#   limiter=warps. Extreme corner (255 regs, 99KB smem, 2048 threads) also probed.
+warning: Nix search path entry '/home/mei/.nix-defexpr/channels' does not exist, ignoring
+Running tasks     devenv:enterShell
+
+Running           devenv:files:cleanup
+Succeeded         devenv:files:cleanup (5.95ms)
+Running           devenv:enterShell
+Succeeded         devenv:enterShell (6.30ms)
+Running           devenv:enterTest
+No command        devenv:enterTest
+1 Skipped, 2 Succeeded
+PolyKernel dev shell (llvmPackages_21 MLIR / cudaPackages_12_6 / rocmPackages.clr)
+  CC/CXX:      /nix/store/m59w5gavjx8db0ay3m1yzbw02l54109b-clang-wrapper-21.1.8/bin/clang / /nix/store/m59w5gavjx8db0ay3m1yzbw02l54109b-clang-wrapper-21.1.8/bin/clang++
+  mlir-tblgen: LLVM (http://llvm.org/):
+  nvcc:        Cuda compilation tools, release 12.6, V12.6.85
+  hipcc:       HIP version: 7.2.53211-9999
+  cmake:       cmake version 4.1.2
+  clang:       clang version 21.1.8
+threads=2048 on sm_89: active_warps=0 max_warps=48 occupancy=0.00% limiter=warps
+bounded: blocks=0 (warps cap 48/64 = 0 resident), active_warps<=max_warps, occupancy in [0,100] -> OK
+extreme probe: active_warps=0 occupancy=0.00% limiter=registers
+NEGATIVE-TEST-PASS: 2048-thread block cannot be resident on sm_89; no crash, clamped to 0 resident blocks (warps limiter)
+NEG_EXIT=0

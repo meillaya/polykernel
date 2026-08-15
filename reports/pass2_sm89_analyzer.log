@@ -1,0 +1,83 @@
+# pass2_sm89_analyzer.log - Todo 5 happy QA (Wave 2): sm_89 in Occupancy + Roofline
+# Date: 2026-08-15 | Command: nix develop --impure --accept-flake-config
+# Analyzer build + gtest fixtures for sm_89 (RTX 6000 Ada). All must pass.
+warning: Nix search path entry '/home/mei/.nix-defexpr/channels' does not exist, ignoring
+Running tasks     devenv:enterShell
+
+Running           devenv:files:cleanup
+Succeeded         devenv:files:cleanup (8.84ms)
+Running           devenv:enterShell
+Succeeded         devenv:enterShell (7.55ms)
+Running           devenv:enterTest
+No command        devenv:enterTest
+1 Skipped, 2 Succeeded
+PolyKernel dev shell (llvmPackages_21 MLIR / cudaPackages_12_6 / rocmPackages.clr)
+  CC/CXX:      /nix/store/m59w5gavjx8db0ay3m1yzbw02l54109b-clang-wrapper-21.1.8/bin/clang / /nix/store/m59w5gavjx8db0ay3m1yzbw02l54109b-clang-wrapper-21.1.8/bin/clang++
+  mlir-tblgen: LLVM (http://llvm.org/):
+  nvcc:        Cuda compilation tools, release 12.6, V12.6.85
+  hipcc:       HIP version: 7.2.53211-9999
+  cmake:       cmake version 4.1.2
+  clang:       clang version 21.1.8
+ninja: no work to do.
+Test project /home/mei/projects/polykernel/build
+      Start  7: Occupancy.HandComputedRegisterLimitedSm90
+ 1/21 Test  #7: Occupancy.HandComputedRegisterLimitedSm90 ..........   Passed    0.00 sec
+      Start  8: Occupancy.RegisterLimitedSm80
+ 2/21 Test  #8: Occupancy.RegisterLimitedSm80 ......................   Passed    0.00 sec
+      Start  9: Occupancy.SmemLimitedSm90
+ 3/21 Test  #9: Occupancy.SmemLimitedSm90 ..........................   Passed    0.00 sec
+      Start 10: Occupancy.WarpLimitedSm90
+ 4/21 Test #10: Occupancy.WarpLimitedSm90 ..........................   Passed    0.00 sec
+      Start 11: Occupancy.BlockLimitedSm90
+ 5/21 Test #11: Occupancy.BlockLimitedSm90 .........................   Passed    0.00 sec
+      Start 12: Occupancy.MatmulKernelSm90
+ 6/21 Test #12: Occupancy.MatmulKernelSm90 .........................   Passed    0.00 sec
+      Start 13: Occupancy.HandComputedRegisterLimitedSm89
+ 7/21 Test #13: Occupancy.HandComputedRegisterLimitedSm89 ..........   Passed    0.00 sec
+      Start 14: Occupancy.WarpLimitedSm89
+ 8/21 Test #14: Occupancy.WarpLimitedSm89 ..........................   Passed    0.00 sec
+      Start 15: Occupancy.ArchParseAndNames
+ 9/21 Test #15: Occupancy.ArchParseAndNames ........................   Passed    0.00 sec
+      Start 16: Roofline.LargeGemmIsComputeBound
+10/21 Test #16: Roofline.LargeGemmIsComputeBound ...................   Passed    0.00 sec
+      Start 17: Roofline.SmallGemmIsMemoryBound
+11/21 Test #17: Roofline.SmallGemmIsMemoryBound ....................   Passed    0.00 sec
+      Start 18: Roofline.Matmul128CubeIsMemoryBound
+12/21 Test #18: Roofline.Matmul128CubeIsMemoryBound ................   Passed    0.00 sec
+      Start 19: Roofline.Sm80RidgeClassification
+13/21 Test #19: Roofline.Sm80RidgeClassification ...................   Passed    0.00 sec
+      Start 20: Roofline.Sm89RidgeAndClassification
+14/21 Test #20: Roofline.Sm89RidgeAndClassification ................   Passed    0.00 sec
+      Start 21: Roofline.Sm89BoundaryStraddlesRidge
+15/21 Test #21: Roofline.Sm89BoundaryStraddlesRidge ................   Passed    0.00 sec
+      Start 22: Roofline.BoundNames
+16/21 Test #22: Roofline.BoundNames ................................   Passed    0.00 sec
+      Start 25: kernel_report.LowOccupancyFiresIncreaseOccupancy
+17/21 Test #25: kernel_report.LowOccupancyFiresIncreaseOccupancy ...   Passed    0.00 sec
+      Start 36: amd_isa.OccupancyWaveLimited
+18/21 Test #36: amd_isa.OccupancyWaveLimited .......................   Passed    0.00 sec
+      Start 37: amd_isa.OccupancyVgprLimited
+19/21 Test #37: amd_isa.OccupancyVgprLimited .......................   Passed    0.00 sec
+      Start 38: amd_isa.OccupancyLdsLimited
+20/21 Test #38: amd_isa.OccupancyLdsLimited ........................   Passed    0.00 sec
+      Start 39: amd_isa.OccupancySgprLimited
+21/21 Test #39: amd_isa.OccupancySgprLimited .......................   Passed    0.00 sec
+
+100% tests passed, 0 tests failed out of 21
+
+Total Test time (real) =   0.05 sec
+# ---- New sm_89 fixtures (hand-computed, all PASS) ----
+#   Occupancy.HandComputedRegisterLimitedSm89 (sm_89: regs=128, threads=256, smem=32KB ->
+#     blocks=min(65536/32768=2, 102400/32768=3, 48/8=6, 24)=2, active_warps=16, occ=16/48=33.33%,
+#     limiter=registers)
+#   Occupancy.WarpLimitedSm89 (threads=1024 -> warps/block=32; 48/32=1 block; active_warps=32,
+#     occ=32/48=66.67%, limiter=warps -- locks the sm_89 48-warp table vs sm_80/90's 64)
+#   Roofline.Sm89RidgeAndClassification (PerfFor(sm_89)={91.1,960.0}; ridge=91.1e12/960e9=94.9;
+#     small GEMM (128,128,4096) AI 63.01 -> memory-bound; large GEMM (4096^3) -> compute-bound)
+#   Roofline.Sm89BoundaryStraddlesRidge (M=N=256: K=360 AI 94.43 < 94.9 -> memory;
+#     K=368 AI 94.97 > 94.9 -> compute)
+# ---- Regression (sm_80/sm_90 values UNCHANGED, all PASS) ----
+#   Occupancy.* (7 pre-existing) + Roofline.* (5 pre-existing): all pass untouched.
+# ---- CTest gotcha (documented in notepad) ----
+#   gtest suite names are "Occupancy.*"/"Roofline.*" (capitalized); ctest -R is case-sensitive,
+#   so the plan's 'occupancy|roofline' regex matches nothing. Used -R 'Occupancy|Roofline'.

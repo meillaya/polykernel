@@ -24,6 +24,16 @@ ArchPerf PerfFor(Arch arch) {
   switch (arch) {
   case Arch::sm_80: // A100: ~312 TFLOPS fp16, ~1.555 TB/s HBM2e.
     return ArchPerf{312.0, 1555.0};
+  case Arch::sm_89: // RTX 6000 Ada: 960 GB/s (datasheet). Peak FLOPs CONVENTION
+    // (load-bearing for the roofline ridge + report projections): per the CUDA
+    // C++ BPG "native arithmetic throughput" table, sm_89 bf16 = 128 results/
+    // clk/SM = 1x FP32 = 91.1 TFLOPS - the ceiling for THIS project's SCALAR
+    // kernels (their FMAs run on the FP32 pipes). fp16 alone = 2x FP32 ~= 182
+    // (packed half2, NOT the bf16 rate); tensor-core dense FP16 = 364.25 (mma
+    // kernels only). The H100/A100 entries above (989/312) are TENSOR-core
+    // dense FP16, NOT scalar rates - do not compare them to 91.1 directly. The
+    // datasheet's 1457 is FP8-with-sparsity = 4x FP16-dense; never use it raw.
+    return ArchPerf{91.1, 960.0};
   case Arch::sm_90: // H100: ~989 TFLOPS fp16, ~3.35 TB/s HBM3.
     return ArchPerf{989.0, 3350.0};
   }

@@ -4,7 +4,10 @@
 // model: from (registers_per_thread, smem_per_block, threads_per_block, arch)
 // compute the achievable active warps / SM, the occupancy percentage, and WHICH
 // hardware constraint is the binding limiter. Per-arch constants are hardcoded
-// from the NVIDIA programming-guide limits (sm_80 A100, sm_90 H100).
+// from the NVIDIA programming-guide limits (sm_80 A100, sm_90 H100,
+// sm_89 RTX 6000 Ada). sm_89 differs from the others on EVERY parallelism
+// dimension (48 warps / 24 blocks / 1536 threads per SM, 100 KB smem/SM), so
+// LimitsFor must set all of them, not just smem.
 //
 //===----------------------------------------------------------------------===//
 
@@ -17,12 +20,13 @@
 namespace polykernel::analysis {
 
 /// Supported target architectures (the analyzer's per-arch constant tables).
-enum class Arch { sm_80, sm_90 };
+enum class Arch { sm_80, sm_89, sm_90 };
 
-/// Parse an arch string ("sm_80" / "sm_90"). Returns nullopt on unknown arch.
+/// Parse an arch string ("sm_80" / "sm_89" / "sm_90"). Returns nullopt on
+/// unknown arch.
 [[nodiscard]] std::optional<Arch> ParseArch(std::string_view text);
 
-/// Canonical arch string ("sm_80" / "sm_90") for report emission.
+/// Canonical arch string ("sm_80" / "sm_89" / "sm_90") for report emission.
 [[nodiscard]] std::string_view ArchName(Arch arch);
 
 /// Hardware limits for one arch. smem differs per arch; the register / warp /

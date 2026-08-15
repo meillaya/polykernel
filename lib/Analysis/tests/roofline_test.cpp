@@ -62,6 +62,36 @@ TEST(Roofline, Sm80RidgeClassification) {
   EXPECT_EQ(large.bound, RooflineBound::compute_bound);
 }
 
+// sm_89 (RTX 6000 Ada): scalar bf16 peak 91.1 TFLOPS, 960 GB/s (HBM2e).
+//   ridge = 91.1e12 / 960e9 = 94.8958 FLOP/byte (hand-computed).
+//   small GEMM (M=N=128, K=4096, fp16): AI ~= 63.01 < 94.9 -> memory-bound.
+//   large GEMM (4096^3, fp16): AI = 1365.33 > 94.9 -> compute-bound.
+TEST(Roofline, Sm89RidgeAndClassification) {
+  const auto perf = polykernel::analysis::PerfFor(Arch::sm_89);
+  EXPECT_DOUBLE_EQ(perf.peak_tflops, 91.1);
+  EXPECT_DOUBLE_EQ(perf.peak_bw_gbps, 960.0);
+  EXPECT_NEAR((91.1e12) / (960e9), 94.8958, 1e-3);
+
+  const auto small = ComputeRoofline(GemmShape{128, 128, 4096, 2}, Arch::sm_89);
+  EXPECT_NEAR(small.arithmetic_intensity_flop_per_byte, 63.0144, 1e-3);
+  EXPECT_EQ(small.bound, RooflineBound::memory_bound);
+
+  const auto large = ComputeRoofline(GemmShape{4096, 4096, 4096, 2}, Arch::sm_89);
+  EXPECT_EQ(large.bound, RooflineBound::compute_bound);
+}
+
+// Boundary straddle around the sm_89 ridge (94.9): M=N=256 square, fp16.
+//   K=360: AI = 2*256*256*360 / ((256*360+360*256+256*256)*2) ~= 94.43 < ridge
+//   K=368: AI ~= 94.97 > ridge
+TEST(Roofline, Sm89BoundaryStraddlesRidge) {
+  const auto below = ComputeRoofline(GemmShape{256, 256, 360, 2}, Arch::sm_89);
+  EXPECT_NEAR(below.arithmetic_intensity_flop_per_byte, 94.4262, 1e-3);
+  EXPECT_EQ(below.bound, RooflineBound::memory_bound);
+  const auto above = ComputeRoofline(GemmShape{256, 256, 368, 2}, Arch::sm_89);
+  EXPECT_NEAR(above.arithmetic_intensity_flop_per_byte, 94.9677, 1e-3);
+  EXPECT_EQ(above.bound, RooflineBound::compute_bound);
+}
+
 TEST(Roofline, BoundNames) {
   EXPECT_EQ(polykernel::analysis::RooflineName(RooflineBound::compute_bound),
             "compute-bound");

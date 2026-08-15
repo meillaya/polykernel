@@ -21,6 +21,8 @@ namespace polykernel::analysis {
 std::optional<Arch> ParseArch(std::string_view text) {
   if (text == "sm_80")
     return Arch::sm_80;
+  if (text == "sm_89")
+    return Arch::sm_89;
   if (text == "sm_90")
     return Arch::sm_90;
   return std::nullopt;
@@ -30,6 +32,8 @@ std::string_view ArchName(Arch arch) {
   switch (arch) {
   case Arch::sm_80:
     return "sm_80";
+  case Arch::sm_89:
+    return "sm_89";
   case Arch::sm_90:
     return "sm_90";
   }
@@ -42,6 +46,15 @@ ArchLimits LimitsFor(Arch arch) {
   case Arch::sm_80: // A100: 164 KB/SM, 163 KB/block max.
     l.smem_per_sm_bytes = 164 * 1024;
     l.smem_per_block_max_bytes = 163 * 1024;
+    return l;
+  case Arch::sm_89: // RTX 6000 Ada: every parallelism dimension differs from
+    // the arch-shared defaults (warps 48 / blocks 24 / threads 1536 / smem
+    // 100 KB per SM, 99 KB per block max) - set ALL of them.
+    l.warps_per_sm = 48;
+    l.blocks_per_sm = 24;
+    l.threads_per_sm = 1536;
+    l.smem_per_sm_bytes = 100 * 1024;
+    l.smem_per_block_max_bytes = 99 * 1024;
     return l;
   case Arch::sm_90: // H100: 228 KB/SM, 227 KB/block max.
     l.smem_per_sm_bytes = 228 * 1024;
