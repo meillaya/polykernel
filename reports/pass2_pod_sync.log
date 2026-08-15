@@ -1,16 +1,27 @@
 ##############################################################################
 # PolyKernel pass2 todo 4: REPO SYNC TO POD (direct SSH)
-# Host: Linux 7.1.8-1-cachyos x86_64   Date: 2026-08-15T13:27:10Z
-# Source: /home/mei/projects/polykernel -> root@65.109.75.15:22:/root/polykernel/
+# Host: Linux 7.1.8-1-cachyos x86_64   Date: 2026-08-15T15:08:22Z
+# Source: /home/mei/projects/polykernel -> ubuntu@216.81.200.13:22:~/polykernel/
 # Key: /home/mei/projects/polykernel/private_key.pem (mode 600) - contents never printed
 ##############################################################################
 
 [PASS] local prerequisites ok (ssh + rsync/tar + key mode 600)
 
-=== STEP 1: reach the pod + ensure /root/polykernel exists ===
-[FAIL] cannot ssh to root@65.109.75.15:22: root@65.109.75.15: Permission denied (publickey).
+=== STEP 1: reach the pod + ensure ~/polykernel exists ===
+[PASS] ssh ok, ~/polykernel ready
+
+[PASS] rsync available on both ends
+
+=== STEP 3: push the repo (method: rsync) ===
+[INFO] rsync completed (quiet -a mode; zero bytes shown means no changes)
+
+=== STEP 4: verify on the pod (CMakeLists present + private key NOT synced) ===
+[INFO]   CMakeLists_OK
+[INFO]   KEY_EXCLUDED_OK
+[INFO]   files_on_pod: 556
+
 === SYNC VERDICT ===
-SYNC VERDICT: SKIPPED (cannot reach the pod)
-  EXACT cause: ssh to root@65.109.75.15:22 failed
-  REMEDY: verify the instance is RUNNING; do NOT provision a new pod
+SYNC VERDICT: PASS (repo pushed to ubuntu@216.81.200.13:~/polykernel via rsync)
+  excludes honored: build/ build_*/ .git/ .omo/ .codegraph *.pem - the private key is NOT on the pod
+
 [INFO] evidence: /home/mei/projects/polykernel/reports/pass2_pod_sync.log

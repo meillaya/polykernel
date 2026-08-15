@@ -1,0 +1,51 @@
+##############################################################################
+# PolyKernel pass2 todo 4: POD ENVIRONMENT PROBE (GATE for todos 9/11/13/14/15)
+# Host: Linux 7.1.8-1-cachyos x86_64   Date: 2026-08-15T14:46:21Z
+# Target: ubuntu@216.81.200.13:22  (existing Prime Intellect RTX 6000 Ada instance - direct SSH, no provisioning)
+# Key: /home/mei/projects/polykernel/private_key.pem  mode: 600  (contents never printed)
+##############################################################################
+
+=== CHECK 0: local prerequisites (ssh client + private key mode 600) ===
+[PASS] private key present, mode 600
+[PASS] ssh client: /home/mei/.nix-profile/bin/ssh
+
+=== CHECK 1: SSH connectivity (ubuntu@216.81.200.13:22, ConnectTimeout=15) ===
+[PASS] ssh session established to ubuntu@216.81.200.13:22
+[INFO]   POD_OK
+[INFO]   Linux 6.8.0-90-generic x86_64 GNU/Linux
+
+=== CHECK 2: nvidia-smi -L (expect RTX 6000 Ada Generation, compute capability 8.9) ===
+[PASS] GPU: NVIDIA RTX 6000 Ada Generation detected (sm_89)
+[INFO]   GPU 0: NVIDIA RTX 6000 Ada Generation (UUID: GPU-5c10936b-d2ef-7838-45ce-354ccb8aed39)
+[INFO]   NVIDIA RTX 6000 Ada Generation, 8.9
+
+=== CHECK 3: nvcc --version (require >= 11.8 for native sm_89) ===
+[PASS] nvcc 12.2 >= 11.8 (native sm_89 supported)
+[INFO]   nvcc: NVIDIA (R) Cuda compiler driver
+[INFO]   Copyright (c) 2005-2023 NVIDIA Corporation
+[INFO]   Built on Tue_Aug_15_22:02:13_PDT_2023
+[INFO]   Cuda compilation tools, release 12.2, V12.2.140
+[INFO]   Build cuda_12.2.r12.2/compiler.33191640_0
+
+=== CHECK 4: python3 --version ===
+[PASS] python3: Python 3.10.12
+
+=== CHECK 5: python packages numpy/ml_dtypes/pytest (pinned; PEP-668 venv fallback) ===
+[PASS] python packages usable (numpy/ml_dtypes/pytest)
+[INFO]   numpy 2.2.6 ml_dtypes 0.6.0 pytest 9.1.1
+[INFO]   PKGS_OK system-python3 (already importable, no install needed)
+
+=== CHECK 6: R2 closure decision inputs (gcc / disk free / glibc / apt llvm-21 / rsync) ===
+[PASS] gcc (Ubuntu 12.3.0-1ubuntu1~22.04.2) 12.3.0 (gcc)
+[PASS] /dev/sda2       344G   24G  306G   8% / (disk free /root)
+[PASS] ldd (Ubuntu GLIBC 2.35-0ubuntu3.11) 2.35 (glibc - R2 closure decision input)
+[WARN] apt llvm-21/libllvm-21-dev: no candidate in the current apt lists - R2 path (a) needs an apt update or falls to (b)/(c)
+[PASS] /usr/bin/rsync (rsync on pod)
+
+=== GATE VERDICT ===
+GATE VERDICT: PASS
+  Pod env is ready for the pod-runnable todos (9/11/13/14/15).
+  R2 closure decision inputs recorded above: glibc, apt llvm-21, gcc, disk free.
+  checks: ssh=0 gpu=0 nvcc=0 python3=0 pkgs=0 (0=ok)
+
+[INFO] evidence: reports/pod_env_v2.log (happy) or the POD_ENV_LOG path with POD_PORT set wrong (negative)

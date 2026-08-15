@@ -29,7 +29,11 @@ POD_PORT="${POD_PORT:-22}"
 POD_USER="${POD_USER:-root}"
 POD_KEY="${POD_KEY:-$REPO_ROOT/private_key.pem}"
 LOG="${POD_SYNC_LOG:-$REPO_ROOT/reports/pass2_pod_sync.log}"
-DEST="/root/polykernel"
+# Destination on the pod: $HOME/polykernel for the $POD_USER (e.g.
+# /home/ubuntu/polykernel), NOT /root/polykernel — the pod user may not have
+# permission to create /root (the pass-2 pod runs as `ubuntu`). `~` in a remote
+# path is expanded by the pod's shell, so DEST is a literal tilde expression.
+DEST="~/polykernel"
 
 SSH_FLAGS=(-o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new -i "$POD_KEY" -p "$POD_PORT")
 POD_ADDR="${POD_USER}@${POD_HOST}"
