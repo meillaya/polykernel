@@ -98,6 +98,10 @@ def load_model() -> dict:
     ada6000 = _load_json("reports/ada6000_bench.json")
     cuda_archs = dict(cuda.get("archs", {}))
     ada_archs = dict(ada6000.get("archs", {}))
+    # Per-arch status comes from each arch's OWN source report: H100/A100 stay
+    # PROJECTED while the RTX 6000 Ada row flips to MEASURED on measured:true.
+    _tag_arch_status(cuda_archs, cuda)
+    _tag_arch_status(ada_archs, ada6000)
     if ada_archs:
         cuda_archs.update(ada_archs)
     else:
@@ -108,6 +112,9 @@ def load_model() -> dict:
                              "run, no sm_89 numbers on disk"),
         }
     cuda = {**cuda, "archs": cuda_archs}
+    amd_archs = dict(amd.get("archs", {}))
+    _tag_arch_status(amd_archs, amd)
+    amd = {**amd, "archs": amd_archs}
     fragment = cuda.get("fragment") or amd.get("fragment") or (
         "MLP block (examples/mlp_block.mlir): rmsnorm+matmul+gelu+matmul+add")
     return {
@@ -129,7 +136,8 @@ def load_model() -> dict:
 _BACKENDS = [
     {"name": "CUDA", "archs": "sm_80 (A100), sm_89 (RTX 6000 Ada), sm_90 (H100)",
      "status": "compile + PTX + GPU-free compile-time analysis (no local NVIDIA "
-               "GPU); H100/A100/RTX 6000 Ada speedups PROJECTED"},
+               "GPU); H100/A100 speedups PROJECTED, RTX 6000 Ada (sm_89) MEASURED "
+               "on the pod"},
     {"name": "HIP / ROCm", "archs": "gfx1101 (local RX 7800 XT), gfx942 (MI300)",
      "status": "runs locally on gfx1101 + WMMA bf16; MI300 cross-compile; MI300 "
                "speedups PROJECTED"},
@@ -216,20 +224,83 @@ def _status_label(report: dict) -> str:
     return report.get("status", "unknown")
 
 
-def _arch_speedup_rows(report: dict) -> list[tuple[str, str, str, str, str]]:
-    """(label, backend, unfused, fused, autotuned) rows from a bench JSON."""
+def _tag_arch_status(archs: dict, src: dict) -> None:
+    """Carry a source report's real-vs-projected fields onto each of its archs."""
+    for a in archs.values():
+        a["measured"] = src.get("measured", False)
+        a["projected"] = src.get("projected", not a["measured"])
+        a["status"] = src.get("status",
+                              "MEASURED" if a["measured"] else "PROJECTED")
+
+
+def _arch_status_label(arch: dict) -> str:
+    """Per-row real-vs-projected status (a row can differ from its section)."""
+    if arch.get("measured"):
+        return "MEASURED"
+    if arch.get("missing_note"):
+        return "SKIPPED"
+    if arch.get("projected") or arch.get("status") == "PROJECTED":
+        return "PROJECTED"
+    return arch.get("status", "unknown")
+
+
+def _arch_speedup_rows(report: dict) -> list[tuple[str, str, str, str, str, str]]:
+    """(label, backend, status, unfused, fused, autotuned) rows from a bench JSON."""
     rows = []
     for arch in report.get("archs", {}).values():
         backend = f'{arch.get("backend", "?")} ({arch.get("arch", "?")})'
         if arch.get("missing_note"):
             rows.append((arch.get("label", "?"), backend,
-                         "SKIPPED", "n/a", "n/a"))
+                         "SKIPPED", "n/a", "n/a", "n/a"))
             continue
         sp = arch.get("speedup", {})
-        rows.append((arch.get("label", "?"), backend,
+        rows.append((arch.get("label", "?"), backend, _arch_status_label(arch),
                      f'{sp.get("unfused", 0):.3f}x', f'{sp.get("fused", 0):.3f}x',
                      f'{sp.get("autotuned", 0):.3f}x'))
     return rows
+
+
+def _arch_walltime_ms(report: dict) -> list[str]:
+    """'label: unfused/fused/autotuned ms' lines for MEASURED archs only."""
+    lines = []
+    for arch in report.get("archs", {}).values():
+        if not arch.get("measured") or arch.get("missing_note"):
+            continue
+        wt = arch.get("measured_total_ms", {})
+        if wt:
+            lines.append(f'{arch.get("label", "?")}: unfused {wt.get("unfused", 0):.4f} '
+                         f'ms &middot; fused {wt.get("fused", 0):.4f} ms &middot; '
+                         f'autotuned {wt.get("autotuned", 0):.4f} ms')
+    return lines
+
+
+def _section_status_line(report: dict) -> str:
+    """Per-arch real-vs-projected summary (rows can differ from the top-level)."""
+    bits = []
+    for arch in report.get("archs", {}).values():
+        label = arch.get("label", "?")
+        if arch.get("missing_note"):
+            bits.append(f"{label}: SKIPPED (no bench JSON on disk)")
+        elif arch.get("measured"):
+            bits.append(f"{label}: MEASURED")
+        else:
+            bits.append(f"{label}: PROJECTED")
+    return "; ".join(bits) if bits else _status_label(report)
+
+
+def _fusion_notes(report: dict) -> list[str]:
+    """Honest notes for MEASURED archs where fusion is slower (fused < 1.0x)."""
+    notes = []
+    for arch in report.get("archs", {}).values():
+        if not arch.get("measured") or arch.get("missing_note"):
+            continue
+        fused = arch.get("speedup", {}).get("fused", 1.0)
+        if fused < 1.0:
+            notes.append(f"{arch.get('label', '?')}: fused speedup {fused:.3f}x < 1.0x - "
+                         "the generated fused kernel recomputes the per-row RMS in every "
+                         "output tile, so the REAL fusion speedup is shape-dependent "
+                         "(plan's caveat); MEASURED as-is, not projected.")
+    return notes
 
 
 def _missing_notes(report: dict) -> list[str]:
@@ -274,19 +345,25 @@ def render_markdown(model: dict, stats: dict) -> str:
                      "PCC >= 0.99)")
     lines.append(f"- source: {stats['correctness_source']}")
     lines += ["", "## CUDA speedups (unfused = 1.00x baseline)", "",
-              f"> {_status_label(model['cuda'])}: {model['cuda'].get('banner', '')}",
-              "", "| arch | backend | unfused | fused | autotuned |",
-              "|---|---|---|---|---|"]
+              f"> {_section_status_line(model['cuda'])}",
+              "", "| arch | backend | status | unfused | fused | autotuned |",
+              "|---|---|---|---|---|---|"]
     for row in _arch_speedup_rows(model["cuda"]):
-        lines.append(f"| {row[0]} | {row[1]} | {row[2]} | {row[3]} | {row[4]} |")
+        lines.append(f"| {row[0]} | {row[1]} | {row[2]} | {row[3]} | {row[4]} | {row[5]} |")
+    for line in _arch_walltime_ms(model["cuda"]):
+        lines.append(f"- MEASURED (CUDA events): {line}")
+    for note in _fusion_notes(model["cuda"]):
+        lines.append(f"> NOTE: {note}")
     for note in _missing_notes(model["cuda"]):
         lines.append(f"> {note}")
     lines += ["", "## AMD speedups (unfused = 1.00x baseline)", "",
-              f"> {_status_label(model['amd'])}: {model['amd'].get('banner', '')}",
-              "", "| arch | backend | unfused | fused | autotuned |",
-              "|---|---|---|---|---|"]
+              f"> {_section_status_line(model['amd'])}",
+              "", "| arch | backend | status | unfused | fused | autotuned |",
+              "|---|---|---|---|---|---|"]
     for row in _arch_speedup_rows(model["amd"]):
-        lines.append(f"| {row[0]} | {row[1]} | {row[2]} | {row[3]} | {row[4]} |")
+        lines.append(f"| {row[0]} | {row[1]} | {row[2]} | {row[3]} | {row[4]} | {row[5]} |")
+    for note in _fusion_notes(model["amd"]):
+        lines.append(f"> NOTE: {note}")
     df = model["dataflow"].get("dataflow_metrics", {})
     fu = model["dataflow"].get("fusion", {})
     lines += ["", "## Dataflow simulator metrics", "",
@@ -317,14 +394,16 @@ def render_markdown(model: dict, stats: dict) -> str:
               "- reports/h100_report.html (CUDA H100/A100 detail, self-contained)",
               "- reports/mi300_report.html (AMD MI300 detail, self-contained)",
               "- reports/dataflow_report.html (dataflow viz, Todo 39)",
-               "", "## Caveats", "",
-               "- H100/A100/MI300/RTX 6000 Ada (sm_89) speedups are PROJECTED "
-               "(roofline + analytic traffic), not measured on rented hardware.",
+                "", "## Caveats", "",
+               "- H100/A100/MI300 speedups are PROJECTED (roofline + analytic "
+               "traffic), not measured on rented hardware. The RTX 6000 Ada "
+               "(sm_89) row is MEASURED on the pod with CUDA events "
+               "(reports/ada6000_bench.json).",
                "- The dataflow backend is a functional/cycle SIMULATOR (NOT real "
                "CSL, NOT Cerebras hardware).",
-              "- No SOTA-performance claim: the goal is the compiler/runtime "
-              "machinery, not beating vLLM.",
-              "",
+               "- No SOTA-performance claim: the goal is the compiler/runtime "
+               "machinery, not beating vLLM.",
+               "",
     ]
     return "\n".join(lines)
 
@@ -476,11 +555,9 @@ def _correctness_banner(stats: dict) -> str:
 
 
 def _speedup_panel(report: dict, anchor: str) -> str:
-    """Speedup bars + table for one bench JSON (CUDA has 2 archs, AMD has 1)."""
+    """Speedup bars + table for one bench JSON (per-arch real-vs-projected)."""
     archs = report.get("archs", {})
-    label = _status_label(report)
-    pill = _pill(label, "proj" if "PROJECTED" in label else "good")
-    parts = [f"<p>{pill} &nbsp; {_esc(report.get('banner', ''))}</p>"]
+    parts = [f"<p>{_section_status_line(report)}</p>"]
     for arch in archs.values():
         if arch.get("missing_note"):
             parts.append(
@@ -491,6 +568,8 @@ def _speedup_panel(report: dict, anchor: str) -> str:
                 f'(never a fabricated MEASURED row).</p></div>')
             continue
         sp = arch.get("speedup", {})
+        status = _arch_status_label(arch)
+        pill = _pill(status, "good" if status == "MEASURED" else "proj")
         mx = max(sp.get("autotuned", 1.0), sp.get("fused", 1.0), 1.0)
         bars = (
             _bar("unfused", 100.0 * sp.get("unfused", 1.0) / mx, "#64748b",
@@ -499,17 +578,28 @@ def _speedup_panel(report: dict, anchor: str) -> str:
                    f'{sp.get("fused", 1.0):.3f}x')
             + _bar("autotuned", 100.0 * sp.get("autotuned", 1.0) / mx, "#22c55e",
                    f'{sp.get("autotuned", 0):.3f}x'))
-        pt = arch.get("projected_total_ms", {})
+        wt = (arch.get("measured_total_ms") if arch.get("measured")
+              else arch.get("projected_total_ms", {}))
+        legend = (f'{"MEASURED" if arch.get("measured") else "projected"} fragment '
+                  f'wall time (ms): unfused {wt.get("unfused", 0):.4f} &middot; '
+                  f'fused {wt.get("fused", 0):.4f} &middot; autotuned '
+                  f'{wt.get("autotuned", 0):.4f}')
+        if not arch.get("measured") and arch.get("ridge_flop_per_byte"):
+            legend += (f' &middot; ridge {arch.get("ridge_flop_per_byte", 0):.1f} '
+                       f'flop/byte &middot; peak {arch.get("peak_tflops", 0):.0f} '
+                       f'TFLOPS / {arch.get("peak_bw_gbps", 0):.0f} GB/s')
+        fusion_note = ""
+        if sp.get("fused", 1.0) < 1.0 and arch.get("measured"):
+            fusion_note = (f'<p class="legend">NOTE: fused speedup '
+                           f'{sp.get("fused", 1.0):.3f}x &lt; 1.0x - fusion is SLOWER '
+                           f'at this shape (the fused kernel recomputes the per-row '
+                           f'RMS in every output tile); MEASURED as-is, not projected.'
+                           f'</p>')
         parts.append(
-            f'<h3>{_esc(arch.get("label", "?"))} &mdash; '
+            f'<h3>{pill} &nbsp; {_esc(arch.get("label", "?"))} &mdash; '
             f'{_esc(arch.get("backend", "?"))} ({_esc(arch.get("arch", "?"))})</h3>'
             f'<div class="panel">{bars}'
-            f'<p class="legend">projected fragment wall time (ms): unfused '
-            f'{pt.get("unfused", 0):.4f} &middot; fused {pt.get("fused", 0):.4f} '
-            f'&middot; autotuned {pt.get("autotuned", 0):.4f} &middot; ridge '
-            f'{arch.get("ridge_flop_per_byte", 0):.1f} flop/byte &middot; peak '
-            f'{arch.get("peak_tflops", 0):.0f} TFLOPS / '
-            f'{arch.get("peak_bw_gbps", 0):.0f} GB/s</p></div>')
+            f'<p class="legend">{legend}</p>{fusion_note}</div>')
     return f'<section id="{anchor}"><h2>{anchor.replace("-", " ").title()}</h2>' \
            + "".join(parts) + "</section>"
 
@@ -631,10 +721,10 @@ def _kernel_report_section(report: dict) -> str:
 _DISCLAIMER = (
     "STATIC + SELF-CONTAINED: inline CSS + inline JS + an embedded JSON payload; no "
     "external dependencies, no network fetch, no framework; renders fully offline. "
-    "H100/A100/MI300/RTX 6000 Ada (sm_89) speedups are PROJECTED (roofline + analytic "
-    "traffic, not measured on rented hardware). The dataflow backend is a "
-    "functional/cycle SIMULATOR (NOT real CSL, NOT Cerebras hardware). No SOTA-"
-    "performance claim.")
+    "H100/A100/MI300 speedups are PROJECTED (roofline + analytic traffic, not measured "
+    "on rented hardware); the RTX 6000 Ada (sm_89) row is MEASURED on the pod with CUDA "
+    "events. The dataflow backend is a functional/cycle SIMULATOR (NOT real CSL, NOT "
+    "Cerebras hardware). No SOTA-performance claim.")
 
 
 def _meta(model: dict, stats: dict) -> str:
@@ -708,8 +798,9 @@ def render_arch_html(model: dict, stats: dict, source_key: str, title: str,
     sections.append(
         '<section><h2>Caveats</h2><div class="panel"><ul style="margin:0;'
         'padding-left:18px">'
-        '<li>PROJECTED, not measured: derived from the roofline model + analytic '
-        'traffic, not a rented-GPU run.</li>'
+        '<li>PROJECTED rows: derived from the roofline model + analytic traffic, '
+        'not a rented-GPU run. The RTX 6000 Ada (sm_89) row is MEASURED on the pod '
+        'with CUDA events (reports/ada6000_bench.json).</li>'
         '<li>The fragment is compute-bound (matmuls AI~1215 &gt;&gt; ridge); the '
         'headline gain is the scalar&rarr;autotuned attainment jump.</li>'
         '<li>Opt-in real measurement: <code>RUNPOD_API_KEY=... '
