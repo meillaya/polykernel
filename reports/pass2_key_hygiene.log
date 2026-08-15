@@ -1,0 +1,27 @@
+=== pass2 key hygiene QA (happy path) ===
+date: 2026-08-15T13:12:01Z
+
+--- git check-ignore (both keys must exit 0) ---
+private_key.pem
+public_key.pem
+check-ignore exit: 0  (expect 0)
+
+--- git status --porcelain (no pem anywhere) ---
+ M .gitignore
+ M devenv.yaml
+ M flake.lock
+ M flake.nix
+?? reports/pass2_devenv_yaml.log
+?? reports/pass2_key_hygiene.log
+pem occurrences in porcelain: 0
+
+--- stat -c '%a' key modes ---
+private_key.pem: 600  (expect 600)
+public_key.pem:  644  (expect 644)
+
+--- .gitignore security section ---
+44:# --- Security: SSH keys (Prime Intellect pod) ---
+45-# SSH keys for the Prime Intellect pod - NEVER commit
+46-*.pem
+
+VERDICT: PASS

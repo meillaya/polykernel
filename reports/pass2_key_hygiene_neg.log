@@ -1,0 +1,22 @@
+=== pass2 key hygiene QA (negative path) ===
+date: 2026-08-15T13:12:09Z
+
+--- STEP 1: temporarily remove the '*.pem' line from .gitignore ---
+check-ignore exit WITHOUT *.pem rule: 1  (expect non-zero = key NOT protected)
+git status shows the key as untracked-but-visible again:
+?? private_key.pem
+?? public_key.pem
+
+--- STEP 2: restore the '*.pem' line exactly ---
+private_key.pem
+public_key.pem
+check-ignore exit AFTER restore: 0  (expect 0 = rule is what protects the key)
+git status --porcelain pem count after restore: 0  (expect 0)
+
+--- .gitignore tail after restore (section intact, single *.pem line) ---
+
+# --- Security: SSH keys (Prime Intellect pod) ---
+# SSH keys for the Prime Intellect pod - NEVER commit
+*.pem
+
+VERDICT: PASS (rule removal exposes the key; restoration re-protects it)

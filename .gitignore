@@ -40,3 +40,7 @@ cache/
 
 # Orchestration state (Atlas / OhMyOpenCode) - not part of the product
 .omo/
+
+# --- Security: SSH keys (Prime Intellect pod) ---
+# SSH keys for the Prime Intellect pod - NEVER commit
+*.pem
