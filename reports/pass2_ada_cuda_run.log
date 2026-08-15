@@ -1,0 +1,31 @@
+..................                                                       [100%]
+18 passed in 15.22s
+=== [T9] env: nvcc / python / packages ===
+Cuda compilation tools, release 12.2, V12.2.140
+Python 3.10.12
+numpy 2.2.6 ml_dtypes 0.6.0 pytest 9.1.1
+=== [T9] dev probe (cudaGetDeviceProperties) ===
+DEVICE NVIDIA RTX 6000 Ada Generation COMPUTE_CAPABILITY 8.9
+=== [T9] per-test golden metrics (harness) ===
+[harness] 17 tests, 17 passed, 0 failed
+[harness] JSON: /tmp/pass2_ada_cuda_run.json
+  [PASS] test_cuda_rmsnorm_with_weight                    cosine=1.000000 pcc=1.000000 rel=6.135e-03 bit_exact=0.999992
+  [PASS] test_cuda_rmsnorm_odd_cols                       cosine=1.000000 pcc=1.000000 rel=0.000e+00 bit_exact=1.000000
+  [PASS] test_cuda_rmsnorm_3d_flattens                    cosine=1.000000 pcc=1.000000 rel=0.000e+00 bit_exact=1.000000
+  [PASS] test_cuda_gelu                                   cosine=1.000000 pcc=1.000000 rel=0.000e+00 bit_exact=1.000000
+  [PASS] test_cuda_gelu_odd_n                             cosine=1.000000 pcc=1.000000 rel=0.000e+00 bit_exact=1.000000
+  [PASS] test_cuda_matmul_square                          cosine=1.000000 pcc=1.000000 rel=0.000e+00 bit_exact=1.000000
+  [PASS] test_cuda_matmul_rectangular                     cosine=1.000000 pcc=1.000000 rel=0.000e+00 bit_exact=1.000000
+  [PASS] test_cuda_matmul_non_tile_multiple               cosine=1.000000 pcc=1.000000 rel=0.000e+00 bit_exact=1.000000
+  [PASS] test_cuda_matmul_batched_flattens                cosine=1.000000 pcc=1.000000 rel=0.000e+00 bit_exact=1.000000
+  [PASS] test_cuda_matmul_large_k_reduction_order         cosine=1.000000 pcc=1.000000 rel=0.000e+00 bit_exact=1.000000
+  [PASS] test_cuda_softmax_tokens_vocab                   cosine=1.000000 pcc=1.000000 rel=0.000e+00 bit_exact=1.000000
+  [PASS] test_cuda_softmax_odd_last_dim                   cosine=1.000000 pcc=1.000000 rel=0.000e+00 bit_exact=1.000000
+  [PASS] test_cuda_softmax_3d_flattens                    cosine=1.000000 pcc=1.000000 rel=0.000e+00 bit_exact=1.000000
+  [PASS] test_cuda_fused_rmsnorm_matmul_square            cosine=1.000000 pcc=1.000000 rel=0.000e+00 bit_exact=1.000000
+  [PASS] test_cuda_fused_rmsnorm_matmul_non_tile          cosine=1.000000 pcc=1.000000 rel=0.000e+00 bit_exact=1.000000
+  [PASS] test_cuda_fused_matmul_bias_gelu_square          cosine=1.000000 pcc=1.000000 rel=0.000e+00 bit_exact=1.000000
+  [PASS] test_cuda_fused_matmul_bias_gelu_non_tile        cosine=1.000000 pcc=1.000000 rel=0.000e+00 bit_exact=1.000000
+=== [T9] verdict ===
+18/18 passed - 0 failed correctness - cosine==pcc==1.0, >= 99.99% bit-exact on the RTX 6000 Ada (sm_89)
+kernel fixes validated: pk_store_bf16x2 materialization + gelu_one double-erf chain (sm_89)

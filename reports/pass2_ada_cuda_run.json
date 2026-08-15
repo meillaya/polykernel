@@ -1,0 +1,299 @@
+{
+  "todo": 9,
+  "plan": "polykernel-pass2.md",
+  "generated_at": "2026-08-15T15:08:45Z",
+  "arch": "sm_89",
+  "device": {
+    "probe_exit": 0,
+    "probe": "DEVICE NVIDIA RTX 6000 Ada Generation COMPUTE_CAPABILITY 8.9"
+  },
+  "harness": {
+    "project_root": "/home/ubuntu/polykernel",
+    "cuda_run_exe": "/home/ubuntu/polykernel/build/cuda_run/cuda_run",
+    "seed": 12648430
+  },
+  "summary": {
+    "tests": 17,
+    "passed": 17,
+    "failed": 0,
+    "bit_exact_min": 0.999992,
+    "cosine_min": 1.0
+  },
+  "tests": [
+    {
+      "test": "test_cuda_rmsnorm_with_weight",
+      "op": "rmsnorm",
+      "shape": [
+        [
+          256,
+          512
+        ]
+      ],
+      "cosine": 1.0,
+      "pcc": 1.0000001192092896,
+      "max_rel_err": 0.006134930998086929,
+      "bit_exact": 0.9999923706054688,
+      "rel_ceiling": 0.01,
+      "passed": true
+    },
+    {
+      "test": "test_cuda_rmsnorm_odd_cols",
+      "op": "rmsnorm",
+      "shape": [
+        [
+          130,
+          127
+        ]
+      ],
+      "cosine": 0.9999998807907104,
+      "pcc": 1.0000001192092896,
+      "max_rel_err": 0.0,
+      "bit_exact": 1.0,
+      "rel_ceiling": 0.01,
+      "passed": true
+    },
+    {
+      "test": "test_cuda_rmsnorm_3d_flattens",
+      "op": "rmsnorm",
+      "shape": [
+        [
+          2,
+          64,
+          128
+        ]
+      ],
+      "cosine": 1.0,
+      "pcc": 1.0000001192092896,
+      "max_rel_err": 0.0,
+      "bit_exact": 1.0,
+      "rel_ceiling": 0.01,
+      "passed": true
+    },
+    {
+      "test": "test_cuda_gelu",
+      "op": "gelu",
+      "shape": [
+        [
+          64,
+          128
+        ]
+      ],
+      "cosine": 1.0000001192092896,
+      "pcc": 1.0,
+      "max_rel_err": 0.0,
+      "bit_exact": 1.0,
+      "rel_ceiling": 0.01,
+      "passed": true
+    },
+    {
+      "test": "test_cuda_gelu_odd_n",
+      "op": "gelu",
+      "shape": [
+        [
+          3,
+          127
+        ]
+      ],
+      "cosine": 1.0000001192092896,
+      "pcc": 1.0,
+      "max_rel_err": 0.0,
+      "bit_exact": 1.0,
+      "rel_ceiling": 0.01,
+      "passed": true
+    },
+    {
+      "test": "test_cuda_matmul_square",
+      "op": "matmul",
+      "shape": [
+        [
+          128,
+          128
+        ]
+      ],
+      "cosine": 1.0,
+      "pcc": 0.9999999403953552,
+      "max_rel_err": 0.0,
+      "bit_exact": 1.0,
+      "rel_ceiling": 0.01,
+      "passed": true
+    },
+    {
+      "test": "test_cuda_matmul_rectangular",
+      "op": "matmul",
+      "shape": [
+        [
+          256,
+          256
+        ]
+      ],
+      "cosine": 0.9999999403953552,
+      "pcc": 1.0,
+      "max_rel_err": 0.0,
+      "bit_exact": 1.0,
+      "rel_ceiling": 0.01,
+      "passed": true
+    },
+    {
+      "test": "test_cuda_matmul_non_tile_multiple",
+      "op": "matmul",
+      "shape": [
+        [
+          130,
+          127
+        ]
+      ],
+      "cosine": 1.0000001192092896,
+      "pcc": 1.0000001192092896,
+      "max_rel_err": 0.0,
+      "bit_exact": 1.0,
+      "rel_ceiling": 0.01,
+      "passed": true
+    },
+    {
+      "test": "test_cuda_matmul_batched_flattens",
+      "op": "matmul",
+      "shape": [
+        [
+          2,
+          64,
+          64
+        ]
+      ],
+      "cosine": 1.0,
+      "pcc": 1.0,
+      "max_rel_err": 0.0,
+      "bit_exact": 1.0,
+      "rel_ceiling": 0.01,
+      "passed": true
+    },
+    {
+      "test": "test_cuda_matmul_large_k_reduction_order",
+      "op": "matmul",
+      "shape": [
+        [
+          256,
+          512
+        ]
+      ],
+      "cosine": 1.0,
+      "pcc": 1.0000001192092896,
+      "max_rel_err": 0.0,
+      "bit_exact": 1.0,
+      "rel_ceiling": 0.05,
+      "passed": true
+    },
+    {
+      "test": "test_cuda_softmax_tokens_vocab",
+      "op": "softmax",
+      "shape": [
+        [
+          64,
+          256
+        ]
+      ],
+      "cosine": 1.0,
+      "pcc": 1.0000001192092896,
+      "max_rel_err": 0.0,
+      "bit_exact": 1.0,
+      "rel_ceiling": 0.01,
+      "passed": true
+    },
+    {
+      "test": "test_cuda_softmax_odd_last_dim",
+      "op": "softmax",
+      "shape": [
+        [
+          32,
+          127
+        ]
+      ],
+      "cosine": 1.0000001192092896,
+      "pcc": 0.9999998807907104,
+      "max_rel_err": 0.0,
+      "bit_exact": 1.0,
+      "rel_ceiling": 0.01,
+      "passed": true
+    },
+    {
+      "test": "test_cuda_softmax_3d_flattens",
+      "op": "softmax",
+      "shape": [
+        [
+          2,
+          16,
+          64
+        ]
+      ],
+      "cosine": 1.0,
+      "pcc": 1.0,
+      "max_rel_err": 0.0,
+      "bit_exact": 1.0,
+      "rel_ceiling": 0.01,
+      "passed": true
+    },
+    {
+      "test": "test_cuda_fused_rmsnorm_matmul_square",
+      "op": "fused_rmsnorm_matmul",
+      "shape": [
+        [
+          128,
+          128
+        ]
+      ],
+      "cosine": 0.9999998807907104,
+      "pcc": 1.0000001192092896,
+      "max_rel_err": 0.0,
+      "bit_exact": 1.0,
+      "rel_ceiling": 0.01,
+      "passed": true
+    },
+    {
+      "test": "test_cuda_fused_rmsnorm_matmul_non_tile",
+      "op": "fused_rmsnorm_matmul",
+      "shape": [
+        [
+          130,
+          127
+        ]
+      ],
+      "cosine": 1.0,
+      "pcc": 1.0,
+      "max_rel_err": 0.0,
+      "bit_exact": 1.0,
+      "rel_ceiling": 0.01,
+      "passed": true
+    },
+    {
+      "test": "test_cuda_fused_matmul_bias_gelu_square",
+      "op": "fused_matmul_bias_gelu",
+      "shape": [
+        [
+          128,
+          128
+        ]
+      ],
+      "cosine": 0.9999999403953552,
+      "pcc": 1.0000001192092896,
+      "max_rel_err": 0.0,
+      "bit_exact": 1.0,
+      "rel_ceiling": 0.01,
+      "passed": true
+    },
+    {
+      "test": "test_cuda_fused_matmul_bias_gelu_non_tile",
+      "op": "fused_matmul_bias_gelu",
+      "shape": [
+        [
+          130,
+          127
+        ]
+      ],
+      "cosine": 1.0,
+      "pcc": 1.0000001192092896,
+      "max_rel_err": 0.0,
+      "bit_exact": 1.0,
+      "rel_ceiling": 0.01,
+      "passed": true
+    }
+  ]
+}

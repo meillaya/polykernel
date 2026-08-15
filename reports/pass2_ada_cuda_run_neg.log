@@ -1,0 +1,109 @@
+...FF.............                                                       [100%]
+=================================== FAILURES ===================================
+________________________________ test_cuda_gelu ________________________________
+
+run_cuda_gelu = <function run_cuda_gelu.<locals>._run at 0x7f7e5d8c4dc0>
+rand_bf16 = <function rand_bf16.<locals>._make at 0x7f7e5d8c5870>
+
+    def test_cuda_gelu(run_cuda_gelu, rand_bf16):
+        x = rand_bf16((64, 128))
+>       _check(run_cuda_gelu(x), G.gelu(x))
+
+tests/kernels/test_cuda_run.py:315: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+out = array([[-0.710938, 0.164062, 0.167969, ..., -0.255859, 0.169922,
+        0.165039],
+       [-0.109375, -0.0563965, 0.1...      [-0.034668, -0.488281, 0.0776367, ..., -0.211914, 0.164062,
+        -0.117188]], shape=(64, 128), dtype=bfloat16)
+ref = array([[0.710938, -0.164062, -0.167969, ..., 0.255859, -0.169922,
+        -0.165039],
+       [0.109375, 0.0563965, -0....
+       [0.034668, 0.488281, -0.0776367, ..., 0.211914, -0.164062,
+        0.117188]], shape=(64, 128), dtype=bfloat16)
+rel_ceiling = 0.01, full_contract = True
+
+    def _check(out: np.ndarray, ref: np.ndarray, rel_ceiling: float = 1e-2,
+               full_contract: bool = True) -> None:
+        """Assert the binding global contract + element-wise rounding fidelity.
+    
+        cosine >= 0.999 and pcc >= 0.99 are the pinned global metrics; the bit-exact
+        floor proves the bf16 rounding contract element-wise; max_rel_err is bounded
+        by the (op-appropriate) ceiling. With full_contract=True the binding single-op
+        metrics.assert_correct (incl. max_rel_err <= 1e-2) must also hold.
+        """
+        assert out.dtype == _BF16
+        assert out.shape == ref.shape
+        c = cosine(out, ref)
+        p = pcc(out, ref)
+        r = max_rel_err(out, ref)
+        exact = float(np.mean(out == ref))
+>       assert c >= COSINE_THRESHOLD, f"cosine={c:.6f} (need >= {COSINE_THRESHOLD})"
+E       AssertionError: cosine=-1.000000 (need >= 0.999)
+E       assert -1.0000001192092896 >= 0.999
+
+tests/kernels/test_cuda_run.py:276: AssertionError
+_____________________________ test_cuda_gelu_odd_n _____________________________
+
+run_cuda_gelu = <function run_cuda_gelu.<locals>._run at 0x7f7e7ec3b520>
+rand_bf16 = <function rand_bf16.<locals>._make at 0x7f7e7ec3b400>
+
+    def test_cuda_gelu_odd_n(run_cuda_gelu, rand_bf16):
+        x = rand_bf16((3, 127))  # odd element count -> scalar tail
+>       _check(run_cuda_gelu(x), G.gelu(x))
+
+tests/kernels/test_cuda_run.py:320: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+out = array([[-0.710938, 0.164062, 0.167969, -0.570312, 0.162109, -0.515625,
+        0.0893555, -0.277344, 0.141602, -0.3007...      -0.10791, -0.789062, -0.722656, -0.652344, -0.835938, 0.0554199,
+        -0.722656, -0.0883789]], dtype=bfloat16)
+ref = array([[0.710938, -0.164062, -0.167969, 0.570312, -0.162109, 0.515625,
+        -0.0893555, 0.277344, -0.141602, 0.3007...2,
+        0.10791, 0.789062, 0.722656, 0.652344, 0.835938, -0.0554199,
+        0.722656, -0.0883789]], dtype=bfloat16)
+rel_ceiling = 0.01, full_contract = True
+
+    def _check(out: np.ndarray, ref: np.ndarray, rel_ceiling: float = 1e-2,
+               full_contract: bool = True) -> None:
+        """Assert the binding global contract + element-wise rounding fidelity.
+    
+        cosine >= 0.999 and pcc >= 0.99 are the pinned global metrics; the bit-exact
+        floor proves the bf16 rounding contract element-wise; max_rel_err is bounded
+        by the (op-appropriate) ceiling. With full_contract=True the binding single-op
+        metrics.assert_correct (incl. max_rel_err <= 1e-2) must also hold.
+        """
+        assert out.dtype == _BF16
+        assert out.shape == ref.shape
+        c = cosine(out, ref)
+        p = pcc(out, ref)
+        r = max_rel_err(out, ref)
+        exact = float(np.mean(out == ref))
+>       assert c >= COSINE_THRESHOLD, f"cosine={c:.6f} (need >= {COSINE_THRESHOLD})"
+E       AssertionError: cosine=-0.999633 (need >= 0.999)
+E       assert -0.9996325969696045 >= 0.999
+
+tests/kernels/test_cuda_run.py:276: AssertionError
+=========================== short test summary info ============================
+FAILED tests/kernels/test_cuda_run.py::test_cuda_gelu - AssertionError: cosin...
+FAILED tests/kernels/test_cuda_run.py::test_cuda_gelu_odd_n - AssertionError:...
+2 failed, 16 passed in 14.26s
+[harness] 17 tests, 15 passed, 2 failed
+[harness] JSON: /tmp/pass2_neg_metrics.json
+  [PASS] test_cuda_rmsnorm_with_weight                    cosine=1.000000 pcc=1.000000 rel=6.135e-03 bit_exact=0.999992
+  [PASS] test_cuda_rmsnorm_odd_cols                       cosine=1.000000 pcc=1.000000 rel=0.000e+00 bit_exact=1.000000
+  [PASS] test_cuda_rmsnorm_3d_flattens                    cosine=1.000000 pcc=1.000000 rel=0.000e+00 bit_exact=1.000000
+  [FAIL] test_cuda_gelu                                   cosine=-1.000000 pcc=-1.000000 rel=2.000e+00 bit_exact=0.000000
+  [FAIL] test_cuda_gelu_odd_n                             cosine=-0.999633 pcc=-0.999569 rel=2.000e+00 bit_exact=0.002625
+  [PASS] test_cuda_matmul_square                          cosine=1.000000 pcc=1.000000 rel=0.000e+00 bit_exact=1.000000
+  [PASS] test_cuda_matmul_rectangular                     cosine=1.000000 pcc=1.000000 rel=0.000e+00 bit_exact=1.000000
+  [PASS] test_cuda_matmul_non_tile_multiple               cosine=1.000000 pcc=1.000000 rel=0.000e+00 bit_exact=1.000000
+  [PASS] test_cuda_matmul_batched_flattens                cosine=1.000000 pcc=1.000000 rel=0.000e+00 bit_exact=1.000000
+  [PASS] test_cuda_matmul_large_k_reduction_order         cosine=1.000000 pcc=1.000000 rel=0.000e+00 bit_exact=1.000000
+  [PASS] test_cuda_softmax_tokens_vocab                   cosine=1.000000 pcc=1.000000 rel=0.000e+00 bit_exact=1.000000
+  [PASS] test_cuda_softmax_odd_last_dim                   cosine=1.000000 pcc=1.000000 rel=0.000e+00 bit_exact=1.000000
+  [PASS] test_cuda_softmax_3d_flattens                    cosine=1.000000 pcc=1.000000 rel=0.000e+00 bit_exact=1.000000
+  [PASS] test_cuda_fused_rmsnorm_matmul_square            cosine=1.000000 pcc=1.000000 rel=0.000e+00 bit_exact=1.000000
+  [PASS] test_cuda_fused_rmsnorm_matmul_non_tile          cosine=1.000000 pcc=1.000000 rel=0.000e+00 bit_exact=1.000000
+  [PASS] test_cuda_fused_matmul_bias_gelu_square          cosine=1.000000 pcc=1.000000 rel=0.000e+00 bit_exact=1.000000
+  [PASS] test_cuda_fused_matmul_bias_gelu_non_tile        cosine=1.000000 pcc=1.000000 rel=0.000e+00 bit_exact=1.000000
