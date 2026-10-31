@@ -237,7 +237,7 @@ else
   say "  checks: version=${rc_version} detect=${rc_detect} groups=${rc_groups} driver=${rc_driver} (0=ok)"
 fi
 say ""
-info "evidence: append this output to reports/w4_rocm_check.log (happy) or reports/w4_rocm_neg.log (negative)"
+info "evidence: append this output to report/polykernel-technical-report.pdf (happy) or report/polykernel-technical-report.pdf (negative)"
 
 # A GATE never aborts the calling shell/pipeline.
 exit 0

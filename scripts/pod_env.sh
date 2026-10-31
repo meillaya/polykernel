@@ -48,6 +48,7 @@ fail() { out "[FAIL] $*"; }
 rc_ssh=1; rc_gpu=1; rc_nvcc=1; rc_python=1; rc_pkgs=1
 missing_ssh=""; missing_gpu=""; missing_nvcc=""; missing_python=""; missing_pkgs=""
 
+mkdir -p "$(dirname "$LOG")"
 : > "$LOG"
 
 out "##############################################################################"

@@ -62,7 +62,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
-_TRAFFIC_JSON = _PROJECT_ROOT / "reports" / "mlp_traffic.json"
+_TRAFFIC_JSON = _PROJECT_ROOT / "report" / "data" / "mlp_traffic.json"
 
 # --- Arch peak perf (mirror lib/Analysis/Roofline.cpp PerfFor + MI300X public ---
 # --- specs). peak_tflops = dense FP16 TFLOP/s; peak_bw_gbps = HBM GB/s.        ---

@@ -16,7 +16,7 @@ Output (per arch):
 
 Exits non-zero if nvcc or ptxas is missing, or any compile/assemble fails (so a
 codegen bug — e.g. an undefined macro or broken include — surfaces as a clear
-captured nvcc error; see reports/w2_nvcc_fail.log).
+captured nvcc error; see report/polykernel-technical-report.pdf).
 """
 
 from __future__ import annotations

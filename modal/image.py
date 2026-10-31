@@ -23,7 +23,7 @@ container STARTUP, which is too late for a build-time compile).
 
 The final `run_commands` is a REAL compile step, not a no-op: a bad compiler flag
 in it fails the image build with the compiler error surfaced (demonstrated in
-reports/w6_image_build_neg.log via a bad `nvcc` flag, nvcc being present in the
+report/polykernel-technical-report.pdf via a bad `nvcc` flag, nvcc being present in the
 CUDA devel base).
 
 NOTE (production hardening, out of skeleton scope): the engine's CMake build

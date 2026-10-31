@@ -18,7 +18,7 @@
 //      `add` has SameTypeOperands and its result type == operand type, so
 //      replacing the op with the non-zero operand keeps types consistent (no
 //      inferReturnTypes call needed; the refineReturnTypes verify hook is a
-//      global no-op anyway — see docs/compiler_pipeline.md, Todo 4).
+//      global no-op anyway — see report/polykernel-technical-report.pdf, Todo 4).
 //   2. GeluConstantFold / SiluConstantFold — gelu/silu of a dense FP constant
 //      fold to a computed `arith.constant`: every element is mapped through
 //      the activation, evaluated in double precision and rounded to the

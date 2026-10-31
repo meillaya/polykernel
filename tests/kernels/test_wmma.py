@@ -43,7 +43,7 @@ per lane-half, row = 8*(l>>4)+e, instead of the correct interleaved row = 2*e+(l
 It scrambles the output rows so golden FAILS decisively (cosine/pcc ~0.13, max_rel_err
 >> 1) -> the variant would be marked validated=false and excluded — while the scalar
 baseline STILL PASSES on the identical inputs. A bad WMMA variant never replaces the
-correct scalar baseline. Evidence: reports/w4_wmma_neg.log.
+correct scalar baseline. Evidence: report/polykernel-technical-report.pdf.
 
 If hipcc / a usable gfx1101 device is absent, the module is SKIPPED-local (the Todo 18
 gate guards this; it would run on the first available rental GPU instead).

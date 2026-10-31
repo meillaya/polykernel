@@ -19,7 +19,7 @@ The MLP matmul is non-square (M != N) and too large to simulate cycle-accurately
 so the dataflow metrics are reported for a representative square SUMMA matmul
 (default 32x32x32 on a 4x4 grid); the fusion traffic reduction uses the MLP's
 ACTUAL eliminated intermediate (read from the fusion attrs polykernel-opt attaches,
-cross-referenced against reports/mlp_traffic.json).
+cross-referenced against report/data/mlp_traffic.json).
 
 THIS IS A SIMULATOR (a functional/cycle model, not real CSL and not Cerebras
 hardware). CE + FMAC (no FMU/PMU); fabin_dsd/fabout_dsd; @set_color_config rx/tx.
@@ -200,7 +200,7 @@ def build_report(opt: Path, mlir: Path, plan: dict) -> dict:
         "traffic_reduction_pct": (100.0 * eliminated / unfused_wavelets
                                   if unfused_wavelets else 0.0),
         "cross_reference": {
-            "report": "reports/mlp_traffic.json",
+            "report": "report/data/mlp_traffic.json",
             "note": "Todo 17 global-traffic report: fusion eliminates the same "
                     "intermediate's global round-trip (reduction_pct there is the "
                     "whole-pipeline global-byte view; here it is the eliminated "
@@ -220,7 +220,7 @@ def build_report(opt: Path, mlir: Path, plan: dict) -> dict:
 
 def _mlp_traffic_xref() -> float | None:
     """Read the Todo 17 global reduction_pct for cross-reference (None if absent)."""
-    p = _PROJECT_ROOT / "reports/mlp_traffic.json"
+    p = _PROJECT_ROOT / "report" / "data" / "mlp_traffic.json"
     if not p.exists():
         return None
     try:

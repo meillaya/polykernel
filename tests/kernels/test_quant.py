@@ -33,11 +33,11 @@ PATH ANNOTATION (contract H): the drivers print `[polykernel-quant] path=...` /
 
 NEGATIVE PATH (proves per-channel scale correctness is tested): a WRONG per-channel
 scale makes the int8 output fail the quantized golden decisively -> the scale is not
-cosmetic, it is verified. Evidence: reports/w8_quant_scale_neg.log.
+cosmetic, it is verified. Evidence: report/polykernel-technical-report.pdf.
 
 If hipcc / a usable gfx1101 device is absent, the GPU tests SKIP-local (the CPU-ref
 tests still run; the Todo 18 gate guards the GPU). The CUDA sm_80/sm_90 compile of
-matmul_int8.cu is GPU-free (nvcc --ptx; see reports/w8_quant.log).
+matmul_int8.cu is GPU-free (nvcc --ptx; see report/polykernel-technical-report.pdf).
 """
 
 from __future__ import annotations

@@ -32,7 +32,7 @@
 //
 // The generated registration is EXPLICIT (no registerAllPasses / MLIRRegisterAll*
 // — nixpkgs MLIR does not ship the aggregate object archives; see
-// docs/compiler_pipeline.md). `--gen-pass-decls -name PolyKernel` emits:
+// report/polykernel-technical-report.pdf). `--gen-pass-decls -name PolyKernel` emits:
 //   - GEN_PASS_DECL_<PASSNAME>  per-pass decl macros (e.g. INFER_SHAPES,
 //                               CANONICALIZE)
 //   - GEN_PASS_REGISTRATION     registerInferShapesPass() /
@@ -183,7 +183,7 @@ def LowerToHip : Pass<"lower-to-hip", "ModuleOp"> {
     Emits the same seven kernels as --lower-to-cuda: rmsnorm, gelu, silu, matmul,
     softmax, fused_rmsnorm_matmul, fused_matmul_bias_gelu. hipcc compiles every
     one for gfx1101 UNCHANGED (the portability proof; see
-    reports/w4_hipcc_compile.log).
+    report/polykernel-technical-report.pdf).
   }];
 
   let options = [

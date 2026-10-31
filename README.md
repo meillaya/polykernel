@@ -1,136 +1,85 @@
 # PolyKernel
 
-### An out-of-tree MLIR compiler that fuses LLM ops into portable CUDA/HIP kernels, autotunes them, simulates a Cerebras-style dataflow fabric, and deploys the engine on Modal GPUs.
+An out-of-tree MLIR compiler for a fused transformer MLP block, with CUDA and HIP backends, a correctness-gated autotuner, and a Cerebras-style dataflow model.
 
-**A compiler + runtime + accelerator simulator in one repo.** PolyKernel lowers a fused
-transformer-block fragment (RMSNorm → MatMul → GELU → MatMul → residual Add, plus the
-attention fragment) through a custom MLIR dialect into portable GPU kernels, analyzes them
-at compile time, autotunes them, maps them onto a dataflow fabric, and serves them — built
-to demonstrate depth across **GPU kernels, compiler/MLIR lowering, CUDA/PTX, ROCm/HIP,
-accelerator-aware scheduling, and inference serving: the overlap that NVIDIA, AMD, Cerebras,
-and Modal hire for.**
+PolyKernel takes a hand-written MLIR fragment, runs twelve passes, and emits portable CUDA or HIP source for RMSNorm, matmul, GELU, softmax, attention, and their fused variants. The same emitted source compiles under `nvcc` and `hipcc`. A NumPy `ml_dtypes.bfloat16` golden checks the kernels, and a C++ analyzer reads `ptxas` or AMDGPU ISA output to report registers, shared memory, occupancy, and the roofline class without a device.
 
----
+The project is for compiler and GPU engineers who want a small, readable example of an out-of-tree MLIR dialect, a two-vendor codegen path, and a test harness that can fail. It is not an inference engine, and it does not claim production performance.
 
-## What it is — and is not
-
-| It is | It is not |
-|---|---|
-| A compiler/runtime **machinery** demonstration | A claim to **beat vLLM** or any production stack |
-| A Cerebras-style dataflow **simulator** (correct CSL terminology: CE+FMAC, `@set_color_config`, `fabin_dsd`/`fabout_dsd`) | Real CSL / `cslc` / **Cerebras hardware** |
-| Compile + PTX + GPU-free analysis for CUDA (sm_80/89/90); the runtime-validation harness (`cuda_run_main.cpp` + MMA kernel) is **runtime-validated on the RTX 6000 Ada (sm_89) pod: 0 failed correctness**; H100/A100 numbers are owner-gated **PROJECTED** | Running NVIDIA kernels locally (this machine has no NVIDIA GPU; the kernels are validated on the remote RTX 6000 Ada pod) |
-| Hand-written `.mlir` input in the `polykernel` dialect | A full PyTorch/ONNX/StableHLO frontend |
-| Exactly the named ops + fused variants (closed op set) | An op zoo |
-
-## Architecture
-
-```
-   .mlir (polykernel dialect)
-        │  polykernel-opt · 11 passes
-        ├────────────────────────────────┐
-   CUDA backend (sm_80/sm_89/sm_90)      HIP/ROCm backend (gfx1101 local · gfx942)
-   nvcc + PTX + GPU-free analyzer        hipcc + AMDGPU ISA + WMMA bf16 · runs on 7800 XT
-   + MMA kernel + runtime launcher       (CUDA twin: matmul_mma.cu · RTX 6000 Ada)
-        └────────────────┬───────────────┘   ← one portable kernel template
-        Autotuner (correctness-gated) + JSON cache + C++ runtime (detect → load → serve)
-        ├────────────────────────────────┐
-   Modal deployment                      Dataflow simulator (64×64 PE grid, SUMMA)
-   /predict /benchmark /kernels          metrics + self-contained HTML viz
-   /report · cold-start                  (functional/cycle model, NOT Cerebras hardware)
-```
-
-Full detail in [`docs/architecture.md`](docs/architecture.md).
+Measured on an RTX 6000 Ada (sm_89) and an RX 7800 XT (gfx1101). The H100, A100, and MI300X numbers are projections. The Modal service is defined and was never deployed.
 
 ## Quick start
 
+Linux x86_64 with Nix and flakes:
+
 ```bash
-# enter the toolchain (LLVM/MLIR-21, CUDA 12.6, ROCm, python3 + numpy/ml_dtypes)
 nix develop --impure --accept-flake-config
 
-# configure + build + run the lit suite (14 tests)
+# Resolve the locked MLIR and LLVM from this checkout.
+MLIR_DIR="$(nix eval --raw --impure --expr \
+  '(builtins.getFlake (toString ./.)).inputs.nixpkgs.legacyPackages.x86_64-linux.llvmPackages_21.mlir.dev.outPath')/lib/cmake/mlir"
+LLVM_DIR="$(nix eval --raw --impure --expr \
+  '(builtins.getFlake (toString ./.)).inputs.nixpkgs.legacyPackages.x86_64-linux.llvmPackages_21.llvm.dev.outPath')/lib/cmake/llvm"
+
 cmake -B build -G Ninja \
-    -DMLIR_DIR="$(nix eval --raw --impure --expr '(builtins.getFlake "/home/mei/projects/polykernel").inputs.nixpkgs.legacyPackages.x86_64-linux.llvmPackages_21.mlir.dev.outPath')/lib/cmake/mlir" \
-    -DLLVM_DIR="$(nix eval --raw --impure --expr '(builtins.getFlake "/home/mei/projects/polykernel").inputs.nixpkgs.legacyPackages.x86_64-linux.llvmPackages_21.llvm.dev.outPath')/lib/cmake/llvm" \
-    -DMLIR_TABLEGEN_EXE="$(which mlir-tblgen)"
+  -DMLIR_DIR="$MLIR_DIR" \
+  -DLLVM_DIR="$LLVM_DIR" \
+  -DMLIR_TABLEGEN_EXE="$(which mlir-tblgen)" \
+  -DLLVM_EXTERNAL_LIT="$(dirname "$(readlink -f "$(which lit)")")/.lit-wrapped"
 cmake --build build
 cmake --build build --target check-polykernel
-
-# run the full pipeline on the MLP fragment
-./build/tools/polykernel-opt/polykernel-opt examples/mlp_block.mlir \
-    --infer-shapes --canonicalize --fuse-rmsnorm-matmul --fuse-matmul-bias-gelu \
-    --infer-tile-layout --plan-memory --lower-to-cuda
 ```
 
-See [`docs/compiler_pipeline.md`](docs/compiler_pipeline.md) for the full build wiring
-(including the nix-store path resolution) and the pass pipeline.
-
-## Reports + dashboard
+The last command runs the 14 lit tests. Run the pipeline on the MLP fragment:
 
 ```bash
-python3 tools/polykernel-report/dashboard.py --dashboard
+./build/tools/polykernel-opt/polykernel-opt examples/mlp_block.mlir \
+  --infer-shapes --canonicalize \
+  --fuse-rmsnorm-matmul --fuse-matmul-bias-gelu \
+  --infer-tile-layout --plan-memory --lower-to-cuda
 ```
 
-aggregates the committed per-backend reports into:
+The generated sources land in `kernels/generated/`. The CUDA and HIP passes emit the same compute; the driver picks the backend with `-DPOLYKERNEL_CUDA` or `-DPOLYKERNEL_HIP`.
 
-- `reports/benchmark_report.md` / `.html` — the dashboard (model fragment, backends,
-  CUDA + AMD speedups, dataflow metrics, compiler stats, **failed correctness**);
-- `reports/h100_report.html` — CUDA H100/A100 detail;
-- `reports/mi300_report.html` — AMD MI300 detail;
-- `reports/dataflow_report.html` — the dataflow visualizer (linked, not regenerated).
+## Architecture
 
-Every HTML page is **static + self-contained** (inline CSS/JS, no external dependencies)
-and renders offline. The RTX 6000 Ada (sm_89) speedups are **MEASURED** on the pod
-(1.000×/0.838×/0.857×); H100/A100/MI300 speedups are **PROJECTED** (roofline + analytic
-traffic) until a rental runs; see
-[`docs/performance_model.md`](docs/performance_model.md). The dashboard reflects reality:
-`--inject-failed-correctness` runs the golden harness with a deliberately-broken kernel and
-the report shows `failed correctness: N>0` prominently (`reports/w6_dashboard_neg.log`).
+![PolyKernel system](report/figures/system-pipeline.png)
+
+The compiler is the left half: twelve passes for shape inference, canonicalization, five single-use fusion passes, tile layout, memory planning, CUDA or HIP source emission, and the kernel report. The two backends compile the same emitted source with different defines. The GPU-free analyzer reads the compiler output and produces the contract-H report. The dataflow model is a separate backend for the same fragment. The runtime chain is one portable template header, an autotuner with a JSON cache, a C++ launcher, and a Modal app that is gated and undeployed.
+
+## The measured result
+
+![Fusion trade](report/figures/fusion-traffic.png)
+
+On the RTX 6000 Ada, the unfused RMSNorm plus matmul takes 25.52 ms. The fused kernel takes 30.46 ms, which is 0.838x. The fused kernel recomputes the row RMS for every 16-column output tile, so it re-reads 10.75 GiB of input to save a 32 MiB round trip. The autotuned figure of 29.79 ms is the minimum of repeated runs of the same kernel, not a different configuration.
+
+The H100, A100, and MI300X rows in the report are roofline projections with stated attainment factors. They are not measurements. The report audits those projections and explains why the H100 and A100 rates exceed the scalar FP32 peaks of the hardware they name.
 
 ## Correctness
 
-The single source of truth is a NumPy + `ml_dtypes.bfloat16` golden: bf16
-round-to-nearest-even inputs, fp32 accumulate, bf16 output, with thresholds of cosine ≥
-0.999, max relative error ≤ 1e-2, and PCC ≥ 0.99. HIP runs the shared portable template
-(scalar + WMMA bf16) golden-validated on the local RX 7800 XT: **75/75 tests passed**.
-CUDA correctness rests on the runtime-validation harness (`lib/Runtime/cuda_run_main.cpp`
-+ the MMA kernel `kernels/generated/matmul_mma.cu`), built and compile-validated for
-sm_80/sm_89/sm_90 and **runtime-validated on the RTX 6000 Ada (sm_89) pod: 0 failed
-correctness, 18/18 golden, cosine == pcc == 1.0** (the MMA kernel separately 5/5 on the
-pod). The first on-NVIDIA run exposed and fixed two real CUDA bugs: a bf16x2 store
-corruption on sm_89 and a gelu erf precision loss (commit `d85866a`), with no HIP
-regression. The dataflow simulator's functional execution is checked against the same
-golden, independently of any GPU. H100/A100/MI300 speedups remain **PROJECTED** (see
-[`docs/performance_model.md`](docs/performance_model.md)). **0 failed correctness tests**
-is a success criterion.
+The golden is NumPy plus `ml_dtypes.bfloat16`: bf16 inputs with round-to-nearest-even, fp32 accumulation, bf16 output, cosine at least 0.999, maximum relative error at most 1e-2, and PCC at least 0.99.
 
-## Status
+The CUDA harness passed 17 of 17 golden cases on the RTX 6000 Ada, plus one negative launch test. The HIP harness passed 18 of 18 on the RX 7800 XT. The MMA kernel passed 5 of 5 on the Ada. The first NVIDIA run found two bugs, a bf16x2 store that corrupted one half of the pair and an erf-based GELU that saturated at the tail; both are fixed in commit `d85866a`.
 
-- **Waves 1-8 (MVP):** the closed `polykernel` dialect + 11-pass pipeline, portable
-  CUDA/HIP codegen, HIP runtime-validated on the local RX 7800 XT (scalar + WMMA bf16, 0
-  failed correctness), CUDA compile + PTX + GPU-free analysis, the Cerebras-style dataflow
-  simulator, the correctness-gated autotuner, the C++ runtime, Modal serving, and the
-  Wave 8 attention + quantization work: done and committed.
-- **Pass 2 (this pass):** the CUDA runtime-validation harness
-  (`lib/Runtime/cuda_run_main.cpp`), the CUDA MMA tensor-core kernel
-  (`kernels/generated/matmul_mma.cu`, `nvcuda::wmma` m16n16k16 bf16, additive +
-  correctness-gated), and sm_89 (RTX 6000 Ada) support across the analyzer, per-kernel
-  report, bench suite, and dashboard: **built + compile-validated locally** (sm_80/89/90)
-  and **runtime-validated on the RTX 6000 Ada pod** (0 failed correctness,
-  `reports/pass2_ada_cuda_run.log`). The validation ran on the pod (216.81.200.13, user
-  ubuntu) provisioned after the original 65.109.75.15 was terminated by the user; the pod
-  has since been terminated. The dashboard (`reports/benchmark_report.md`) carries the
-  RTX 6000 Ada (sm_89) row as **MEASURED**: unfused 1.000× / fused 0.838× / autotuned
-  0.857× (fused is slower at this compute-bound shape, the plan's shape-dependence
-  caveat, confirmed). H100/A100/MI300 remain **PROJECTED**.
-- **Lit:** 14/14 `.mlir` tests green (`check-polykernel`).
+These tests use small shapes. The 2048x11008x4096 benchmark shape is timed, not checked against the golden in the CUDA harness.
 
-<!--## Documentation
+## Tests
 
-| Doc | Contents |
-|---|---|
-| [`docs/architecture.md`](docs/architecture.md) | System map: compiler + backends + simulator + Modal |
-| [`docs/compiler_pipeline.md`](docs/compiler_pipeline.md) | MLIR build wiring + the 11-pass pipeline + tools |
-| [`docs/cuda_backend.md`](docs/cuda_backend.md) | nvcc/PTX, GPU-free analyzer, contract-H kernel report |
-| [`docs/hip_backend.md`](docs/hip_backend.md) | gfx1101 local run, gfx942 cross-compile, AMDGPU ISA, WMMA bf16 |
-| [`docs/dataflow_backend.md`](docs/dataflow_backend.md) | The Cerebras-style simulator (CE+FMAC, SUMMA, metrics, viz) |
-| [`docs/performance_model.md`](docs/performance_model.md) | Roofline model + real-vs-projected speedups |-->
+```bash
+cmake --build build --target check-polykernel        # 14 lit tests
+ctest --test-dir build --output-on-failure           # 158 unit tests
+python3 -m pytest tests/kernels/test_hip_run.py -q   # 18, needs gfx1101
+python3 -m pytest tests/kernels/test_cuda_run.py -q  # 18, needs sm_89
+```
+
+The CUDA and HIP tests skip with a named reason when no device is present.
+
+## Report
+
+The full technical report is [report/polykernel-technical-report.pdf](report/polykernel-technical-report.pdf). It covers the compiler, both backends, the correctness evidence, the measured result, the projection audit, the dataflow model, the serving contract, and the test gaps. It replaces the earlier `docs/` and `reports/` directories.
+
+The machine-readable benchmark inputs are in `report/data/`. The figures are Excalidraw scenes in `report/figures/`, rendered with the Excalidraw CLI.
+
+## License
+
+No license file is present yet.

@@ -18,7 +18,7 @@ project(PolyKernel LANGUAGES CXX C)
 set(CMAKE_BUILD_WITH_INSTALL_NAME_DIR ON)
 
 # C++20 first (W1 spike). If MLIR-21 headers reject C++20, drop to 17 and
-# record the result in docs/compiler_pipeline.md + reports/w1_cppstd.log.
+# record the result in report/polykernel-technical-report.pdf.
 set(CMAKE_CXX_STANDARD 20 CACHE STRING "C++ standard to conform to")
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)

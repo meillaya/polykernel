@@ -41,7 +41,7 @@ every other matmul shape (K <= 128) passes the FULL assert_correct.
 Negative path: `cuda_run neg` launches a kernel with a too-large block (2048 >
 the max threads-per-block of 1024 on sm_80/sm_89/sm_90 alike); the runtime must
 CATCH + report the CUDA error (no silent corruption, no crash) - see
-reports/pass2_cuda_run_neg.log (todo 7's launcher QA).
+report/polykernel-technical-report.pdf (todo 7's launcher QA).
 
 NO-GPU GOTCHA (todo 7, documented): a machine with no NVIDIA driver makes
 cudaGetDeviceCount return cudaErrorInsufficientDriver ("CUDA driver version is

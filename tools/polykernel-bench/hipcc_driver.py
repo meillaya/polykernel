@@ -40,7 +40,7 @@ Works identically for gfx1101 and gfx942 (the ISA is read from the cross-compile
 
 Exits non-zero if hipcc is missing, a kernel source is absent, or any compile
 fails (so a portability bug — e.g. an unguarded CUDA-only intrinsic — surfaces as
-a clear captured hipcc error; see reports/w4_hipcc_portability_neg.log).
+a clear captured hipcc error; see report/polykernel-technical-report.pdf).
 """
 
 from __future__ import annotations

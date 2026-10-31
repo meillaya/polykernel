@@ -49,7 +49,7 @@ believable bug of forgetting the row-major output layout), which TRANSPOSES the 
 tile. It fails golden decisively (cosine/pcc ~0, max_rel_err >> 1) -> the variant
 would be marked validated=false and excluded — while the scalar baseline STILL
 PASSES on the identical inputs. A bad MMA variant never replaces the correct scalar
-baseline. Evidence: reports/pass2_mma_neg.log.
+baseline. Evidence: report/polykernel-technical-report.pdf.
 
 If nvcc / a usable CUDA device is absent, the module is SKIPPED-local: the session
 fixture compiles the launcher (nvcc builds sm_89 with no device needed), the

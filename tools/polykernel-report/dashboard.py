@@ -78,6 +78,10 @@ def _load_json(rel: str) -> dict:
     """Load a committed report JSON ({} if absent - the page degrades, not crashes)."""
     path = _PROJECT_ROOT / rel
     if not path.exists():
+        # Report data moved under report/data/ when docs/ and reports/ were folded
+        # into the technical report; keep the old rel paths working.
+        path = _PROJECT_ROOT / "report" / "data" / Path(rel).name
+    if not path.exists():
         return {}
     try:
         return json.loads(path.read_text())
@@ -87,15 +91,15 @@ def _load_json(rel: str) -> dict:
 
 def load_model() -> dict:
     """Assemble the aggregated dashboard model from the committed reports."""
-    cuda = _load_json("reports/h100_bench.json")
-    amd = _load_json("reports/mi300_bench.json")
+    cuda = _load_json("report/data/h100_bench.json")
+    amd = _load_json("report/data/mi300_bench.json")
     # RTX 6000 Ada (sm_89) is its OWN committed bench report
     # (reports/ada6000_bench.json, written PROJECTED by run_bench_suite.py; a
     # todo-14 MEASURED run would override it). Fold its archs into the CUDA
     # section so the dashboard surfaces the sm_89 row next to H100/A100. If the
     # file is missing the row degrades to an explicit SKIPPED note (never a
     # fabricated MEASURED claim).
-    ada6000 = _load_json("reports/ada6000_bench.json")
+    ada6000 = _load_json("report/data/ada6000_bench.json")
     cuda_archs = dict(cuda.get("archs", {}))
     ada_archs = dict(ada6000.get("archs", {}))
     # Per-arch status comes from each arch's OWN source report: H100/A100 stay
@@ -108,7 +112,7 @@ def load_model() -> dict:
         cuda_archs["ada6000"] = {
             "arch": "sm_89", "backend": "cuda",
             "label": "NVIDIA RTX 6000 Ada (sm_89)",
-            "missing_note": ("reports/ada6000_bench.json missing - no pod gate "
+            "missing_note": ("report/data/ada6000_bench.json missing - no pod gate "
                              "run, no sm_89 numbers on disk"),
         }
     cuda = {**cuda, "archs": cuda_archs}
@@ -125,9 +129,9 @@ def load_model() -> dict:
         "shape": cuda.get("shape", {}),
         "cuda": cuda,
         "amd": amd,
-        "dataflow": _load_json("reports/dataflow_metrics.json"),
-        "kernel_report": _load_json("reports/kernel_report_example.json"),
-        "traffic": _load_json("reports/mlp_traffic.json"),
+        "dataflow": _load_json("report/data/dataflow_metrics.json"),
+        "kernel_report": _load_json("report/data/kernel_report_example.json"),
+        "traffic": _load_json("report/data/mlp_traffic.json"),
     }
 
 
@@ -849,7 +853,7 @@ def main(argv: list[str] | None = None) -> int:
                         help="override the correctness source with a JSON file "
                              "({validated, failed, ops, table}; offline/no-build)")
     parser.add_argument("--reports-dir", default=str(_REPORTS),
-                        help="output directory (default reports/)")
+                        help="output directory for generated pages (default reports/)")
     parser.add_argument("--no-write", action="store_true",
                         help="run the gate + print the summary but write nothing")
     args = parser.parse_args(argv)

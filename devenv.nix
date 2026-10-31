@@ -39,7 +39,7 @@ in
   #       pkgs = import nixpkgs { config = { allowUnfree = true;
   #         cudaSupport = true; rocmSupport = true; cudaCapabilities = [...]; }; };
   #   Toggling allowUnfree=false there makes cudaPackages fail to evaluate
-  #   (the EULA gate), which is the QA negative test (reports/w1_allowunfree_negative.log).
+  #   (the EULA gate), which is the QA negative test (report/polykernel-technical-report.pdf).
 
   packages = [
     # --- LLVM/MLIR 21 (out-of-tree dialect build) ---

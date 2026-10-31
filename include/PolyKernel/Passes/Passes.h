@@ -10,7 +10,7 @@
 // every PolyKernel pass. Registration is EXPLICIT via the TableGen-generated
 // GEN_PASS_REGISTRATION block — we deliberately do NOT use registerAllPasses /
 // MLIRRegisterAll* (nixpkgs MLIR does not ship the aggregate object archives;
-// see docs/compiler_pipeline.md).
+// see report/polykernel-technical-report.pdf).
 //
 // Passes:
 //   - `--infer-shapes`   (Todo 4): shape + dtype inference (InferShapes.h).

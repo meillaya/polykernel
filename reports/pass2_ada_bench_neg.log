@@ -1,2 +1,0 @@
-[bench_cuda] cudaMalloc(&p, n * sizeof(pk_bf16)) failed: out of memory
-EXIT_CODE=1

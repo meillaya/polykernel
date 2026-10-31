@@ -4,7 +4,7 @@ This is WHERE the SHARED portable template's RUNTIME correctness is validated: t
 SAME generated kernels (kernels/generated/*.cu) the CUDA backend compiles with
 -DPOLYKERNEL_CUDA are here compiled UNCHANGED by hipcc -DPOLYKERNEL_HIP
 --offload-arch=gfx1101 and ACTUALLY EXECUTED on the local gfx1101 GPU (RX 7800 XT;
-the Todo 18 gate passed natively - reports/w4_rocm_check.log). Proving the portable
+the Todo 18 gate passed natively - report/polykernel-technical-report.pdf). Proving the portable
 compute logic is numerically correct when run on a real GPU validates BOTH backends.
 
 Mechanism (REUSED, not reinvented): mirrors tests/kernels/conftest.py exactly - a
@@ -32,7 +32,7 @@ test uses; every other matmul shape (K <= 128) passes the FULL assert_correct.
 
 Negative path: `hip_run neg` launches a kernel with a too-large block (2048 > the
 gfx1101 max of 1024); the runtime must CATCH + report the HIP error (no silent
-corruption, no crash) - see reports/w4_hip_launch_neg.log.
+corruption, no crash) - see report/polykernel-technical-report.pdf.
 
 If hipcc / a usable gfx1101 device is absent, the module is SKIPPED-local (the Todo
 18 gate guards this; it would run on the first available rental GPU instead).

@@ -44,3 +44,7 @@ cache/
 # --- Security: SSH keys (Prime Intellect pod) ---
 # SSH keys for the Prime Intellect pod - NEVER commit
 *.pem
+
+# Generated report output (the technical report PDF is tracked under report/)
+reports/
+report/generated/

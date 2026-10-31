@@ -39,7 +39,7 @@ HIP tests SKIP-local (the CPU-ref + golden still validate the algorithm).
 
 Negative path: attention with the causal mask DISABLED (--causal 0) leaks future
 tokens; the output diverges from the causal golden (cosine drops well below 0.999),
-proving mask correctness IS tested - see reports/w8_attention_mask_neg.log.
+proving mask correctness IS tested - see report/polykernel-technical-report.pdf.
 """
 
 from __future__ import annotations
