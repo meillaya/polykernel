@@ -80,6 +80,14 @@ The full technical report is [report/polykernel-technical-report.pdf](report/pol
 
 The machine-readable benchmark inputs are in `report/data/`. The figures are Excalidraw scenes in `report/figures/`, rendered with the Excalidraw CLI.
 
+## Diagram tooling
+
+The Excalidraw CLI is packaged as a separate flake in `nix/excalidraw-cli`. The drawing rules for agents are in `agents/excalidraw.nix`.
+
+```bash
+nix run ./nix/excalidraw-cli#excalidraw-cli -- --version
+```
+
 ## License
 
 No license file is present yet.
